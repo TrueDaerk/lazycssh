@@ -70,9 +70,9 @@ type Config struct {
 	// Targets reports the broadcast scope. Nil means the run has no router
 	// yet, and the status panel says so rather than guessing a count.
 	Targets Targeter
-	// WorkingSet describes the current subject of work, rendered next to the
-	// broadcast scope so the two can be compared at a glance.
-	WorkingSet interface{ Describe() string }
+	// WorkingSet is the current subject of work: what the Status panel reports
+	// and what the Groups panel lists and switches between.
+	WorkingSet WorkingSets
 	// Logging reports that session output is being written to disk, which is
 	// off by default and must be visible for the whole run while it is on.
 	Logging bool
@@ -99,13 +99,14 @@ type App struct {
 
 	filter textinput.Model
 
-	focus      Area
-	panel      Panel
-	paneIndex  int
-	page       int
-	hostCursor int
-	showHelp   bool
-	fullScreen bool
+	focus       Area
+	panel       Panel
+	paneIndex   int
+	page        int
+	hostCursor  int
+	groupCursor int
+	showHelp    bool
+	fullScreen  bool
 }
 
 // NewApp builds the root model.
@@ -264,8 +265,11 @@ func (a App) handleFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // handleSidebarKey moves within the panel list, or within the selected panel
 // when that panel owns a list of its own.
 func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if a.panel == PanelHosts {
+	switch a.panel {
+	case PanelHosts:
 		return a.handleHostsKey(msg)
+	case PanelGroups:
+		return a.handleGroupsKey(msg)
 	}
 
 	switch {
@@ -277,6 +281,45 @@ func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Choosing a host is choosing its pane; the panel that owns the list
 		// says which host, and the grid is where the user wanted to end up.
 		a.focus = AreaGrid
+		return a, nil
+	}
+	return a, nil
+}
+
+// handleGroupsKey drives the Groups panel: the arrows move the group cursor and
+// enter makes that group the working set, which is the one keystroke the panel
+// exists for.
+func (a App) handleGroupsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	rows := len(a.groupRows())
+
+	switch {
+	case key.Matches(msg, a.keys.Up):
+		if a.groupCursor <= 0 {
+			return a.movePanel(-1), nil
+		}
+		return a.moveGroupCursor(-1), nil
+	case key.Matches(msg, a.keys.Down):
+		if a.groupCursor >= rows-1 {
+			return a.movePanel(+1), nil
+		}
+		return a.moveGroupCursor(+1), nil
+	case key.Matches(msg, a.keys.Choose):
+		next, err := a.activateSelectedGroup()
+		if err != nil {
+			// A working set that cannot be activated is a bug in the model,
+			// not something the user can fix; it must not take the run down.
+			return a, nil
+		}
+		return next, nil
+	case key.Matches(msg, a.keys.NextChunk):
+		if a.cfg.WorkingSet != nil {
+			a.cfg.WorkingSet.Next()
+		}
+		return a, nil
+	case key.Matches(msg, a.keys.PrevChunk):
+		if a.cfg.WorkingSet != nil {
+			a.cfg.WorkingSet.Prev()
+		}
 		return a, nil
 	}
 	return a, nil

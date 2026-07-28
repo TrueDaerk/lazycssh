@@ -2,6 +2,11 @@
 
 ## 2026-07-28
 
+- Added the Groups / Views panel: the all-hosts entry, every named working set and the unnamed ad
+  hoc one, with the active row marked by a character as well as a style and `enter` switching to
+  it in a single keystroke. `[`/`]` page the working set, distinct from paging the pane window.
+  `core/tui.md` updated. Version 0.1.24.
+
 - Added the Hosts panel: every host with its pane number, selection marker and connection state,
   a filter that owns the keyboard while open, `space` to toggle selection and `enter` to focus a
   pane. Selection is keyed by host identifier so it survives reconnects, filtering and paging, and
