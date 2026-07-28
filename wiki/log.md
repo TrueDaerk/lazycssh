@@ -2,6 +2,10 @@
 
 ## 2026-07-28
 
+- Host arguments are now resolved through `~/.ssh/config` (`HostName`, `User`, `Port`,
+  `IdentityFile`, `ProxyJump`, glob patterns), with command line overrides winning. New concept
+  document `core/host-resolution.md`. Version 0.1.2.
+
 - Added `internal/hosts` with bash-style brace expansion of host arguments, documented in
   `core/host-expansion.md`. Malformed patterns are rejected rather than silently kept as
   literals, which is a deliberate divergence from bash. Version 0.1.1.
