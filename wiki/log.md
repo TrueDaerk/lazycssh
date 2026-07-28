@@ -2,6 +2,11 @@
 
 ## 2026-07-28
 
+- Added the keymap: every binding declared once in `internal/ui/keys.go`, with the short help line
+  and the `?` overlay generated from it. Tests fail on a binding without a help string, on a
+  binding that appears in no help group, and on a key that would mean two things at once. New
+  concept document `core/keys.md`. Version 0.1.17.
+
 - Added `internal/ui` with the theme: one palette, every style in `theme.go`, and a test that
   fails on a style literal anywhere else in the package. Colour is never the only carrier of
   meaning - focus is a thicker border, the insecure marker is reverse video. The charm v2 modules

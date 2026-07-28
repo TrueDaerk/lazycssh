@@ -15,3 +15,4 @@ The runtime pieces of lazycssh.
 * [Session files](./session-files.md) - the on-disk format for a saved run, and why no credential ever appears in one
 * [Credential handling](./credentials.md) - agent, identity file or secret_command, and how a secret stays out of logs and files
 * [Theme and styles](./theme.md) - the one place styles live, and why colour is never the only carrier of meaning
+* [Keymap and help](./keys.md) - every binding declared once, the help generated from it, and how ambiguity is prevented

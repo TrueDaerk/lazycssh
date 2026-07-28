@@ -3,6 +3,7 @@ module github.com/TrueDaerk/lazycssh
 go 1.26.5
 
 require (
+	charm.land/bubbles/v2 v2.1.1
 	charm.land/lipgloss/v2 v2.0.5
 	github.com/kevinburke/ssh_config v1.6.0
 	golang.org/x/crypto v0.54.0
@@ -10,6 +11,7 @@ require (
 )
 
 require (
+	charm.land/bubbletea/v2 v2.0.7 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20260703014108-f5a850f9c2b7 // indirect
 	github.com/charmbracelet/x/ansi v0.11.7 // indirect
