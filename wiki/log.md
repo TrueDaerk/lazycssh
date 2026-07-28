@@ -2,6 +2,10 @@
 
 ## 2026-07-28
 
+- Added `internal/hosts` with bash-style brace expansion of host arguments, documented in
+  `core/host-expansion.md`. Malformed patterns are rejected rather than silently kept as
+  literals, which is a deliberate divergence from bash. Version 0.1.1.
+
 - Bootstrapped the Go module as `github.com/TrueDaerk/lazycssh` (the remote, not the
   `github.com/geant/...` path `CLAUDE.md` guessed at). Added `internal/version` with the
   `Version` constant at `0.1.0`, the `lazycssh` entrypoint with `--version`, and a CI workflow
