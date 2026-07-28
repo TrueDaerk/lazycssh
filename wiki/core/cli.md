@@ -10,12 +10,26 @@ timestamp: 2026-07-28T00:00:00Z
 # Command line interface
 
 ```
-lazycssh [flags] <host>...
+lazycssh [flags] <host|@session>...
 ```
 
 Host arguments may use brace expansion, for example `srv1-{01..40}.example.com`. Expansion is
 performed by lazycssh itself, so a quoted argument behaves the same as an unquoted one and no
 shell is involved.
+
+An argument starting with `@` names a saved session; see
+[Session files](./session-files.md). Sessions and hosts can be mixed and the order is
+preserved, because the order hosts appear in is the order their panes are tiled in:
+
+```sh
+lazycssh @prod-web                      # the saved session
+lazycssh @prod-web extra.example.com    # the session plus one more host
+lazycssh @prod-web @canaries            # two sessions merged
+```
+
+When more than one session is named, the last one's broadcast mode wins, and the last one that
+sets a working set wins: the last thing the user named is the thing they meant. A session name
+that is not saved is an error listing the sessions that are.
 
 ## Flags
 
@@ -24,12 +38,14 @@ shell is involved.
 | `--version` | Print the version and exit. Takes precedence over every other argument. |
 | `-h`, `--help` | Print usage and exit. |
 | `--insecure-ignore-host-key` | Accept any host key without checking `known_hosts`. Dangerous, prints a warning on every run — see [Host key verification](./host-keys.md). |
+| `--list-sessions` | List the saved sessions with their host counts and exit. |
+| `--sessions-dir <dir>` | Read sessions from this directory instead of `$XDG_CONFIG_HOME/lazycssh/sessions`. |
 
 ## Exit codes
 
 | Code | Meaning |
 |------|---------|
-| `0` | Success. Currently only `--version` and `--help` reach it. |
+| `0` | Success. Currently `--version`, `--help` and `--list-sessions` reach it. |
 | `1` | A failure during the run. |
 | `2` | Usage error: unknown flag, or no host arguments given. |
 

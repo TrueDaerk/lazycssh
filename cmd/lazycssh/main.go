@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
+	"github.com/TrueDaerk/lazycssh/internal/sessions"
 	"github.com/TrueDaerk/lazycssh/internal/version"
 )
 
@@ -22,9 +24,11 @@ const (
 const usage = `lazycssh - terminal UI for parallel SSH
 
 Usage:
-  lazycssh [flags] <host>...
+  lazycssh [flags] <host|@session>...
 
 Hosts may use brace expansion, for example srv1-{01..40}.example.com.
+An argument starting with @ names a saved session; extra hosts on the command
+line are merged into it.
 
 Flags:
 `
@@ -47,6 +51,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	insecure := fs.Bool("insecure-ignore-host-key", false,
 		"accept any host key without checking known_hosts (dangerous)")
+	listSessions := fs.Bool("list-sessions", false, "list the saved sessions and exit")
+	sessionDir := fs.String("sessions-dir", "",
+		"directory holding saved sessions (default $XDG_CONFIG_HOME/lazycssh/sessions)")
 
 	if err := fs.Parse(args); err != nil {
 		// flag already reported the error and printed the usage.
@@ -58,10 +65,26 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return exitOK
 	}
 
-	hosts := fs.Args()
-	if len(hosts) == 0 {
+	store, err := openStore(*sessionDir)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return exitError
+	}
+
+	if *listSessions {
+		return printSessions(store, stdout, stderr)
+	}
+
+	args = fs.Args()
+	if len(args) == 0 {
 		fs.Usage()
 		return exitUsage
+	}
+
+	resolved, err := resolvePlan(args, store)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return exitError
 	}
 
 	if *insecure {
@@ -74,7 +97,54 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	// The transport and the TUI do not exist yet; see the SSH transport and TUI
 	// shell epics. Report honestly rather than pretending to connect.
+	if names := resolved.SessionNames(); len(names) > 0 {
+		fmt.Fprintf(stderr, "lazycssh %s: loaded session %s\n",
+			version.String(), strings.Join(names, ", "))
+	}
 	fmt.Fprintf(stderr, "lazycssh %s: connecting is not implemented yet (%d host arguments given)\n",
-		version.String(), len(hosts))
+		version.String(), len(resolved.Patterns))
 	return exitError
+}
+
+// openStore builds the session store, from an explicit directory or the default
+// location.
+func openStore(dir string) (*sessions.Store, error) {
+	if dir != "" {
+		return sessions.NewStore(dir)
+	}
+	return sessions.DefaultStore()
+}
+
+// printSessions lists the saved sessions with their host counts, which is what
+// a user reaches for after mistyping a session name.
+func printSessions(store *sessions.Store, stdout, stderr io.Writer) int {
+	names, err := store.List()
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return exitError
+	}
+	if len(names) == 0 {
+		fmt.Fprintf(stderr, "no sessions are saved in %s\n", store.Dir())
+		return exitOK
+	}
+
+	for _, name := range names {
+		sess, err := store.Load(name)
+		if err != nil {
+			// One unreadable file must not hide the rest of the list.
+			fmt.Fprintf(stderr, "%s: %v\n", name, err)
+			continue
+		}
+		count, err := sess.HostCount()
+		if err != nil {
+			fmt.Fprintf(stderr, "%s: %v\n", name, err)
+			continue
+		}
+		line := fmt.Sprintf("%s\t%d hosts", sess.Name, count)
+		if sess.Description != "" {
+			line += "\t" + sess.Description
+		}
+		fmt.Fprintln(stdout, line)
+	}
+	return exitOK
 }

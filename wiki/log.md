@@ -2,6 +2,10 @@
 
 ## 2026-07-28
 
+- `lazycssh @name` launches a saved session, merging any extra hosts named on the command line
+  in argument order, and an unknown name is an error that lists what is saved. Added
+  `--list-sessions` and `--sessions-dir`. `core/cli.md` updated. Version 0.1.15.
+
 - The current run can be saved as a named session: `sessions.FromRun` keeps the host arguments as
   typed, drops what only restates a default, and refuses to overwrite an existing session without
   the caller asking first. `core/session-files.md` updated. Version 0.1.14.
