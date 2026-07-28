@@ -59,8 +59,22 @@ func (p Panel) Number() int { return int(p) + 1 }
 type Config struct {
 	// SessionName is shown in the status bar, empty for an ad hoc run.
 	SessionName string
-	// Hosts are the host identifiers of the run, in order.
+	// Hosts are the host identifiers of the run, in order. It is used when
+	// there is no [Config.Fleet], which is how the views are tested without a
+	// transport.
 	Hosts []string
+	// Fleet is the live transport. When set it is the source of truth for the
+	// host list, the connection states and the counts.
+	Fleet Fleet
+	// Targets reports the broadcast scope. Nil means the run has no router
+	// yet, and the status panel says so rather than guessing a count.
+	Targets Targeter
+	// WorkingSet describes the current subject of work, rendered next to the
+	// broadcast scope so the two can be compared at a glance.
+	WorkingSet interface{ Describe() string }
+	// Logging reports that session output is being written to disk, which is
+	// off by default and must be visible for the whole run while it is on.
+	Logging bool
 	// Theme selects the palette.
 	Theme Options
 	// Keys overrides the bindings. The zero value means [DefaultKeyMap].
@@ -145,6 +159,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.theme = NewTheme(opts)
 		a.help.Styles = HelpStyles(a.theme)
 		return a, nil
+
+	case FleetUpdatedMsg:
+		// Nothing to store: the panels read the fleet's live state when they
+		// render. Redrawing is the whole effect.
+		return a.followFocus(), nil
 
 	case HostsChangedMsg:
 		return a.withHosts(msg.Hosts).followFocus(), nil
@@ -249,7 +268,7 @@ func (a App) handleGridKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 // grid is the current tiling of the main area.
-func (a App) grid() Grid { return TileGrid(a.layout.Main, len(a.cfg.Hosts)) }
+func (a App) grid() Grid { return TileGrid(a.layout.Main, len(a.hostIDs())) }
 
 // Grid returns the tiling the view is drawing, which is what the tests and the
 // paging logic ask about.
@@ -329,6 +348,15 @@ func (a App) renderSidebar() string {
 		default:
 			b.WriteString(a.theme.Muted.Render(label))
 		}
+
+		// Only the selected panel opens. Five open panels on an 80-column
+		// terminal would show none of them usefully.
+		if panel == a.panel {
+			if body := a.panelBody(panel, r.Width-2); body != "" {
+				b.WriteString("\n")
+				b.WriteString(indent(body))
+			}
+		}
 	}
 
 	return a.frame(a.theme.PanelFrame(focused), r, b.String())
@@ -341,7 +369,7 @@ func (a App) renderMain() string {
 	r := a.layout.Main
 	focused := a.focus == AreaGrid
 
-	if len(a.cfg.Hosts) == 0 {
+	if len(a.hostIDs()) == 0 {
 		return a.frame(a.theme.PaneFrame(focused), r, a.theme.Muted.Render("no hosts"))
 	}
 
@@ -367,7 +395,7 @@ func (a App) renderMain() string {
 				break
 			}
 			host := first + slot
-			if host >= len(a.cfg.Hosts) {
+			if host >= len(a.hostIDs()) {
 				// An empty slot on the last page keeps the panes the size they
 				// were, rather than letting them jump about as hosts come and go.
 				cells = append(cells, a.frame(a.theme.Pane, g.Cells[slot], ""))
@@ -387,12 +415,12 @@ func (a App) renderMain() string {
 // rendering issue; until then the pane names its host, which is what the
 // tiling tests assert against.
 func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
-	if host < 0 || host >= len(a.cfg.Hosts) {
+	if host < 0 || host >= len(a.hostIDs()) {
 		return a.frame(a.theme.Pane, cell, "")
 	}
 
 	focused := gridFocused && host == a.paneIndex
-	name := a.cfg.Hosts[host]
+	name := a.hostIDs()[host]
 
 	header := a.theme.Muted.Render(name)
 	if focused {
@@ -411,15 +439,22 @@ func (a App) renderStatusBar() string {
 	if a.cfg.SessionName != "" {
 		parts = append(parts, a.theme.Base.Render("@"+a.cfg.SessionName))
 	}
-	hosts := len(a.cfg.Hosts)
+	hosts := len(a.hostIDs())
 	parts = append(parts, a.theme.Muted.Render(fmt.Sprintf("%d host%s", hosts, plural(hosts))))
-	parts = append(parts, a.theme.Muted.Render(a.panel.Title()))
+	if a.cfg.Targets != nil {
+		scope := a.theme.Base
+		if a.cfg.Targets.Warning() {
+			scope = a.theme.StatusWarning
+		}
+		parts = append(parts, scope.Render(a.cfg.Targets.Describe()))
+	}
 	if label := a.windowLabel(); label != "" {
 		parts = append(parts, a.theme.Muted.Render(label))
 	}
-	if a.cfg.Insecure {
-		parts = append(parts, a.theme.StatusInsecure.Render("HOST KEYS UNVERIFIED"))
-	}
+	// The flags that weaken a default live on the status bar as well as in the
+	// Status panel, because the bar is the one thing that is on screen whatever
+	// the user has scrolled to.
+	parts = append(parts, a.activeFlags()...)
 
 	line := strings.Join(parts, " ")
 	short := a.help.ShortHelpView(a.keys.For(a.focus).ShortHelp())
@@ -468,4 +503,14 @@ func plural(n int) string {
 		return ""
 	}
 	return "s"
+}
+
+// indent shifts a panel body one column in, so it reads as belonging to the
+// panel above it rather than as another entry in the list.
+func indent(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = " " + line
+	}
+	return strings.Join(lines, "\n")
 }

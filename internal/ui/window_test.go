@@ -37,11 +37,11 @@ func TestPagingMovesTheWindowAndTheFocus(t *testing.T) {
 	if a.Page() != 1 {
 		t.Fatalf("Page() = %d after paging forward", a.Page())
 	}
-	if got := a.WindowHosts()[0]; got != a.cfg.Hosts[perPage] {
+	if got := a.WindowHosts()[0]; got != a.hostIDs()[perPage] {
 		t.Fatalf("the second page starts at %q", got)
 	}
 	// The pane that receives a keystroke is one the user can see.
-	if a.FocusedHost() != a.cfg.Hosts[perPage] {
+	if a.FocusedHost() != a.hostIDs()[perPage] {
 		t.Fatalf("FocusedHost() = %q after paging", a.FocusedHost())
 	}
 
@@ -91,10 +91,10 @@ func TestMovingFocusTurnsThePage(t *testing.T) {
 // which hosts a command is about.
 func TestPagingDoesNotChangeTheHostList(t *testing.T) {
 	a := pagedApp(t, 12, 60, 14)
-	before := strings.Join(a.cfg.Hosts, ",")
+	before := strings.Join(a.hostIDs(), ",")
 
 	a = pressKey(t, a, "n")
-	if got := strings.Join(a.cfg.Hosts, ","); got != before {
+	if got := strings.Join(a.hostIDs(), ","); got != before {
 		t.Fatalf("paging changed the run's hosts:\n%s\n%s", before, got)
 	}
 }

@@ -20,11 +20,11 @@ func (a App) WindowHosts() []string {
 		return nil
 	}
 	first := a.clampedPage(g) * g.PerPage
-	last := min(first+g.PerPage, len(a.cfg.Hosts))
+	last := min(first+g.PerPage, len(a.hostIDs()))
 	if first >= last {
 		return nil
 	}
-	return append([]string(nil), a.cfg.Hosts[first:last]...)
+	return append([]string(nil), a.hostIDs()[first:last]...)
 }
 
 // clampedPage keeps the page inside the range the current size allows. The
@@ -51,7 +51,7 @@ func (a App) pageBy(delta int) App {
 		return a
 	}
 	a.page = next
-	a.paneIndex = clamp(next*g.PerPage, 0, len(a.cfg.Hosts)-1)
+	a.paneIndex = clamp(next*g.PerPage, 0, len(a.hostIDs())-1)
 	return a
 }
 
