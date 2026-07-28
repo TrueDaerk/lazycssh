@@ -2,6 +2,10 @@
 
 ## 2026-07-28
 
+- Added the authentication chain in `internal/ssh/auth.go`: agent, identity files with a
+  passphrase prompt, password, keyboard-interactive, with secrets cached per key file and per
+  login user. Documented in `core/authentication.md`. Version 0.1.6.
+
 - Added `ssh.Fake`, the scriptable session implementation that lets everything above the
   transport be tested without a network. Documented in `core/session.md`. Version 0.1.5.
 

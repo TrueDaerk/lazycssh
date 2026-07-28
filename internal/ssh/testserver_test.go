@@ -22,6 +22,9 @@ type testServer struct {
 
 	// Password is accepted for any user. Empty means password auth is refused.
 	Password string
+	// AuthorizedKey is accepted for any user. Nil means public key auth is
+	// refused.
+	AuthorizedKey ssh.PublicKey
 
 	mu         sync.Mutex
 	ptyTerm    string
@@ -125,6 +128,19 @@ func (s *testServer) handleConn(conn net.Conn) {
 		PasswordCallback: func(c ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 			if s.Password == "" || string(password) != s.Password {
 				return nil, errors.New("password rejected")
+			}
+			return nil, nil
+		},
+		PublicKeyCallback: func(c ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
+			s.mu.Lock()
+			authorized := s.AuthorizedKey
+			s.mu.Unlock()
+
+			if authorized == nil {
+				return nil, errors.New("public key auth disabled")
+			}
+			if string(key.Marshal()) != string(authorized.Marshal()) {
+				return nil, errors.New("unknown public key")
 			}
 			return nil, nil
 		},
