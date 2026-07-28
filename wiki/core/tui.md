@@ -203,6 +203,21 @@ size of the panel rather than the size of the fleet — two hundred hosts includ
 
 Exit-code tracking is not here yet; it is [#41](https://github.com/TrueDaerk/lazycssh/issues/41).
 
+### [3] Groups / Views
+
+The working sets defined for this run — see [Working sets](./working-sets.md) — plus where the
+window sits.
+
+Rows: the built-in **all hosts** entry first (undoing a narrowing has to be one keystroke away),
+then every named set with its definition, and — when the active set is neither — the **unnamed**
+ad hoc set the user is actually in, so the panel can never hide where they are.
+
+- the active row is marked with `▸` as well as a style, so it survives a terminal without colour,
+- `enter` makes that row the working set: the one keystroke from "which twenty am I working on"
+  to "these twenty",
+- `[` and `]` page the **working set** by its own chunk size. That is a different thing from
+  `pgup`/`pgdn`, which page the pane window; the panel shows both lines for exactly that reason.
+
 ## Messages
 
 | Message | Effect |
