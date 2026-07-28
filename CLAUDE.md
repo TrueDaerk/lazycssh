@@ -80,6 +80,8 @@ Conventions, workflow and versioning live in the wiki, not here. They are bindin
 
 Short version: never commit on `main`; every change starts from a GitHub issue and ends in a merged PR that also updates the wiki and bumps the version.
 
+**Tests are not optional.** Every exported behavior with branches or error paths gets tests, and every bugfix ships with a test that fails without the fix. Pure delegation and rendering glue are exempt — this is not a test-per-function rule, and there is no coverage threshold. Details in `conventions.md`.
+
 ## Commands
 
 ```sh
