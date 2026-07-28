@@ -2,6 +2,9 @@
 
 ## 2026-07-28
 
+- Added `ssh.Fake`, the scriptable session implementation that lets everything above the
+  transport be tested without a network. Documented in `core/session.md`. Version 0.1.5.
+
 - Added `internal/ssh` with the session lifecycle: dial, handshake, PTY, streams, resize and
   close, behind a `Session` interface. Events are explicitly hints rather than the source of
   truth, because a blocking send deadlocks `Start`. Documented in `core/session.md`.
