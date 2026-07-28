@@ -2,6 +2,11 @@
 
 ## 2026-07-28
 
+- The pane window pages through the host list: `n`/`p` move a whole page and take the pane focus
+  with them, moving focus off a page turns it, and the page is clamped when the terminal shrinks.
+  The window is explicitly not the working set - paging never changes who receives a keystroke.
+  `core/tui.md` updated. Version 0.1.21.
+
 - The pane grid auto-tiles: the squarest shape that holds the hosts, bounded by a 24x6 minimum
   pane size, and paging rather than shrinking below it. Deterministic for every host count, with
   the shapes for 1, 2, 3, 4, 6, 9, 12 and 20 asserted. Full screen is `f`, because the number keys
