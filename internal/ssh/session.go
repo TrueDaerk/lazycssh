@@ -151,6 +151,10 @@ type Config struct {
 	Width, Height int
 	// ScrollbackLines bounds the retained output; zero means the default.
 	ScrollbackLines int
+	// Scrollback, when set, is reused instead of allocating a fresh buffer.
+	// Reconnecting passes the previous buffer here so the pane keeps what the
+	// host said before it died.
+	Scrollback *scrollback.Buffer
 }
 
 func (c Config) withDefaults() Config {
@@ -198,11 +202,17 @@ type sshSession struct {
 // which the caller owns; nil is allowed for a session nobody is watching.
 func New(id string, cfg Config, events chan<- Event) Session {
 	cfg = cfg.withDefaults()
+
+	buf := cfg.Scrollback
+	if buf == nil {
+		buf = scrollback.New(cfg.ScrollbackLines)
+	}
+
 	return &sshSession{
 		id:     id,
 		cfg:    cfg,
 		events: events,
-		buf:    scrollback.New(cfg.ScrollbackLines),
+		buf:    buf,
 		closed: make(chan struct{}),
 	}
 }

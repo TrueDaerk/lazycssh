@@ -5,10 +5,29 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/TrueDaerk/lazycssh/internal/hosts"
+	"github.com/TrueDaerk/lazycssh/internal/scrollback"
 )
+
+// reconnectMarker begins the separator line written into a preserved scrollback.
+// It is matched by tests and by the renderer, so it is a constant rather than a
+// literal in a format string.
+const reconnectMarker = "── reconnecting"
+
+// writeReconnectSeparator marks where an old connection ended and a new one
+// begins, so the two cannot be read as one continuous stream.
+func writeReconnectSeparator(buf *scrollback.Buffer, host hosts.Host) {
+	if buf == nil {
+		return
+	}
+	line := fmt.Sprintf("\r\n%s to %s at %s %s\r\n",
+		reconnectMarker, host.Alias, time.Now().Format(time.RFC3339), strings.Repeat("─", 8))
+	buf.Write([]byte(line))
+}
 
 // Defaults for a manager that does not configure them.
 const (
@@ -20,9 +39,22 @@ const (
 	DefaultEventBuffer = 512
 )
 
+// SessionRequest is what the manager asks a [Factory] for.
+type SessionRequest struct {
+	// ID is the identifier the session must report.
+	ID string
+	// Host is the resolved target.
+	Host hosts.Host
+	// Events is the fan-in channel to report on.
+	Events chan<- Event
+	// Scrollback, when set, must be adopted rather than replaced. Reconnecting
+	// passes the previous session's buffer here so the pane keeps its history.
+	Scrollback *scrollback.Buffer
+}
+
 // Factory builds one session. It exists so the manager can be driven by fakes:
 // every manager test runs without a network.
-type Factory func(id string, host hosts.Host, events chan<- Event) Session
+type Factory func(SessionRequest) Session
 
 // ManagerConfig describes a fleet.
 type ManagerConfig struct {
@@ -76,7 +108,7 @@ func NewManager(cfg ManagerConfig) (*Manager, error) {
 
 	for _, host := range cfg.Hosts {
 		id := m.uniqueID(host)
-		s := cfg.NewSession(id, host, m.events)
+		s := cfg.NewSession(SessionRequest{ID: id, Host: host, Events: m.events})
 		m.sessions = append(m.sessions, s)
 		m.byID[id] = s
 	}
@@ -161,7 +193,12 @@ func (m *Manager) startOne(ctx context.Context, s Session) {
 func (m *Manager) Wait() { m.wg.Wait() }
 
 // Reconnect replaces one session with a fresh one for the same host and dials
-// it. The identifier is preserved, so panes and selections survive.
+// it, without touching any other session.
+//
+// The identifier is preserved, so panes and selections survive, and so is the
+// scrollback: a pane that just died is exactly the pane whose last lines the
+// user wants to read. A separator is written into it so the old output cannot be
+// mistaken for the new connection's.
 func (m *Manager) Reconnect(ctx context.Context, id string) error {
 	m.mu.Lock()
 	old, ok := m.byID[id]
@@ -170,7 +207,12 @@ func (m *Manager) Reconnect(ctx context.Context, id string) error {
 		return fmt.Errorf("reconnect %s: no such session", id)
 	}
 
-	fresh := m.cfg.NewSession(id, old.Host(), m.events)
+	buf := old.Scrollback()
+	writeReconnectSeparator(buf, old.Host())
+
+	fresh := m.cfg.NewSession(SessionRequest{
+		ID: id, Host: old.Host(), Events: m.events, Scrollback: buf,
+	})
 	m.byID[id] = fresh
 	for i, s := range m.sessions {
 		if s.ID() == id {
