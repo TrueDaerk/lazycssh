@@ -158,6 +158,30 @@ different machine.
 While the `?` overlay is open it is the only thing listening: the key that closes it does not
 also act. A user reading the help is not also driving the panes.
 
+## Panels
+
+The sidebar lists the five panels; only the **selected** one opens. Five open panels on an
+80-column terminal would show none of them usefully.
+
+### [1] Status
+
+The panel that answers "what happens if I type": the session name, the broadcast scope with its
+live target count, the working set, hosts up/total, and every flag that weakens a default.
+
+Every number is read from live state **at render time**. A cached target count is a lie waiting
+to be told: the fleet changes under the user, and the one moment the count matters is the moment
+it changed. `FleetUpdatedMsg` carries no payload for the same reason — it asks for a redraw, and
+the redraw reads the truth. That also survives the transport dropping event hints when the UI is
+behind, which it does by design (see [Session manager](./manager.md)).
+
+Flags — `HOST KEYS UNVERIFIED`, `SESSION LOGGING ON`, `BROADCASTING TO EVERY HOST` — are rendered
+in the warning style **and** repeated on the status bar, so switching panels or scrolling cannot
+hide a weakened default. Without a router the panel says `BROADCAST (not started)` rather than
+inventing a count.
+
+Panel bodies wrap rather than truncate: a line that silently loses its tail is worse than one
+that takes a second row, because the tail is where the warnings are.
+
 ## Messages
 
 | Message | Effect |
@@ -165,6 +189,8 @@ also act. A user reading the help is not also driving the panes.
 | `tea.WindowSizeMsg` | recompute the layout and resize the help |
 | `tea.BackgroundColorMsg` | rebuild the theme for a light or dark terminal |
 | `tea.KeyPressMsg` | dispatch by focus |
+| `FleetUpdatedMsg` | redraw; the panels read the fleet's live state themselves |
+| `HostsChangedMsg` | replace the host list, keeping the focused host |
 
 `Init` returns `tea.RequestBackgroundColor`, which is what makes the palette match the terminal
 rather than guessing.

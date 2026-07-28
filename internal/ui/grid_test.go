@@ -274,7 +274,7 @@ func TestGridRendersOnlyTheCurrentPage(t *testing.T) {
 		t.Fatalf("the first page does not show the first host:\n%s", view)
 	}
 
-	last := a.cfg.Hosts[len(a.cfg.Hosts)-1]
+	last := a.hostIDs()[len(a.hostIDs())-1]
 	if strings.Contains(view, last) {
 		t.Fatalf("the first page shows a host from another page:\n%s", view)
 	}

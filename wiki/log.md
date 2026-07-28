@@ -2,6 +2,11 @@
 
 ## 2026-07-28
 
+- Added the Status panel: session, broadcast scope with a live target count, working set, hosts
+  up/total, and the flags that weaken a default. Every number is read from live state at render
+  time rather than cached, and the warning flags are repeated on the status bar so they cannot be
+  switched away from. `core/tui.md` updated. Version 0.1.22.
+
 - The pane window pages through the host list: `n`/`p` move a whole page and take the pane focus
   with them, moving focus off a page turns it, and the page is clamped when the terminal shrinks.
   The window is explicitly not the working set - paging never changes who receives a keystroke.
