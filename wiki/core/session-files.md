@@ -90,6 +90,25 @@ Authentication is referenced instead: an agent, an `identity_file` pointing at a
 `secret_command` that prints the credential. See [Credential handling](./credentials.md) for the
 mechanisms and [Authentication](./authentication.md) for the method order at connect time.
 
+## Saving a run
+
+`FromRun` turns the live run into a session: the host arguments **as typed**, the connection
+options, the broadcast mode and the working set. Saving forty resolved hostnames would produce a
+file that is unreadable and wrong the moment the fleet changes, so the patterns are kept.
+
+What is deliberately not saved:
+
+- a **manual** working set — it is a list of identifiers from this run, and restoring it against
+  a different fleet would mean nothing,
+- anything that only restates a default — a host entry says what differs,
+- the defaults that are already the defaults: `broadcast: all` and an unnarrowed working set are
+  left out of the file entirely.
+
+`Store.Create` refuses to replace an existing session and returns `ErrExists`; `Store.Save`
+overwrites. `Store.SaveRun(run, overwrite)` is the pair in one call. The refusal exists because
+only the caller can ask the user, and overwriting a session someone built by hand should be a
+decision rather than a side effect.
+
 ## Round trip
 
 `Decode` and `Encode` round-trip: load, save, load again produces a byte-identical file, and a
