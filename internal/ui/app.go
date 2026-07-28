@@ -85,6 +85,7 @@ type App struct {
 	focus      Area
 	panel      Panel
 	paneIndex  int
+	page       int
 	showHelp   bool
 	fullScreen bool
 }
@@ -146,7 +147,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case HostsChangedMsg:
-		return a.withHosts(msg.Hosts), nil
+		return a.withHosts(msg.Hosts).followFocus(), nil
 
 	case tea.KeyPressMsg:
 		return a.handleKey(msg)
@@ -229,13 +230,17 @@ func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (a App) handleGridKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, a.keys.PaneLeft):
-		return a.movePane(-1), nil
+		return a.movePane(-1).followFocus(), nil
 	case key.Matches(msg, a.keys.PaneRight):
-		return a.movePane(+1), nil
+		return a.movePane(+1).followFocus(), nil
 	case key.Matches(msg, a.keys.PaneUp):
-		return a.movePane(-a.grid().Columns), nil
+		return a.movePane(-a.grid().Columns).followFocus(), nil
 	case key.Matches(msg, a.keys.PaneDown):
-		return a.movePane(+a.grid().Columns), nil
+		return a.movePane(+a.grid().Columns).followFocus(), nil
+	case key.Matches(msg, a.keys.NextPage):
+		return a.pageBy(+1), nil
+	case key.Matches(msg, a.keys.PrevPage):
+		return a.pageBy(-1), nil
 	case key.Matches(msg, a.keys.FullScreen):
 		a.fullScreen = !a.fullScreen
 		return a, nil
@@ -351,8 +356,7 @@ func (a App) renderMain() string {
 		return a.frame(a.theme.PaneFrame(focused), r, a.theme.Muted.Render("no room for a pane"))
 	}
 
-	page := g.Page(a.paneIndex)
-	first := page * g.PerPage
+	first := a.clampedPage(g) * g.PerPage
 
 	var rows []string
 	for row := range g.Rows {
@@ -410,6 +414,9 @@ func (a App) renderStatusBar() string {
 	hosts := len(a.cfg.Hosts)
 	parts = append(parts, a.theme.Muted.Render(fmt.Sprintf("%d host%s", hosts, plural(hosts))))
 	parts = append(parts, a.theme.Muted.Render(a.panel.Title()))
+	if label := a.windowLabel(); label != "" {
+		parts = append(parts, a.theme.Muted.Render(label))
+	}
 	if a.cfg.Insecure {
 		parts = append(parts, a.theme.StatusInsecure.Render("HOST KEYS UNVERIFIED"))
 	}

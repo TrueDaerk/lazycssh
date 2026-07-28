@@ -74,6 +74,20 @@ being reflowed, so the panes stay the size they were as hosts come and go.
 for this, but the epic gives the number keys to the sidebar panels; a key cannot mean both, so
 full screen took the letter.
 
+## The window
+
+The **window** is which hosts are on screen. It is not the [working set](./working-sets.md),
+which is which hosts a command is about. Paging the window never changes who receives a
+keystroke — that is the entire reason the two are separate concepts.
+
+- `pgdn`/`n` and `pgup`/`p` move the window a whole page and put the pane focus on the first host
+  of the new page, so the pane that receives a keystroke is one the user can see,
+- moving the pane focus off the edge of a page turns the page rather than focusing a pane that is
+  not drawn,
+- the page indicator (`page 2/5`) appears in the status bar only when there is more than one page,
+- the page is clamped on every render: a terminal that shrinks produces more pages, and the page
+  the user was on may stop existing.
+
 ## Focus
 
 Focus is one explicit piece of model state and it is always visible: the focused frame is drawn
@@ -118,6 +132,20 @@ being reflowed, so the panes stay the size they were as hosts come and go.
 `f` full-screens the focused pane and `f` again returns to the grid. The issue proposed `1`/`2`/`3`
 for this, but the epic gives the number keys to the sidebar panels; a key cannot mean both, so
 full screen took the letter.
+
+## The window
+
+The **window** is which hosts are on screen. It is not the [working set](./working-sets.md),
+which is which hosts a command is about. Paging the window never changes who receives a
+keystroke — that is the entire reason the two are separate concepts.
+
+- `pgdn`/`n` and `pgup`/`p` move the window a whole page and put the pane focus on the first host
+  of the new page, so the pane that receives a keystroke is one the user can see,
+- moving the pane focus off the edge of a page turns the page rather than focusing a pane that is
+  not drawn,
+- the page indicator (`page 2/5`) appears in the status bar only when there is more than one page,
+- the page is clamped on every render: a terminal that shrinks produces more pages, and the page
+  the user was on may stop existing.
 
 ## Focus survives the host list changing
 
