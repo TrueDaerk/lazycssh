@@ -2,6 +2,10 @@
 
 ## 2026-07-28
 
+- Added host key verification against `known_hosts` with an accept prompt for unknown keys and a
+  hard failure for changed ones, plus the `--insecure-ignore-host-key` opt-out. Documented in
+  `core/host-keys.md`. Version 0.1.7.
+
 - Added the authentication chain in `internal/ssh/auth.go`: agent, identity files with a
   passphrase prompt, password, keyboard-interactive, with secrets cached per key file and per
   login user. Documented in `core/authentication.md`. Version 0.1.6.

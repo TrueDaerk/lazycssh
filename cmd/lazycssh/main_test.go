@@ -44,6 +44,18 @@ func TestRun(t *testing.T) {
 			wantStderr: []string{"nope"},
 		},
 		{
+			name:       "the insecure flag warns loudly before anything else",
+			args:       []string{"--insecure-ignore-host-key", "a.example.com"},
+			wantCode:   exitError,
+			wantStderr: []string{"WARNING", "insecure-ignore-host-key", "machine-in-the-middle"},
+		},
+		{
+			name:       "host key verification is not weakened without the flag",
+			args:       []string{"a.example.com"},
+			wantCode:   exitError,
+			wantStderr: []string{"not implemented"},
+		},
+		{
 			name:       "hosts are accepted but connecting is not implemented",
 			args:       []string{"a.example.com", "b.example.com"},
 			wantCode:   exitError,
@@ -77,6 +89,10 @@ func TestRun(t *testing.T) {
 				if !strings.Contains(stderr.String(), want) {
 					t.Errorf("stderr = %q, want it to contain %q", stderr.String(), want)
 				}
+			}
+			if tt.name == "host key verification is not weakened without the flag" &&
+				strings.Contains(stderr.String(), "WARNING") {
+				t.Error("a run without the flag printed the insecure warning")
 			}
 		})
 	}

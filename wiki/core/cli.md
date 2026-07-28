@@ -23,6 +23,7 @@ shell is involved.
 |------|--------|
 | `--version` | Print the version and exit. Takes precedence over every other argument. |
 | `-h`, `--help` | Print usage and exit. |
+| `--insecure-ignore-host-key` | Accept any host key without checking `known_hosts`. Dangerous, prints a warning on every run — see [Host key verification](./host-keys.md). |
 
 ## Exit codes
 
