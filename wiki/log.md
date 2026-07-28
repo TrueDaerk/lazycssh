@@ -2,6 +2,10 @@
 
 ## 2026-07-28
 
+- Added the session manager: bounded fan-out dialling, one fan-in event channel, per-host
+  reconnect and close, and fleet counts for the status bar. Documented in `core/manager.md`.
+  Version 0.1.8.
+
 - Added host key verification against `known_hosts` with an accept prompt for unknown keys and a
   hard failure for changed ones, plus the `--insecure-ignore-host-key` opt-out. Documented in
   `core/host-keys.md`. Version 0.1.7.
