@@ -1,0 +1,31 @@
+# Fixture for the resolver tests. Never the developer's real ~/.ssh/config.
+
+Host bastion
+    HostName bastion.example.com
+    User ops
+    Port 2222
+    IdentityFile ~/.ssh/id_bastion
+
+Host web-*
+    User deploy
+    Port 2200
+    ProxyJump bastion
+
+Host web-1
+    HostName 10.0.0.1
+
+Host db.example.com
+    User postgres
+
+Host multikey
+    IdentityFile ~/.ssh/id_one
+    IdentityFile /etc/ssh/id_two
+
+Host noproxy
+    ProxyJump none
+
+Host badport
+    Port 99999
+
+Host *
+    User fallback
