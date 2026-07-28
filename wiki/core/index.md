@@ -7,3 +7,4 @@ The runtime pieces of lazycssh.
 * [Host resolution](./host-resolution.md) - turning an argument into a dialable target via ~/.ssh/config
 * [Scrollback buffer](./scrollback.md) - bounded per-session ring buffer, so a chatty host cannot stall the UI
 * [SSH session lifecycle](./session.md) - one host end to end, and the event contract the UI depends on
+* [Authentication](./authentication.md) - method order, credential caching across hosts, and how secrets stay out of logs
