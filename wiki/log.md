@@ -2,6 +2,11 @@
 
 ## 2026-07-28
 
+- Added `internal/commandlog` and the Command log panel: one entry per command with its target
+  count and mode, never an entry per host, and never anything typed in `single` mode - that is the
+  mode a sudo prompt is answered in. The log is in memory only, bounded, and says so when it drops
+  older entries. New concept document `core/command-log.md`. Version 0.1.26.
+
 - Added the Sessions panel: saved sessions with host counts, `enter` to launch and `space` to
   merge (both emitted as messages, so the UI still cannot dial), and `w` to save the current run
   with a name prompt. An existing name turns into an explicit overwrite question and nothing is

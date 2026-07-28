@@ -83,6 +83,9 @@ type Config struct {
 	// RunDefaults are the connection options the run was started with, written
 	// into a saved session.
 	RunDefaults sessions.HostOptions
+	// CommandLog is the audit trail of what was sent this run. Nil means the
+	// panel says so rather than pretending the run sent nothing.
+	CommandLog CommandLog
 	// Logging reports that session output is being written to disk, which is
 	// off by default and must be visible for the whole run while it is on.
 	Logging bool
@@ -122,6 +125,7 @@ type App struct {
 	hostCursor    int
 	groupCursor   int
 	sessionCursor int
+	logCursor     int
 	showHelp      bool
 	fullScreen    bool
 }
@@ -304,6 +308,8 @@ func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.handleGroupsKey(msg)
 	case PanelSessions:
 		return a.handleSessionsKey(msg)
+	case PanelCommandLog:
+		return a.handleLogKey(msg)
 	}
 
 	switch {
@@ -343,6 +349,28 @@ func (a App) handleSaveKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	a.saveInput, cmd = a.saveInput.Update(msg)
 	return a, cmd
+}
+
+// handleLogKey drives the Command log panel: the arrows move through the
+// history and enter sends an entry again.
+func (a App) handleLogKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	entries := len(a.logEntries())
+
+	switch {
+	case key.Matches(msg, a.keys.Up):
+		if a.logCursor <= 0 {
+			return a.movePanel(-1), nil
+		}
+		return a.moveLogCursor(-1), nil
+	case key.Matches(msg, a.keys.Down):
+		if a.logCursor >= entries-1 {
+			return a.movePanel(+1), nil
+		}
+		return a.moveLogCursor(+1), nil
+	case key.Matches(msg, a.keys.Choose):
+		return a.resendSelectedCommand()
+	}
+	return a, nil
 }
 
 // handleSessionsKey drives the Sessions panel.

@@ -19,6 +19,8 @@ func (a App) panelBody(panel Panel, width, height int) string {
 		return a.groupsPanel(width, height)
 	case PanelSessions:
 		return a.sessionsPanel(width, height)
+	case PanelCommandLog:
+		return a.logPanel(width, height)
 	default:
 		return a.theme.Muted.Render("not implemented yet")
 	}

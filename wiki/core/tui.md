@@ -234,6 +234,11 @@ The saved [session files](./session-files.md), each with its host count and desc
 The panel does not dial. `enter` emits a `SessionLaunchMsg`; the layer that owns the transport
 acts on it, which keeps `internal/ui` unable to open a connection.
 
+### [5] Command log
+
+Every command sent this run, newest last, each with its target count and mode — see
+[Command log](./command-log.md). `enter` sends an entry again, to the **current** target set.
+
 ## Messages
 
 | Message | Effect |
@@ -245,6 +250,7 @@ acts on it, which keeps `internal/ui` unable to open a connection.
 | `HostsChangedMsg` | replace the host list, keeping the focused host |
 | `SessionsChangedMsg` | re-read the session directory |
 | `SessionLaunchMsg` | emitted, not handled: the program opens or merges a saved session |
+| `CommandResendMsg` | emitted, not handled: the program sends a logged command again |
 
 `Init` returns `tea.RequestBackgroundColor`, which is what makes the palette match the terminal
 rather than guessing.
