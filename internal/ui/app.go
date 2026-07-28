@@ -7,6 +7,7 @@ import (
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -96,10 +97,13 @@ type App struct {
 	help   help.Model
 	layout Layout
 
+	filter textinput.Model
+
 	focus      Area
 	panel      Panel
 	paneIndex  int
 	page       int
+	hostCursor int
 	showHelp   bool
 	fullScreen bool
 }
@@ -115,13 +119,18 @@ func NewApp(cfg Config) App {
 	h := help.New()
 	h.Styles = HelpStyles(theme)
 
+	filter := textinput.New()
+	filter.Placeholder = "filter hosts"
+	filter.Prompt = ""
+
 	return App{
-		cfg:   cfg,
-		keys:  keys,
-		theme: theme,
-		help:  h,
-		focus: AreaSidebar,
-		panel: PanelStatus,
+		cfg:    cfg,
+		keys:   keys,
+		theme:  theme,
+		help:   h,
+		filter: filter,
+		focus:  AreaSidebar,
+		panel:  PanelStatus,
 	}
 }
 
@@ -178,6 +187,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKey dispatches a key press. Bindings are matched by area, so a key
 // means one thing at a time; see [KeyMap].
 func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// The filter input has the keyboard while it is open: a host called "x"
+	// must be typeable without closing a pane.
+	if a.filter.Focused() {
+		return a.handleFilterKey(msg)
+	}
+
 	// While the overlay is open it is the only thing listening: a user reading
 	// the help is not also driving the panes.
 	if a.showHelp {
@@ -224,8 +239,35 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// handleSidebarKey moves within the panel list.
+// handleFilterKey feeds the filter input, which owns the keyboard while it is
+// open.
+func (a App) handleFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		// Keep the filter, give the keyboard back.
+		a.filter.Blur()
+		return a, nil
+	case "esc":
+		// Abandon it: esc undoes, enter confirms.
+		a.filter.SetValue("")
+		a.filter.Blur()
+		a.hostCursor = 0
+		return a, nil
+	}
+
+	var cmd tea.Cmd
+	a.filter, cmd = a.filter.Update(msg)
+	a.hostCursor = clamp(a.hostCursor, 0, max(0, len(a.hostRows())-1))
+	return a, cmd
+}
+
+// handleSidebarKey moves within the panel list, or within the selected panel
+// when that panel owns a list of its own.
 func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if a.panel == PanelHosts {
+		return a.handleHostsKey(msg)
+	}
+
 	switch {
 	case key.Matches(msg, a.keys.Up):
 		return a.movePanel(-1), nil
@@ -235,6 +277,35 @@ func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Choosing a host is choosing its pane; the panel that owns the list
 		// says which host, and the grid is where the user wanted to end up.
 		a.focus = AreaGrid
+		return a, nil
+	}
+	return a, nil
+}
+
+// handleHostsKey drives the Hosts panel: the arrows move the host cursor rather
+// than the panel selection, because the list is what the user came for.
+func (a App) handleHostsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	rows := len(a.hostRows())
+
+	switch {
+	case key.Matches(msg, a.keys.Up):
+		// Off the top of the list is the panel above it, so the panel list
+		// stays reachable with the same keys that drive the host list.
+		if a.hostCursor <= 0 {
+			return a.movePanel(-1), nil
+		}
+		return a.moveHostCursor(-1), nil
+	case key.Matches(msg, a.keys.Down):
+		if a.hostCursor >= rows-1 {
+			return a.movePanel(+1), nil
+		}
+		return a.moveHostCursor(+1), nil
+	case key.Matches(msg, a.keys.Toggle):
+		return a.toggleSelectedHost(), nil
+	case key.Matches(msg, a.keys.Choose):
+		return a.focusSelectedHost(), nil
+	case key.Matches(msg, a.keys.Filter):
+		a.filter.Focus()
 		return a, nil
 	}
 	return a, nil
@@ -352,7 +423,7 @@ func (a App) renderSidebar() string {
 		// Only the selected panel opens. Five open panels on an 80-column
 		// terminal would show none of them usefully.
 		if panel == a.panel {
-			if body := a.panelBody(panel, r.Width-2); body != "" {
+			if body := a.panelBody(panel, r.Width-2, panelBodyHeight(r, len(Panels()))); body != "" {
 				b.WriteString("\n")
 				b.WriteString(indent(body))
 			}
@@ -513,4 +584,10 @@ func indent(s string) string {
 		lines[i] = " " + line
 	}
 	return strings.Join(lines, "\n")
+}
+
+// panelBodyHeight is how many rows the open panel's body may use: the sidebar
+// minus its border and minus the one line each panel title costs.
+func panelBodyHeight(sidebar Rect, panels int) int {
+	return max(1, sidebar.Height-2-panels)
 }

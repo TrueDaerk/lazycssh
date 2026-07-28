@@ -9,10 +9,12 @@ import (
 //
 // Only the selected panel has a body: a sidebar that showed five open panels at
 // once on an 80-column terminal would show none of them usefully.
-func (a App) panelBody(panel Panel, width int) string {
+func (a App) panelBody(panel Panel, width, height int) string {
 	switch panel {
 	case PanelStatus:
 		return a.statusPanel(width)
+	case PanelHosts:
+		return a.hostsPanel(width, height)
 	default:
 		return a.theme.Muted.Render("not implemented yet")
 	}

@@ -109,7 +109,7 @@ func DefaultKeyMap() KeyMap {
 		Up:        key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
 		Down:      key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
 		Choose:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "focus this host's pane")),
-		Toggle:    key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "toggle selection")),
+		Toggle:    key.NewBinding(key.WithKeys("space", " "), key.WithHelp("space", "toggle selection")),
 		Filter:    key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
 		SaveSet:   key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "save the working set or session")),
 		NextChunk: key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "next chunk of hosts")),

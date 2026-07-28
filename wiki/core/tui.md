@@ -182,6 +182,27 @@ inventing a count.
 Panel bodies wrap rather than truncate: a line that silently loses its tail is worse than one
 that takes a second row, because the tail is where the warnings are.
 
+### [2] Hosts
+
+Every host of the run: pane number, selection marker, name, connection state.
+
+- `↑`/`k` and `↓`/`j` move the host cursor; running off either end moves to the neighbouring
+  panel, so the panel list stays reachable with the same keys,
+- `space` toggles selection. Selection lives in the [broadcast router](./broadcast-scope.md) and
+  is keyed by **host identifier**, so it survives a reconnect, a filter and a page turn — the pane
+  moves, the host keeps its name,
+- `enter` focuses that host's pane and hands focus to the grid,
+- `/` opens the filter, which owns the keyboard while it is open: a host called `x` must be
+  typeable without closing a pane. `enter` keeps the filter, `esc` drops it.
+
+Filtering never renumbers panes: a row shows the host's position in the **full** list, so
+`3 web-02` stays pane 3 whatever the filter hides.
+
+Only the visible rows are rendered, with a `+N more` marker for the rest, so a redraw costs the
+size of the panel rather than the size of the fleet — two hundred hosts included.
+
+Exit-code tracking is not here yet; it is [#41](https://github.com/TrueDaerk/lazycssh/issues/41).
+
 ## Messages
 
 | Message | Effect |
