@@ -10,3 +10,4 @@ The runtime pieces of lazycssh.
 * [Authentication](./authentication.md) - method order, credential caching across hosts, and how secrets stay out of logs
 * [Host key verification](./host-keys.md) - known_hosts checking, why a changed key is never a prompt, and the one way out
 * [Session manager](./manager.md) - owning a fleet: bounded fan-out dialling, one event channel, per-host reconnect
+* [Working sets](./working-sets.md) - the current subject of work: counts, ranges, patterns, paging and named sets
