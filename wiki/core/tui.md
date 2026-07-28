@@ -218,6 +218,22 @@ ad hoc set the user is actually in, so the panel can never hide where they are.
 - `[` and `]` page the **working set** by its own chunk size. That is a different thing from
   `pgup`/`pgdn`, which page the pane window; the panel shows both lines for exactly that reason.
 
+### [4] Sessions
+
+The saved [session files](./session-files.md), each with its host count and description.
+
+- `enter` launches the session under the cursor, `space` merges it into the current run,
+- `w` saves the current run: a name prompt that owns the keyboard, pre-filled with the session
+  the run was started from,
+- an existing name is **never** replaced silently: the first `enter` turns into `overwrite "x"?
+  y/n`, and nothing is written until it is answered,
+- the run's **patterns** are written, not the hostnames they expanded to,
+- one unreadable file becomes one `(unreadable)` row rather than an empty panel — hiding the
+  other sessions would make a typo look like data loss.
+
+The panel does not dial. `enter` emits a `SessionLaunchMsg`; the layer that owns the transport
+acts on it, which keeps `internal/ui` unable to open a connection.
+
 ## Messages
 
 | Message | Effect |
@@ -227,6 +243,8 @@ ad hoc set the user is actually in, so the panel can never hide where they are.
 | `tea.KeyPressMsg` | dispatch by focus |
 | `FleetUpdatedMsg` | redraw; the panels read the fleet's live state themselves |
 | `HostsChangedMsg` | replace the host list, keeping the focused host |
+| `SessionsChangedMsg` | re-read the session directory |
+| `SessionLaunchMsg` | emitted, not handled: the program opens or merges a saved session |
 
 `Init` returns `tea.RequestBackgroundColor`, which is what makes the palette match the terminal
 rather than guessing.
