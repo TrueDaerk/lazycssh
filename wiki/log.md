@@ -2,6 +2,10 @@
 
 ## 2026-07-28
 
+- The current run can be saved as a named session: `sessions.FromRun` keeps the host arguments as
+  typed, drops what only restates a default, and refuses to overwrite an existing session without
+  the caller asking first. `core/session-files.md` updated. Version 0.1.14.
+
 - Session configs can now say *how* to authenticate without storing the secret: a per-session or
   per-host `secret_command` argv whose stdout is the credential, run with a timeout and a hard
   kill so a hung password manager cannot pin a session. Added `internal/secret`, whose `Value`
