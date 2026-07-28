@@ -2,6 +2,9 @@
 
 ## 2026-07-28
 
+- Added `internal/scrollback`, the bounded per-session ring buffer that enforces the
+  backpressure rule. Documented in `core/scrollback.md`. Version 0.1.3.
+
 - Host arguments are now resolved through `~/.ssh/config` (`HostName`, `User`, `Port`,
   `IdentityFile`, `ProxyJump`, glob patterns), with command line overrides winning. New concept
   document `core/host-resolution.md`. Version 0.1.2.
