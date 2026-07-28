@@ -69,41 +69,16 @@ Any keystroke going out must be visibly indicated — the user must always know 
 - Prefer `ssh-agent` auth; ask for passphrases via a masked `textinput`, keep them in memory only.
 - Broadcasting a destructive command to N hosts is the whole point of the tool and also its main footgun — do not add "confirm every command" friction, but do make the target count unmissable before send.
 
-## Conventions
+## Process — read before changing code
 
-- `gofmt` (or `gofumpt`) clean; `go vet` clean.
-- Errors wrapped with `fmt.Errorf("...: %w", err)`. No naked `panic` outside `main`.
-- Exported identifiers documented; unexported ones only where non-obvious.
-- Table-driven tests. The SSH layer is behind an interface so the UI tests run without a network — fake sessions, not real dials.
-- No global state. Config and dependencies passed into constructors.
+Conventions, workflow and versioning live in the wiki, not here. They are binding, not optional reading:
 
-## Workflow
+- [`wiki/contributing/conventions.md`](wiki/contributing/conventions.md) — gofmt/vet, error wrapping, tests, no global state
+- [`wiki/contributing/workflow.md`](wiki/contributing/workflow.md) — issue-driven work, one issue = one branch, PR closing sequence
+- [`wiki/contributing/versioning.md`](wiki/contributing/versioning.md) — semver policy, `internal/version` is the source of truth
+- [`wiki/contributing/wiki-format.md`](wiki/contributing/wiki-format.md) — OKF v0.1 rules for the `wiki/` bundle
 
-Work is tracked in **GitHub issues**. Every feature and every bugfix starts as an issue and is closed by a merged PR. Use `gh` for all of it.
-
-One issue = one branch. Never work on `main` directly.
-
-```sh
-gh issue list
-gh issue view <n>
-git switch -c <type>/<n>-<short-slug>   # feat/12-broadcast-modes, fix/34-pane-crash
-```
-
-When an issue is done, the full closing sequence runs — none of these steps are optional:
-
-1. **Docs** — update the wiki concept document(s) the change touches, refresh `timestamp`, add a `log.md` entry. Update `README.md` if user-facing behavior or flags changed.
-2. **Version bump** — see below. Commit it with the rest of the work.
-3. **PR** — `gh pr create` against `main`. Body references the issue with `Closes #<n>` so it auto-closes on merge.
-4. **Merge** — merge into `main` once checks pass.
-5. **Cleanup** — delete the branch locally and remotely (`git branch -d`, `git push origin --delete` or `gh pr merge --delete-branch`), and `git switch main && git pull`.
-
-### Versioning
-
-Semver, single source of truth: a `Version` constant in `internal/version` plus a matching `v<x.y.z>` git tag on `main` after merge.
-
-- **Patch** (`0.1.3` → `0.1.4`) — the default. Bump after every closed issue: bugfixes, small features, refactors, docs-only changes that ship.
-- **Minor** (`0.1.4` → `0.2.0`) — on request, or occasionally for a large new feature. When a change feels minor-worthy, bump it and say so; the user can correct it.
-- **Major** — **never** bump on your own initiative. Only on explicit request.
+Short version: never commit on `main`; every change starts from a GitHub issue and ends in a merged PR that also updates the wiki and bumps the version.
 
 ## Commands
 
@@ -124,24 +99,8 @@ TUI cannot be verified from stdout alone. To check a change visually, run it in 
 
 ## Wiki
 
-The `wiki/` directory is an **OKF (Open Knowledge Format) v0.1** bundle — hierarchical markdown organized
-for progressive disclosure by humans and agents. The format is specified at
-<https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md>.
+`wiki/` is an OKF v0.1 bundle. Start at [`wiki/index.md`](wiki/index.md); the format rules are in
+[`wiki/contributing/wiki-format.md`](wiki/contributing/wiki-format.md).
 
-Rules that matter when reading or writing the wiki:
-
-- **Concept documents** (every `.md` that is not a reserved file) MUST have parseable YAML frontmatter
-  with a non-empty `type` field. Also include the recommended fields: `title`,
-  `description` (one-line summary), and where the concept is backed by source, `resource`
-  (a repo-relative path to the code it documents). `tags` and `timestamp` (ISO 8601) are optional but encouraged.
-- **Reserved files** are `index.md` and `log.md`:
-  - `index.md` provides directory listings for progressive disclosure and contains **no frontmatter**
-    (the sole exception: the root `index.md` may carry `okf_version: "0.1"`). Entries use `* [Title](url) - description`.
-  - `log.md` (optional) records changes newest-first under `## YYYY-MM-DD` headings.
-- **Cross-links** are bundle-relative (`/core/config.md`) or relative (`./other.md`);
-  broken links are tolerated (may point at future docs).
-- Consumers must tolerate unknown `type` values, unknown keys, and missing optional fields gracefully.
-
-**Keep the wiki current.** When you change behavior the wiki documents (a feature, a subsystem, the architecture),
-update the matching concept document in the same change, refresh its `timestamp`, and add a `log.md` entry. Treat the
-wiki as part of the deliverable, not an afterthought.
+**Keep it current.** When you change behavior the wiki documents, update the matching concept document
+in the same change, refresh its `timestamp`, and add a `log.md` entry. The wiki is part of the deliverable.
