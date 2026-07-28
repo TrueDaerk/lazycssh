@@ -2,6 +2,11 @@
 
 ## 2026-07-28
 
+- Added the Sessions panel: saved sessions with host counts, `enter` to launch and `space` to
+  merge (both emitted as messages, so the UI still cannot dial), and `w` to save the current run
+  with a name prompt. An existing name turns into an explicit overwrite question and nothing is
+  written until it is answered. `core/tui.md` updated. Version 0.1.25.
+
 - Added the Groups / Views panel: the all-hosts entry, every named working set and the unnamed ad
   hoc one, with the active row marked by a character as well as a style and `enter` switching to
   it in a single keystroke. `[`/`]` page the working set, distinct from paging the pane window.

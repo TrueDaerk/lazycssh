@@ -10,6 +10,8 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/TrueDaerk/lazycssh/internal/sessions"
 )
 
 // Panel is one of the numbered panels down the left, in the order the number
@@ -73,6 +75,14 @@ type Config struct {
 	// WorkingSet is the current subject of work: what the Status panel reports
 	// and what the Groups panel lists and switches between.
 	WorkingSet WorkingSets
+	// Sessions is the saved-session store the Sessions panel lists and writes.
+	Sessions SessionStore
+	// RunPatterns are the host arguments as the user typed them, kept so
+	// saving the run writes patterns rather than expanded hostnames.
+	RunPatterns []string
+	// RunDefaults are the connection options the run was started with, written
+	// into a saved session.
+	RunDefaults sessions.HostOptions
 	// Logging reports that session output is being written to disk, which is
 	// off by default and must be visible for the whole run while it is on.
 	Logging bool
@@ -97,16 +107,23 @@ type App struct {
 	help   help.Model
 	layout Layout
 
-	filter textinput.Model
+	filter    textinput.Model
+	saveInput textinput.Model
 
-	focus       Area
-	panel       Panel
-	paneIndex   int
-	page        int
-	hostCursor  int
-	groupCursor int
-	showHelp    bool
-	fullScreen  bool
+	sessionRows      []sessionRow
+	sessionsErr      error
+	saveErr          error
+	confirmOverwrite bool
+
+	focus         Area
+	panel         Panel
+	paneIndex     int
+	page          int
+	hostCursor    int
+	groupCursor   int
+	sessionCursor int
+	showHelp      bool
+	fullScreen    bool
 }
 
 // NewApp builds the root model.
@@ -124,15 +141,21 @@ func NewApp(cfg Config) App {
 	filter.Placeholder = "filter hosts"
 	filter.Prompt = ""
 
-	return App{
-		cfg:    cfg,
-		keys:   keys,
-		theme:  theme,
-		help:   h,
-		filter: filter,
-		focus:  AreaSidebar,
-		panel:  PanelStatus,
+	save := textinput.New()
+	save.Placeholder = "session name"
+	save.Prompt = ""
+
+	a := App{
+		cfg:       cfg,
+		keys:      keys,
+		theme:     theme,
+		help:      h,
+		filter:    filter,
+		saveInput: save,
+		focus:     AreaSidebar,
+		panel:     PanelStatus,
 	}
+	return a.loadSessions()
 }
 
 // Init asks the terminal for its background colour so the palette can match it.
@@ -170,6 +193,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.help.Styles = HelpStyles(a.theme)
 		return a, nil
 
+	case SessionsChangedMsg:
+		return a.loadSessions(), nil
+
 	case FleetUpdatedMsg:
 		// Nothing to store: the panels read the fleet's live state when they
 		// render. Redrawing is the whole effect.
@@ -188,6 +214,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKey dispatches a key press. Bindings are matched by area, so a key
 // means one thing at a time; see [KeyMap].
 func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// The save prompt has the keyboard while it is open, for the same reason
+	// the filter does: a session called "x" has to be nameable.
+	if a.Saving() {
+		return a.handleSaveKey(msg)
+	}
+
 	// The filter input has the keyboard while it is open: a host called "x"
 	// must be typeable without closing a pane.
 	if a.filter.Focused() {
@@ -270,6 +302,8 @@ func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.handleHostsKey(msg)
 	case PanelGroups:
 		return a.handleGroupsKey(msg)
+	case PanelSessions:
+		return a.handleSessionsKey(msg)
 	}
 
 	switch {
@@ -282,6 +316,58 @@ func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// says which host, and the grid is where the user wanted to end up.
 		a.focus = AreaGrid
 		return a, nil
+	}
+	return a, nil
+}
+
+// handleSaveKey drives the save-as prompt and the overwrite question. An
+// existing session is never replaced without the user answering for it.
+func (a App) handleSaveKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if a.confirmOverwrite {
+		switch msg.String() {
+		case "y", "Y":
+			a.confirmOverwrite = false
+			return a.commitSave(true)
+		default:
+			return a.cancelSave(), nil
+		}
+	}
+
+	switch msg.String() {
+	case "enter":
+		return a.commitSave(false)
+	case "esc":
+		return a.cancelSave(), nil
+	}
+
+	var cmd tea.Cmd
+	a.saveInput, cmd = a.saveInput.Update(msg)
+	return a, cmd
+}
+
+// handleSessionsKey drives the Sessions panel.
+func (a App) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	rows := len(a.sessionRows)
+
+	switch {
+	case key.Matches(msg, a.keys.Up):
+		if a.sessionCursor <= 0 {
+			return a.movePanel(-1), nil
+		}
+		return a.moveSessionCursor(-1), nil
+	case key.Matches(msg, a.keys.Down):
+		if a.sessionCursor >= rows-1 {
+			return a.movePanel(+1), nil
+		}
+		return a.moveSessionCursor(+1), nil
+	case key.Matches(msg, a.keys.Choose):
+		return a.launchSelectedSession(false)
+	case key.Matches(msg, a.keys.Toggle):
+		// Space merges rather than replaces, which is the same "add to what I
+		// have" meaning it carries in the Hosts panel.
+		return a.launchSelectedSession(true)
+	case key.Matches(msg, a.keys.SaveSet):
+		return a.beginSave(), nil
 	}
 	return a, nil
 }
