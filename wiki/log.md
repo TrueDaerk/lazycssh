@@ -2,6 +2,11 @@
 
 ## 2026-07-28
 
+- Decided and implemented broadcast scope: `all` means the active working set, and reaching
+  every host in the run is a separate `fleet` mode that renders as a warning. `internal/broadcast`
+  resolves mode, working set, selection and focus into the target list, and never renders a count
+  that differs from it. New decision document `core/broadcast-scope.md`. Version 0.1.11.
+
 - Added `internal/workingset`: the current subject of work as a first-class model object,
   defined by count, range, pattern or manual selection, with single-keystroke paging by chunk
   size and named sets that survive it. New concept document `core/working-sets.md`.
