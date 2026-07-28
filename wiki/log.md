@@ -2,6 +2,11 @@
 
 ## 2026-07-28
 
+- Added the Hosts panel: every host with its pane number, selection marker and connection state,
+  a filter that owns the keyboard while open, `space` to toggle selection and `enter` to focus a
+  pane. Selection is keyed by host identifier so it survives reconnects, filtering and paging, and
+  only the visible rows are rendered. `core/tui.md` updated. Version 0.1.23.
+
 - Added the Status panel: session, broadcast scope with a live target count, working set, hosts
   up/total, and the flags that weaken a default. Every number is read from live state at render
   time rather than cached, and the warning flags are repeated on the status bar so they cannot be

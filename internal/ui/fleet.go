@@ -32,6 +32,10 @@ type Targeter interface {
 	Warning() bool
 	// IsSelected reports whether a host is toggled.
 	IsSelected(id string) bool
+	// Toggle flips a host's selection and reports whether it is now selected.
+	// Selection is by identifier, so it survives a reconnect and paging: the
+	// pane may move, the host does not change its name.
+	Toggle(id string) bool
 }
 
 // FleetUpdatedMsg says the fleet changed: a session connected, failed, was

@@ -234,7 +234,7 @@ func TestOnlyTheSelectedPanelOpens(t *testing.T) {
 	if strings.Contains(view, "session: prod-web") {
 		t.Fatalf("an unselected panel is still open:\n%s", view)
 	}
-	if !strings.Contains(view, "not implemented yet") {
+	if !strings.Contains(view, "1 web-01") {
 		t.Fatalf("the Hosts panel says nothing:\n%s", view)
 	}
 }
@@ -242,7 +242,7 @@ func TestOnlyTheSelectedPanelOpens(t *testing.T) {
 func TestPanelBodyForEveryPanel(t *testing.T) {
 	a, _, _, _ := statusApp(t, "web-01")
 	for _, panel := range Panels() {
-		if body := a.panelBody(panel, 30); body == "" {
+		if body := a.panelBody(panel, 30, 10); body == "" {
 			t.Fatalf("panel %v renders nothing", panel)
 		}
 	}
