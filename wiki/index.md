@@ -8,5 +8,6 @@ Knowledge bundle for lazycssh — a terminal UI for parallel SSH.
 
 ## Sections
 
+* [Core](./core/index.md) - the runtime pieces: CLI, transport, UI
 * [Contributing](./contributing/index.md) - how work is planned, branched, reviewed, versioned and documented
 * [Changelog](./log.md) - wiki changes, newest first

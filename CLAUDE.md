@@ -4,11 +4,11 @@ Terminal UI for parallel SSH. Inspired by `lazygit` / `lazydocker`, replaces cla
 
 **Core purpose:** open SSH sessions to many hosts at once, broadcast keyboard input to all of them simultaneously, and watch every host's output in one screen.
 
-Status: greenfield. No code yet — everything below is the target design, not a description of existing files.
+Status: early. Only the module skeleton exists (`cmd/lazycssh`, `internal/version`, CI). Everything below beyond that is the target design, not a description of existing files.
 
 ## Stack
 
-- Go (module `github.com/geant/lazycssh` unless decided otherwise)
+- Go (module `github.com/TrueDaerk/lazycssh`, matching the remote)
 - TUI: **bubbletea v2** — `github.com/charmbracelet/bubbletea/v2`
 - Styling: `github.com/charmbracelet/lipgloss/v2`
 - Widgets: `github.com/charmbracelet/bubbles/v2` (viewport, textinput, list, help, key)
