@@ -2,6 +2,11 @@
 
 ## 2026-07-28
 
+- The pane grid auto-tiles: the squarest shape that holds the hosts, bounded by a 24x6 minimum
+  pane size, and paging rather than shrinking below it. Deterministic for every host count, with
+  the shapes for 1, 2, 3, 4, 6, 9, 12 and 20 asserted. Full screen is `f`, because the number keys
+  belong to the sidebar panels. `core/tui.md` updated. Version 0.1.20.
+
 - Focus routing: keys are dispatched by the focused area and the other area's bindings are not
   consulted, arrows move within the sidebar and the grid, nothing wraps, and `HostsChangedMsg`
   preserves the focused host by identity rather than by position. `core/tui.md` updated.

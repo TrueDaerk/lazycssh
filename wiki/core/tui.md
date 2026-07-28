@@ -46,6 +46,34 @@ Rules:
 - every rect is non-negative at every size, including sizes no terminal reports. A test sweeps
   every width from −5 to 200 and every height from −5 to 60 and asserts it.
 
+## Pane grid
+
+`TileGrid(area, count)` is the tiling: the squarest arrangement that holds the hosts, bounded by
+how many minimum-size panes the area actually fits. It is a pure function, so two renders of the
+same state cannot disagree about where a pane is.
+
+| Hosts | Shape |
+|-------|-------|
+| 1 | 1×1 |
+| 2 | 2×1 |
+| 3, 4 | 2×2 |
+| 6 | 3×2 |
+| 9 | 3×3 |
+| 12 | 4×3 |
+| 20 | 5×4 |
+
+A pane is never smaller than 24×6 including its border. When the hosts do not fit at that size
+the grid **pages** rather than shrinking further — four readable panes and a page indicator beat
+twelve unreadable ones. `Grid.Pages`, `Grid.Page(i)` and `Grid.Cell(i)` say how many pages there
+are and where a host sits on its own.
+
+An empty slot on the last page — three hosts in a 2×2 — is drawn as an empty frame rather than
+being reflowed, so the panes stay the size they were as hosts come and go.
+
+`f` full-screens the focused pane and `f` again returns to the grid. The issue proposed `1`/`2`/`3`
+for this, but the epic gives the number keys to the sidebar panels; a key cannot mean both, so
+full screen took the letter.
+
 ## Focus
 
 Focus is one explicit piece of model state and it is always visible: the focused frame is drawn
@@ -63,7 +91,35 @@ colour so it survives a terminal without colour.
 - nothing wraps. Stepping off the last pane onto the first is how a user ends up typing into the
   machine at the other end of the fleet.
 
-### Focus survives the host list changing
+### Pane grid
+
+`TileGrid(area, count)` is the tiling: the squarest arrangement that holds the hosts, bounded by
+how many minimum-size panes the area actually fits. It is a pure function, so two renders of the
+same state cannot disagree about where a pane is.
+
+| Hosts | Shape |
+|-------|-------|
+| 1 | 1×1 |
+| 2 | 2×1 |
+| 3, 4 | 2×2 |
+| 6 | 3×2 |
+| 9 | 3×3 |
+| 12 | 4×3 |
+| 20 | 5×4 |
+
+A pane is never smaller than 24×6 including its border. When the hosts do not fit at that size
+the grid **pages** rather than shrinking further — four readable panes and a page indicator beat
+twelve unreadable ones. `Grid.Pages`, `Grid.Page(i)` and `Grid.Cell(i)` say how many pages there
+are and where a host sits on its own.
+
+An empty slot on the last page — three hosts in a 2×2 — is drawn as an empty frame rather than
+being reflowed, so the panes stay the size they were as hosts come and go.
+
+`f` full-screens the focused pane and `f` again returns to the grid. The issue proposed `1`/`2`/`3`
+for this, but the epic gives the number keys to the sidebar panels; a key cannot mean both, so
+full screen took the letter.
+
+## Focus survives the host list changing
 
 `HostsChangedMsg` replaces the host list — a session merged in, a host closed, panes paged. The
 focused host is preserved **by identity**, not by position: if the machine is still in the run it

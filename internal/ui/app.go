@@ -82,10 +82,11 @@ type App struct {
 	help   help.Model
 	layout Layout
 
-	focus     Area
-	panel     Panel
-	paneIndex int
-	showHelp  bool
+	focus      Area
+	panel      Panel
+	paneIndex  int
+	showHelp   bool
+	fullScreen bool
 }
 
 // NewApp builds the root model.
@@ -227,13 +228,30 @@ func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // machine at the other end of the fleet.
 func (a App) handleGridKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case key.Matches(msg, a.keys.PaneLeft), key.Matches(msg, a.keys.PaneUp):
+	case key.Matches(msg, a.keys.PaneLeft):
 		return a.movePane(-1), nil
-	case key.Matches(msg, a.keys.PaneRight), key.Matches(msg, a.keys.PaneDown):
+	case key.Matches(msg, a.keys.PaneRight):
 		return a.movePane(+1), nil
+	case key.Matches(msg, a.keys.PaneUp):
+		return a.movePane(-a.grid().Columns), nil
+	case key.Matches(msg, a.keys.PaneDown):
+		return a.movePane(+a.grid().Columns), nil
+	case key.Matches(msg, a.keys.FullScreen):
+		a.fullScreen = !a.fullScreen
+		return a, nil
 	}
 	return a, nil
 }
+
+// grid is the current tiling of the main area.
+func (a App) grid() Grid { return TileGrid(a.layout.Main, len(a.cfg.Hosts)) }
+
+// Grid returns the tiling the view is drawing, which is what the tests and the
+// paging logic ask about.
+func (a App) Grid() Grid { return a.grid() }
+
+// FullScreen reports whether one pane fills the main area.
+func (a App) FullScreen() bool { return a.fullScreen }
 
 // panelForKey maps a number key to the panel it selects.
 func (a App) panelForKey(msg tea.KeyPressMsg) (Panel, bool) {
@@ -322,21 +340,64 @@ func (a App) renderMain() string {
 		return a.frame(a.theme.PaneFrame(focused), r, a.theme.Muted.Render("no hosts"))
 	}
 
-	var b strings.Builder
-	b.WriteString(a.theme.Muted.Render(fmt.Sprintf("%d host%s", len(a.cfg.Hosts), plural(len(a.cfg.Hosts)))))
-	for i, host := range a.cfg.Hosts {
-		b.WriteString("\n")
-		switch {
-		case i == a.paneIndex && focused:
-			b.WriteString(a.theme.Cursor.Render(host))
-		case i == a.paneIndex:
-			b.WriteString(a.theme.Selected.Render(host))
-		default:
-			b.WriteString(a.theme.Muted.Render(host))
+	// Full screen is one pane in the whole area, which is what reading a stack
+	// trace or driving an interactive program needs.
+	if a.fullScreen {
+		return a.renderPane(a.paneIndex, r, focused)
+	}
+
+	g := a.grid()
+	if g.Empty() {
+		return a.frame(a.theme.PaneFrame(focused), r, a.theme.Muted.Render("no room for a pane"))
+	}
+
+	page := g.Page(a.paneIndex)
+	first := page * g.PerPage
+
+	var rows []string
+	for row := range g.Rows {
+		var cells []string
+		for col := range g.Columns {
+			slot := row*g.Columns + col
+			if slot >= len(g.Cells) {
+				break
+			}
+			host := first + slot
+			if host >= len(a.cfg.Hosts) {
+				// An empty slot on the last page keeps the panes the size they
+				// were, rather than letting them jump about as hosts come and go.
+				cells = append(cells, a.frame(a.theme.Pane, g.Cells[slot], ""))
+				continue
+			}
+			cells = append(cells, a.renderPane(host, g.Cells[slot], focused))
+		}
+		if len(cells) > 0 {
+			rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, cells...))
 		}
 	}
 
-	return a.frame(a.theme.PaneFrame(focused), r, b.String())
+	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+}
+
+// renderPane draws one host's pane. The output itself arrives with the
+// rendering issue; until then the pane names its host, which is what the
+// tiling tests assert against.
+func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
+	if host < 0 || host >= len(a.cfg.Hosts) {
+		return a.frame(a.theme.Pane, cell, "")
+	}
+
+	focused := gridFocused && host == a.paneIndex
+	name := a.cfg.Hosts[host]
+
+	header := a.theme.Muted.Render(name)
+	if focused {
+		header = a.theme.Cursor.Render(name)
+	} else if host == a.paneIndex {
+		header = a.theme.Selected.Render(name)
+	}
+
+	return a.frame(a.theme.PaneFrame(focused), cell, header)
 }
 
 // renderStatusBar draws the bottom line: what is selected, how many hosts are in

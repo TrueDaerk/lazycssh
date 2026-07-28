@@ -32,12 +32,13 @@ func TestArrowsMoveWithinTheGrid(t *testing.T) {
 	if a.FocusedHost() != "web-02" {
 		t.Fatalf("FocusedHost() = %q after moving right", a.FocusedHost())
 	}
+	// Four hosts tile as a 2x2, so down is a row - two hosts - not one.
 	a = pressKey(t, a, "j")
-	if a.FocusedHost() != "web-03" {
+	if a.FocusedHost() != "web-04" {
 		t.Fatalf("FocusedHost() = %q after moving down", a.FocusedHost())
 	}
 	a = pressKey(t, a, "h")
-	if a.FocusedHost() != "web-02" {
+	if a.FocusedHost() != "web-03" {
 		t.Fatalf("FocusedHost() = %q after moving left", a.FocusedHost())
 	}
 	a = pressKey(t, a, "k")
@@ -101,8 +102,8 @@ func TestTheSameKeyMeansOneThingAtATime(t *testing.T) {
 	if a.Panel() != panelBefore {
 		t.Fatal("a key handled by the grid also moved the sidebar")
 	}
-	if a.PaneIndex() != 1 {
-		t.Fatalf("PaneIndex() = %d", a.PaneIndex())
+	if a.PaneIndex() != a.Grid().Columns {
+		t.Fatalf("PaneIndex() = %d, want one row down", a.PaneIndex())
 	}
 
 	a = pressKey(t, a, "tab") // back to the sidebar
