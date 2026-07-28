@@ -17,9 +17,10 @@ Status: early. Only the module skeleton exists (`cmd/lazycssh`, `internal/versio
 
 **bubbletea v2 matters.** Do not copy v1 examples. Differences that bite:
 
-- `Init()` has signature `Init() (Model, Cmd)` — returns the model too.
-- Key messages are `tea.KeyPressMsg` / `tea.KeyReleaseMsg`, not `tea.KeyMsg`. Match with `msg.String()` or `msg.Key()`.
-- `tea.Model.View()` may return `fmt.Stringer`-ish content / cursor info depending on the program type — check the actual v2 API before writing view code, don't guess.
+- `Init()` is `Init() Cmd` in the released v2 (the alpha's `(Model, Cmd)` signature did not survive). Verify against the module in the cache, not against a blog post.
+- Key messages are `tea.KeyPressMsg` / `tea.KeyReleaseMsg`, not `tea.KeyMsg`. Match with `key.Matches`, `msg.String()` or the `Code`/`Mod` fields.
+- `View()` returns a `tea.View` struct, not a string: build it with `tea.NewView(s)` and read `.Content` in tests.
+- The terminal background arrives as `tea.BackgroundColorMsg` in response to the `tea.RequestBackgroundColor` command; that is how the theme learns whether it is light or dark.
 - Program options and mouse handling were renamed. When unsure, read the vendored source under `$(go env GOMODCACHE)/charm.land/bubbletea/v2@*/` rather than web memory.
 
 ## Layout (planned)
