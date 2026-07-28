@@ -34,6 +34,12 @@ An issue is written before the work, not after. It states:
 
 Issues that only exist to describe a commit already written are not the workflow.
 
+Every issue carries exactly one **type label** — see [Issue types](./issue-types.md).
+
+```sh
+gh issue create --label enhancement --title "..." --body "..."
+```
+
 ## Closing sequence
 
 When an issue is done, the full closing sequence runs — none of these steps are optional:
