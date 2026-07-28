@@ -45,6 +45,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	showVersion := fs.Bool("version", false, "print the version and exit")
+	insecure := fs.Bool("insecure-ignore-host-key", false,
+		"accept any host key without checking known_hosts (dangerous)")
 
 	if err := fs.Parse(args); err != nil {
 		// flag already reported the error and printed the usage.
@@ -60,6 +62,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if len(hosts) == 0 {
 		fs.Usage()
 		return exitUsage
+	}
+
+	if *insecure {
+		// Weakening host key verification is announced, every run. Once the TUI
+		// exists the status bar carries this for the whole session as well.
+		fmt.Fprintln(stderr,
+			"WARNING: --insecure-ignore-host-key is set. Host keys are not verified and "+
+				"a machine-in-the-middle cannot be detected.")
 	}
 
 	// The transport and the TUI do not exist yet; see the SSH transport and TUI
