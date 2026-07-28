@@ -55,6 +55,7 @@ working_set: first 20
 | `defaults` | connection options for every entry that does not override them |
 | `hosts[].pattern` | a host argument **unexpanded**, so `srv1-{01..40}.example.com` stays readable |
 | `hosts[].user`, `.port`, `.identity_file`, `.jump_host` | per-entry overrides |
+| `secret_command` | argv that prints the credential on stdout; see [Credential handling](./credentials.md) |
 | `broadcast` | the mode the run starts in: `all`, `selected`, `single`, `fleet` |
 | `working_set` | the starting working set: `first 20`, `21-40`, `web-*` |
 
@@ -85,8 +86,9 @@ error never quotes the value it found. This is a refusal, not a warning: the sec
 in the root `CLAUDE.md` says lazycssh does not write or read plaintext secrets, and a warning
 that lets the run continue would make that untrue.
 
-Authentication is referenced instead: an agent, or `identity_file` pointing at a key.
-See [Authentication](./authentication.md) for the method order at connect time.
+Authentication is referenced instead: an agent, an `identity_file` pointing at a key, or a
+`secret_command` that prints the credential. See [Credential handling](./credentials.md) for the
+mechanisms and [Authentication](./authentication.md) for the method order at connect time.
 
 ## Round trip
 

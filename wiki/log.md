@@ -2,6 +2,12 @@
 
 ## 2026-07-28
 
+- Session configs can now say *how* to authenticate without storing the secret: a per-session or
+  per-host `secret_command` argv whose stdout is the credential, run with a timeout and a hard
+  kill so a hung password manager cannot pin a session. Added `internal/secret`, whose `Value`
+  renders as `[redacted]` under every format verb and refuses to be serialised. New concept
+  document `core/credentials.md`. Version 0.1.13.
+
 - Added `internal/sessions`: the on-disk session format under `$XDG_CONFIG_HOME/lazycssh/sessions`,
   with unexpanded host patterns, a schema version, strict unknown-key rejection, an atomic
   0600 save and an explicit refusal for any inline credential key. New concept document
