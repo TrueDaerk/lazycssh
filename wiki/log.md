@@ -2,6 +2,11 @@
 
 ## 2026-07-28
 
+- Added `internal/sessions`: the on-disk session format under `$XDG_CONFIG_HOME/lazycssh/sessions`,
+  with unexpanded host patterns, a schema version, strict unknown-key rejection, an atomic
+  0600 save and an explicit refusal for any inline credential key. New concept document
+  `core/session-files.md`. Version 0.1.12.
+
 - Decided and implemented broadcast scope: `all` means the active working set, and reaching
   every host in the run is a separate `fleet` mode that renders as a warning. `internal/broadcast`
   resolves mode, working set, selection and focus into the target list, and never renders a count

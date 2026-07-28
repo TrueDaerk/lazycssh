@@ -12,3 +12,4 @@ The runtime pieces of lazycssh.
 * [Session manager](./manager.md) - owning a fleet: bounded fan-out dialling, one event channel, per-host reconnect
 * [Working sets](./working-sets.md) - the current subject of work: counts, ranges, patterns, paging and named sets
 * [Broadcast scope](./broadcast-scope.md) - what `all` means when a working set is active, and how the target count stays honest
+* [Session files](./session-files.md) - the on-disk format for a saved run, and why no credential ever appears in one
