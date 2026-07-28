@@ -69,6 +69,30 @@ before returning — which is what makes "no goroutine leaks" testable rather th
 
 `Resize` before `Start` is remembered and applied when the PTY is requested.
 
+## The fake
+
+`ssh.Fake` implements the same interface without opening a socket. Everything above the
+transport uses it, so no test in this repository needs a network or a fixture host.
+
+Scripted before `Start` — `ConnectDelay`, `DialErr`, `AuthErr`, `Banner`, `EchoInput`,
+`Responses` — and driven afterwards:
+
+```go
+f := ssh.NewFake("s1", host, events)
+f.Responses = map[string]string{"hostname": "srv1\r\n"}
+f.Start(ctx)
+f.Emit("...")            // output as if from the remote
+f.Flood(20000)           // overwhelm the scrollback
+f.Disconnect(err)        // drop mid-session
+f.ExitWithStatus(3)      // remote shell exits non-zero
+f.Written()              // what a broadcast actually delivered
+f.Resizes()              // that a terminal resize reached this session once
+```
+
+A response only fires on a completed line, so typing a command character by character behaves
+the way a real shell does. The fake mirrors the real session's refusal to block on an undrained
+event channel; a fake that blocked would hide the deadlock the real one is built to avoid.
+
 ## Testing
 
 The real implementation is tested against an in-process SSH server on the loopback interface
