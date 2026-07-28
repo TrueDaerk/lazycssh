@@ -2,6 +2,12 @@
 
 ## 2026-07-28
 
+- Added the TUI shell: the bubbletea root model with the sidebar/grid/status-bar layout, focus
+  cycling, panel numbers and the generated help overlay. The layout is pure arithmetic, asserted
+  non-negative at every size from 1x1 up, and the status bar is never dropped. `CLAUDE.md`
+  corrected against the released bubbletea v2 API. New concept document `core/tui.md`.
+  Version 0.1.18.
+
 - Added the keymap: every binding declared once in `internal/ui/keys.go`, with the short help line
   and the `?` overlay generated from it. Tests fail on a binding without a help string, on a
   binding that appears in no help group, and on a key that would mean two things at once. New
