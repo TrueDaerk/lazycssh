@@ -2,6 +2,11 @@
 
 ## 2026-07-28
 
+- Added `internal/workingset`: the current subject of work as a first-class model object,
+  defined by count, range, pattern or manual selection, with single-keystroke paging by chunk
+  size and named sets that survive it. New concept document `core/working-sets.md`.
+  Version 0.1.10.
+
 - Reconnect now preserves a pane's scrollback across the redial, separated by a visible marker,
   and reuses credentials already held in memory. `core/manager.md` updated. Version 0.1.9.
 
