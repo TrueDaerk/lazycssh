@@ -2,6 +2,11 @@
 
 ## 2026-07-28
 
+- Added `internal/ssh` with the session lifecycle: dial, handshake, PTY, streams, resize and
+  close, behind a `Session` interface. Events are explicitly hints rather than the source of
+  truth, because a blocking send deadlocks `Start`. Documented in `core/session.md`.
+  Version 0.1.4.
+
 - Added `internal/scrollback`, the bounded per-session ring buffer that enforces the
   backpressure rule. Documented in `core/scrollback.md`. Version 0.1.3.
 
