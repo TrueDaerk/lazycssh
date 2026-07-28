@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -223,25 +222,25 @@ func TestHostCursorClampsWhenTheFilterShrinksTheList(t *testing.T) {
 	}
 }
 
-// Two hundred hosts must not make a redraw expensive: only the visible rows are
-// rendered.
-func TestTwoHundredHostsRenderQuickly(t *testing.T) {
+// Two hundred hosts must not make a redraw expensive. The guarantee is
+// structural rather than a stopwatch: the panel renders the rows that fit and
+// nothing else, so the cost of a redraw is the size of the panel. A wall-clock
+// assertion here would only measure the CI machine.
+func TestTwoHundredHostsRenderOnlyTheVisibleRows(t *testing.T) {
 	names := make([]string, 0, 200)
 	for i := 1; i <= 200; i++ {
 		names = append(names, fmt.Sprintf("web-%03d", i))
 	}
 	a, _ := hostsApp(t, names...)
 
-	start := time.Now()
 	for range 50 {
-		_ = a.View()
 		a = pressKey(t, a, "j")
-	}
-	if elapsed := time.Since(start); elapsed > 2*time.Second {
-		t.Fatalf("50 redraws over 200 hosts took %s", elapsed)
 	}
 
 	view := plain(a.hostsPanel(40, 12))
+	if lines := strings.Count(view, "\n") + 1; lines > 13 {
+		t.Fatalf("a 12-row panel rendered %d lines:\n%s", lines, view)
+	}
 	if !strings.Contains(view, "more") {
 		t.Fatalf("the panel does not say how many hosts are off screen:\n%s", view)
 	}
