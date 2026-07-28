@@ -55,8 +55,21 @@ colour so it survives a terminal without colour.
 - `tab` / `shift+tab` move between the sidebar and the grid,
 - `1`–`5` select a panel **and** move focus to the sidebar, because pressing a panel number and
   landing somewhere else is a surprise,
+- inside the sidebar, `↑`/`k` and `↓`/`j` move the panel selection; inside the grid the same keys
+  move the pane focus, and `enter` from the sidebar hands focus to the grid,
 - key presses are dispatched by area, so a key means one thing at a time — see
-  [Keymap and help](./keys.md).
+  [Keymap and help](./keys.md). The bindings of the area that does not have focus are not
+  consulted at all,
+- nothing wraps. Stepping off the last pane onto the first is how a user ends up typing into the
+  machine at the other end of the fleet.
+
+### Focus survives the host list changing
+
+`HostsChangedMsg` replaces the host list — a session merged in, a host closed, panes paged. The
+focused host is preserved **by identity**, not by position: if the machine is still in the run it
+keeps focus at its new index, and only when it is gone does the focus clamp to the nearest pane
+that exists. A list that shifts under the cursor must never silently move the user onto a
+different machine.
 
 While the `?` overlay is open it is the only thing listening: the key that closes it does not
 also act. A user reading the help is not also driving the panes.

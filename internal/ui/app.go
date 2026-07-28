@@ -82,9 +82,10 @@ type App struct {
 	help   help.Model
 	layout Layout
 
-	focus    Area
-	panel    Panel
-	showHelp bool
+	focus     Area
+	panel     Panel
+	paneIndex int
+	showHelp  bool
 }
 
 // NewApp builds the root model.
@@ -143,6 +144,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.help.Styles = HelpStyles(a.theme)
 		return a, nil
 
+	case HostsChangedMsg:
+		return a.withHosts(msg.Hosts), nil
+
 	case tea.KeyPressMsg:
 		return a.handleKey(msg)
 	}
@@ -186,6 +190,48 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
+	// Everything below here is dispatched by focus, so the same key press means
+	// one thing at a time. The bindings of the area that does not have focus
+	// are not consulted at all.
+	switch a.focus {
+	case AreaSidebar:
+		return a.handleSidebarKey(msg)
+	case AreaGrid:
+		return a.handleGridKey(msg)
+	default:
+		return a, nil
+	}
+}
+
+// handleSidebarKey moves within the panel list.
+func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, a.keys.Up):
+		return a.movePanel(-1), nil
+	case key.Matches(msg, a.keys.Down):
+		return a.movePanel(+1), nil
+	case key.Matches(msg, a.keys.Choose):
+		// Choosing a host is choosing its pane; the panel that owns the list
+		// says which host, and the grid is where the user wanted to end up.
+		a.focus = AreaGrid
+		return a, nil
+	}
+	return a, nil
+}
+
+// handleGridKey moves between panes.
+//
+// Left and right step through the panes in host order; up and down do the same
+// until the grid geometry exists, at which point they move by a row. Neither
+// wraps: stepping off the last pane onto the first is how a user types into the
+// machine at the other end of the fleet.
+func (a App) handleGridKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, a.keys.PaneLeft), key.Matches(msg, a.keys.PaneUp):
+		return a.movePane(-1), nil
+	case key.Matches(msg, a.keys.PaneRight), key.Matches(msg, a.keys.PaneDown):
+		return a.movePane(+1), nil
+	}
 	return a, nil
 }
 
@@ -272,13 +318,25 @@ func (a App) renderMain() string {
 	r := a.layout.Main
 	focused := a.focus == AreaGrid
 
-	hosts := len(a.cfg.Hosts)
-	body := a.theme.Muted.Render(fmt.Sprintf("%d host%s", hosts, plural(hosts)))
-	if hosts == 0 {
-		body = a.theme.Muted.Render("no hosts")
+	if len(a.cfg.Hosts) == 0 {
+		return a.frame(a.theme.PaneFrame(focused), r, a.theme.Muted.Render("no hosts"))
 	}
 
-	return a.frame(a.theme.PaneFrame(focused), r, body)
+	var b strings.Builder
+	b.WriteString(a.theme.Muted.Render(fmt.Sprintf("%d host%s", len(a.cfg.Hosts), plural(len(a.cfg.Hosts)))))
+	for i, host := range a.cfg.Hosts {
+		b.WriteString("\n")
+		switch {
+		case i == a.paneIndex && focused:
+			b.WriteString(a.theme.Cursor.Render(host))
+		case i == a.paneIndex:
+			b.WriteString(a.theme.Selected.Render(host))
+		default:
+			b.WriteString(a.theme.Muted.Render(host))
+		}
+	}
+
+	return a.frame(a.theme.PaneFrame(focused), r, b.String())
 }
 
 // renderStatusBar draws the bottom line: what is selected, how many hosts are in

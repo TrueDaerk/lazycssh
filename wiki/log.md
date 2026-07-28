@@ -2,6 +2,11 @@
 
 ## 2026-07-28
 
+- Focus routing: keys are dispatched by the focused area and the other area's bindings are not
+  consulted, arrows move within the sidebar and the grid, nothing wraps, and `HostsChangedMsg`
+  preserves the focused host by identity rather than by position. `core/tui.md` updated.
+  Version 0.1.19.
+
 - Added the TUI shell: the bubbletea root model with the sidebar/grid/status-bar layout, focus
   cycling, panel numbers and the generated help overlay. The layout is pure arithmetic, asserted
   non-negative at every size from 1x1 up, and the status bar is never dropped. `CLAUDE.md`
