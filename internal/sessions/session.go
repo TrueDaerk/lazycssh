@@ -17,6 +17,7 @@ import (
 
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 	"github.com/TrueDaerk/lazycssh/internal/hosts"
+	"github.com/TrueDaerk/lazycssh/internal/secret"
 	"github.com/TrueDaerk/lazycssh/internal/workingset"
 )
 
@@ -57,11 +58,20 @@ type HostOptions struct {
 	IdentityFile string `yaml:"identity_file,omitempty"`
 	// JumpHost is a ProxyJump target.
 	JumpHost string `yaml:"jump_host,omitempty"`
+	// SecretCommand is a program and its arguments that print the login
+	// credential on standard output - `pass show prod/deploy`, `op read ...`.
+	// It is how a session says *how* to authenticate without storing the
+	// secret. It is an argv, never a shell line, so a password entry with
+	// shell metacharacters in its name cannot become a command.
+	SecretCommand []string `yaml:"secret_command,omitempty"`
 }
 
 // empty reports whether no option is set, so an all-zero defaults block can be
 // omitted from the written file.
-func (o HostOptions) empty() bool { return o == HostOptions{} }
+func (o HostOptions) empty() bool {
+	return o.User == "" && o.Port == 0 && o.IdentityFile == "" &&
+		o.JumpHost == "" && len(o.SecretCommand) == 0
+}
 
 // HostEntry is one host pattern plus its overrides.
 type HostEntry struct {
@@ -195,9 +205,15 @@ func (s *Session) Validate() error {
 		if h.Port < 0 || h.Port > 65535 {
 			return fmt.Errorf("session %s: host %q: invalid port %d", s.Name, h.Pattern, h.Port)
 		}
+		if err := (secret.Command{Argv: h.SecretCommand}).Validate(); err != nil {
+			return fmt.Errorf("session %s: host %q: %w", s.Name, h.Pattern, err)
+		}
 	}
 	if s.Defaults.Port < 0 || s.Defaults.Port > 65535 {
 		return fmt.Errorf("session %s: invalid default port %d", s.Name, s.Defaults.Port)
+	}
+	if err := (secret.Command{Argv: s.Defaults.SecretCommand}).Validate(); err != nil {
+		return fmt.Errorf("session %s: defaults: %w", s.Name, err)
 	}
 
 	if s.Broadcast != "" {
@@ -261,7 +277,17 @@ func (s *Session) Options(i int) HostOptions {
 	if o.JumpHost == "" {
 		o.JumpHost = s.Defaults.JumpHost
 	}
+	if len(o.SecretCommand) == 0 {
+		o.SecretCommand = s.Defaults.SecretCommand
+	}
 	return o
+}
+
+// SecretCommand returns the credential command for one host entry, with the
+// session default filled in. An empty command means there is none, and
+// authentication falls back to the agent, an identity file or a prompt.
+func (s *Session) SecretCommand(i int) secret.Command {
+	return secret.Command{Argv: s.Options(i).SecretCommand}
 }
 
 // HostCount expands every pattern and reports how many hosts the session opens.

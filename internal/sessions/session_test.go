@@ -88,10 +88,10 @@ func TestDefaultsWhenSessionIsSilent(t *testing.T) {
 	if err != nil || sel != nil {
 		t.Fatalf("Selector() = %v, %v, want nil", sel, err)
 	}
-	if got := s.Options(0); got != (HostOptions{}) {
+	if got := s.Options(0); !got.empty() {
 		t.Fatalf("Options() = %+v, want zero", got)
 	}
-	if got := s.Options(99); got != (HostOptions{}) {
+	if got := s.Options(99); !got.empty() {
 		t.Fatalf("Options(out of range) = %+v", got)
 	}
 }
@@ -244,5 +244,66 @@ func TestHostCountReportsMalformedPatterns(t *testing.T) {
 	s := &Session{Version: 1, Name: "a", Hosts: []HostEntry{{Pattern: "web-{01.."}}}
 	if _, err := s.HostCount(); err == nil {
 		t.Fatal("HostCount accepted a malformed pattern")
+	}
+}
+
+// A session says *how* to authenticate - an argv that prints the credential -
+// never the credential itself.
+func TestSecretCommand(t *testing.T) {
+	const src = `version: 1
+name: prod
+defaults:
+  secret_command: [pass, show, prod/deploy]
+hosts:
+  - pattern: h1
+  - pattern: h2
+    secret_command: [op, read, "op://vault/h2/password"]
+`
+	s, err := Decode(strings.NewReader(src))
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+
+	if got := s.SecretCommand(0).String(); got != "pass show prod/deploy" {
+		t.Fatalf("host 0 command = %q", got)
+	}
+	if got := s.SecretCommand(1).String(); got != "op read op://vault/h2/password" {
+		t.Fatalf("host 1 command = %q", got)
+	}
+
+	var buf bytes.Buffer
+	if err := Encode(&buf, s); err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	if !strings.Contains(buf.String(), "secret_command") {
+		t.Fatalf("secret_command was dropped on write:\n%s", buf.String())
+	}
+}
+
+func TestSecretCommandWithoutOne(t *testing.T) {
+	s, err := Decode(strings.NewReader("version: 1\nname: a\nhosts:\n  - pattern: h1\n"))
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if !s.SecretCommand(0).Empty() {
+		t.Fatalf("SecretCommand() = %q, want none", s.SecretCommand(0))
+	}
+}
+
+func TestValidateRejectsAMalformedSecretCommand(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+	}{
+		{"blank program", "version: 1\nname: a\nhosts:\n  - pattern: h1\n    secret_command: [\"  \"]\n"},
+		{"empty argument", "version: 1\nname: a\nhosts:\n  - pattern: h1\n    secret_command: [pass, \"\"]\n"},
+		{"blank default program", "version: 1\nname: a\ndefaults:\n  secret_command: [\"\"]\nhosts:\n  - pattern: h1\n"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := Decode(strings.NewReader(tc.yaml)); err == nil {
+				t.Fatal("Decode accepted a malformed secret command")
+			}
+		})
 	}
 }
