@@ -14,3 +14,4 @@ The runtime pieces of lazycssh.
 * [Broadcast scope](./broadcast-scope.md) - what `all` means when a working set is active, and how the target count stays honest
 * [Session files](./session-files.md) - the on-disk format for a saved run, and why no credential ever appears in one
 * [Credential handling](./credentials.md) - agent, identity file or secret_command, and how a secret stays out of logs and files
+* [Theme and styles](./theme.md) - the one place styles live, and why colour is never the only carrier of meaning

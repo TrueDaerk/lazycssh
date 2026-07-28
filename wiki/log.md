@@ -2,6 +2,12 @@
 
 ## 2026-07-28
 
+- Added `internal/ui` with the theme: one palette, every style in `theme.go`, and a test that
+  fails on a style literal anywhere else in the package. Colour is never the only carrier of
+  meaning - focus is a thicker border, the insecure marker is reverse video. The charm v2 modules
+  are now required from `charm.land/...`, which `CLAUDE.md` records. New concept document
+  `core/theme.md`. Version 0.1.16.
+
 - `lazycssh @name` launches a saved session, merging any extra hosts named on the command line
   in argument order, and an unknown name is an error that lists what is saved. Added
   `--list-sessions` and `--sessions-dir`. `core/cli.md` updated. Version 0.1.15.

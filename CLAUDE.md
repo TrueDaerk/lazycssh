@@ -9,9 +9,9 @@ Status: early. Only the module skeleton exists (`cmd/lazycssh`, `internal/versio
 ## Stack
 
 - Go (module `github.com/TrueDaerk/lazycssh`, matching the remote)
-- TUI: **bubbletea v2** — `github.com/charmbracelet/bubbletea/v2`
-- Styling: `github.com/charmbracelet/lipgloss/v2`
-- Widgets: `github.com/charmbracelet/bubbles/v2` (viewport, textinput, list, help, key)
+- TUI: **bubbletea v2** — `charm.land/bubbletea/v2` (the v2 modules moved off the `github.com/charmbracelet/...` path)
+- Styling: `charm.land/lipgloss/v2`
+- Widgets: `charm.land/bubbles/v2` (viewport, textinput, list, help, key)
 - SSH: `golang.org/x/crypto/ssh` preferred over shelling out to `/usr/bin/ssh`. Gives per-session PTY control, window resize, and clean stdin fan-out. Fall back to spawning `ssh` subprocesses only if agent-forwarding / jump-host / `~/.ssh/config` parity becomes blocking.
 - SSH config parse: `github.com/kevinburke/ssh_config` for `~/.ssh/config` host lookup and glob patterns.
 
@@ -20,7 +20,7 @@ Status: early. Only the module skeleton exists (`cmd/lazycssh`, `internal/versio
 - `Init()` has signature `Init() (Model, Cmd)` — returns the model too.
 - Key messages are `tea.KeyPressMsg` / `tea.KeyReleaseMsg`, not `tea.KeyMsg`. Match with `msg.String()` or `msg.Key()`.
 - `tea.Model.View()` may return `fmt.Stringer`-ish content / cursor info depending on the program type — check the actual v2 API before writing view code, don't guess.
-- Program options and mouse handling were renamed. When unsure, read the vendored source under `$GOPATH/pkg/mod/github.com/charmbracelet/bubbletea/v2@*/` rather than web memory.
+- Program options and mouse handling were renamed. When unsure, read the vendored source under `$(go env GOMODCACHE)/charm.land/bubbletea/v2@*/` rather than web memory.
 
 ## Layout (planned)
 
