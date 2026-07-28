@@ -286,3 +286,8 @@ func indexByte(b []byte, c byte) int {
 	}
 	return -1
 }
+
+// passwordAuth is the auth method matching the test server's password.
+func passwordAuth(s *testServer) []ssh.AuthMethod {
+	return []ssh.AuthMethod{ssh.Password(s.Password)}
+}

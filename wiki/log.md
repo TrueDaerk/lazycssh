@@ -2,6 +2,9 @@
 
 ## 2026-07-28
 
+- Reconnect now preserves a pane's scrollback across the redial, separated by a visible marker,
+  and reuses credentials already held in memory. `core/manager.md` updated. Version 0.1.9.
+
 - Added the session manager: bounded fan-out dialling, one fan-in event channel, per-host
   reconnect and close, and fleet counts for the status bar. Documented in `core/manager.md`.
   Version 0.1.8.

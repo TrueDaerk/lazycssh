@@ -43,6 +43,24 @@ identifier, keeping its position in the list, so panes and selections survive. T
 is closed outside the lock — closing waits for reader goroutines, and holding the lock through
 that would stall the UI.
 
+**The scrollback survives.** The pane that just died is exactly the pane whose last lines the
+user wants to read, so the buffer is handed to the new session rather than replaced. A separator
+is written into it first, so the two connections cannot be read as one continuous stream:
+
+```
+error: disk full
+── reconnecting to srv1 at 2026-07-28T12:00:00Z ────────
+Welcome to srv1
+```
+
+Reconnecting works from every end state — failed, closed, a remote shell exit — and from a
+session that is still connected. It touches no other session.
+
+**No re-prompt.** Credentials live in the [`Credentials`](./authentication.md) cache held by the
+factory closure, not in the session, so redialling reuses a password already in memory instead
+of asking again. Three reconnects, one prompt — asserted against the real transport, since a
+fake never touches the credential cache.
+
 `Close(id)` ends one session and leaves the rest running: one dead host is one dead pane.
 
 ## Fleet summary

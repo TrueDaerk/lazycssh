@@ -31,14 +31,15 @@ func fakeFactory(script func(host hosts.Host, f *Fake)) (Factory, func(id string
 		fakes = map[string]*Fake{}
 	)
 
-	factory := func(id string, host hosts.Host, events chan<- Event) Session {
-		f := NewFake(id, host, events)
-		f.Banner = "welcome to " + host.Alias + "\r\n"
+	factory := func(req SessionRequest) Session {
+		f := NewFake(req.ID, req.Host, req.Events)
+		f.UseScrollback(req.Scrollback)
+		f.Banner = "welcome to " + req.Host.Alias + "\r\n"
 		if script != nil {
-			script(host, f)
+			script(req.Host, f)
 		}
 		mu.Lock()
-		fakes[id] = f
+		fakes[req.ID] = f
 		mu.Unlock()
 		return f
 	}
@@ -178,16 +179,16 @@ func TestManagerSlowHostDoesNotDelayOthers(t *testing.T) {
 func TestManagerBoundsParallelDials(t *testing.T) {
 	var inFlight, peak atomic.Int32
 
-	factory := func(id string, host hosts.Host, events chan<- Event) Session {
-		f := NewFake(id, host, events)
+	factory := func(req SessionRequest) Session {
+		f := NewFake(req.ID, req.Host, req.Events)
 		f.ConnectDelay = 20 * time.Millisecond
 		return f
 	}
 
 	// Wrap the factory so the test can watch concurrency through the fake's
 	// connect delay.
-	counting := func(id string, host hosts.Host, events chan<- Event) Session {
-		return &countingSession{Session: factory(id, host, events), inFlight: &inFlight, peak: &peak}
+	counting := func(req SessionRequest) Session {
+		return &countingSession{Session: factory(req), inFlight: &inFlight, peak: &peak}
 	}
 
 	m, err := NewManager(ManagerConfig{

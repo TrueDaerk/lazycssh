@@ -76,9 +76,25 @@ func NewFake(id string, host hosts.Host, events chan<- Event) *Fake {
 	}
 }
 
-func (f *Fake) ID() string                     { return f.id }
-func (f *Fake) Host() hosts.Host               { return f.host }
-func (f *Fake) Scrollback() *scrollback.Buffer { return f.buf }
+// UseScrollback adopts an existing buffer instead of the fake's own, which is
+// what a reconnect does to keep a pane's history.
+func (f *Fake) UseScrollback(buf *scrollback.Buffer) {
+	if buf == nil {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.buf = buf
+}
+
+func (f *Fake) ID() string       { return f.id }
+func (f *Fake) Host() hosts.Host { return f.host }
+
+func (f *Fake) Scrollback() *scrollback.Buffer {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.buf
+}
 
 func (f *Fake) State() State {
 	f.mu.Lock()
@@ -203,7 +219,7 @@ func (f *Fake) Close() error {
 
 // Emit appends output as if the remote host had sent it.
 func (f *Fake) Emit(output string) {
-	f.buf.Write([]byte(output))
+	f.Scrollback().Write([]byte(output))
 	f.emit(OutputEvent{ID: f.id})
 }
 
