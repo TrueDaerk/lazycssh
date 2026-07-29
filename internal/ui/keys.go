@@ -68,6 +68,11 @@ type KeyMap struct {
 	Choose    key.Binding
 	Toggle    key.Binding
 	Filter    key.Binding
+	SelectAll key.Binding
+	Invert    key.Binding
+	ClearSel  key.Binding
+	SelectUp  key.Binding
+	SelectDwn key.Binding
 	SaveSet   key.Binding
 	NextChunk key.Binding
 	PrevChunk key.Binding
@@ -111,6 +116,11 @@ func DefaultKeyMap() KeyMap {
 		Choose:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "focus this host's pane")),
 		Toggle:    key.NewBinding(key.WithKeys("space", " "), key.WithHelp("space", "toggle selection")),
 		Filter:    key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
+		SelectAll: key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "select every host")),
+		Invert:    key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "invert the selection")),
+		ClearSel:  key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "clear the selection")),
+		SelectUp:  key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "select the hosts that are up")),
+		SelectDwn: key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "select the hosts that are down")),
 		SaveSet:   key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "save the working set or session")),
 		NextChunk: key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "next chunk of hosts")),
 		PrevChunk: key.NewBinding(key.WithKeys("["), key.WithHelp("[", "previous chunk of hosts")),
@@ -141,6 +151,7 @@ func (k KeyMap) global() []key.Binding {
 func (k KeyMap) sidebar() []key.Binding {
 	return []key.Binding{
 		k.Up, k.Down, k.Choose, k.Toggle, k.Filter,
+		k.SelectAll, k.Invert, k.ClearSel, k.SelectUp, k.SelectDwn,
 		k.SaveSet, k.NextChunk, k.PrevChunk,
 	}
 }

@@ -96,6 +96,36 @@ One keystroke each, from anywhere in the interface:
 `single` is instant and unmistakable because that is what a `sudo` prompt needs: one key, and the
 status bar names the single host it now sends to.
 
+## Building the selection
+
+The `selected` scope is built either by hand in the Hosts panel or by pattern from the command
+line, and the two do the same things:
+
+| Key | Command line | Effect |
+|-----|--------------|--------|
+| `space` | — | toggle the host under the cursor |
+| `a` | `/select all` | every host in the run |
+| — | `/select set` | the active working set |
+| `u` | `/select up` | the hosts that can take input |
+| `d` | `/select down` | the hosts that cannot — "show me what broke" |
+| `i` | `/select invert` | flip the selection |
+| `c` | `/select none` | clear it |
+| — | `/select web-*` | every host matching a glob |
+| — | `/deselect web-1*` | the same, in reverse |
+
+A pattern matches across the **whole run**, not only the working set: a selection is a statement
+about machines, and `web-*` must not mean different things at different times. Hosts selected
+outside the working set stay selected and are reported by `Excluded()` rather than silently
+dropped.
+
+Command-line instructions start with `/` on purpose. `select` is a shell builtin, and a line that
+means "run this on forty machines" must never be intercepted because it happens to start with a
+word this program knows. A `/`-prefixed line is never sent to a host and never recorded as a
+command.
+
+The status bar count follows the selection as it changes, so `BROADCAST selected (3/3 up)` is
+always the number of machines the next keystroke reaches.
+
 ## Sending
 
 `Router.Send` writes to exactly the targets and returns a `Delivery`: the mode, the scope size,

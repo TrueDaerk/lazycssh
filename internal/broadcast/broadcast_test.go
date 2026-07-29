@@ -509,3 +509,110 @@ func TestSingleModeRespectsLiveness(t *testing.T) {
 		t.Fatalf("Describe() = %q", got)
 	}
 }
+
+func TestSelectionSetOperations(t *testing.T) {
+	r, _ := router(t, 5)
+	sessions := newFakeSessions("web-01", "web-02", "web-03", "web-04", "web-05")
+	sessions.up["web-02"] = false
+	sessions.up["web-04"] = false
+	r.Attach(sessions)
+
+	if got := r.SelectAll(); got != 5 {
+		t.Fatalf("SelectAll() = %d", got)
+	}
+	if got := r.SelectionCount(); got != 5 {
+		t.Fatalf("SelectionCount() = %d", got)
+	}
+
+	r.ClearSelection()
+	if got := r.SelectConnected(); got != 3 {
+		t.Fatalf("SelectConnected() = %d", got)
+	}
+	if got := strings.Join(r.Selected(), ","); got != "web-01,web-03,web-05" {
+		t.Fatalf("Selected() = %q", got)
+	}
+
+	if got := r.InvertSelection(); got != 2 {
+		t.Fatalf("InvertSelection() = %d", got)
+	}
+	if got := strings.Join(r.Selected(), ","); got != "web-02,web-04" {
+		t.Fatalf("Selected() = %q after inverting", got)
+	}
+
+	r.ClearSelection()
+	if got := r.SelectDisconnected(); got != 2 {
+		t.Fatalf("SelectDisconnected() = %d", got)
+	}
+	if got := strings.Join(r.Selected(), ","); got != "web-02,web-04" {
+		t.Fatalf("Selected() = %q", got)
+	}
+}
+
+// A pattern selects across the whole run, not only the working set: a selection
+// is a statement about machines, and `web-*` must not mean different things at
+// different times.
+func TestSelectMatchingIgnoresTheWorkingSet(t *testing.T) {
+	r, ws := router(t, 40)
+	if err := ws.ApplySpec("first 5", nil); err != nil {
+		t.Fatalf("ApplySpec: %v", err)
+	}
+
+	n, err := r.SelectMatching("web-1*")
+	if err != nil {
+		t.Fatalf("SelectMatching: %v", err)
+	}
+	if n != 10 {
+		t.Fatalf("SelectMatching() matched %d, want 10", n)
+	}
+
+	// Only the ones inside the working set are targets, and the panel reports
+	// the rest as excluded rather than dropping them from the selection.
+	if err := r.SetMode(ModeSelected); err != nil {
+		t.Fatalf("SetMode: %v", err)
+	}
+	if got := r.Count(); got != 0 {
+		t.Fatalf("Count() = %d, want none inside first 5", got)
+	}
+	if got := len(r.Excluded()); got != 10 {
+		t.Fatalf("Excluded() = %d, want 10", got)
+	}
+
+	n, err = r.DeselectMatching("web-1*")
+	if err != nil {
+		t.Fatalf("DeselectMatching: %v", err)
+	}
+	if n != 10 || r.SelectionCount() != 0 {
+		t.Fatalf("DeselectMatching() = %d, %d left selected", n, r.SelectionCount())
+	}
+}
+
+func TestSelectMatchingRejectsAMalformedGlob(t *testing.T) {
+	r, _ := router(t, 3)
+	if _, err := r.SelectMatching("web-[01"); err == nil {
+		t.Fatal("SelectMatching accepted a malformed glob")
+	}
+	if _, err := r.DeselectMatching("web-[01"); err == nil {
+		t.Fatal("DeselectMatching accepted a malformed glob")
+	}
+}
+
+// Without a transport nothing is known about liveness, so nothing is selected
+// rather than everything.
+func TestLivenessSelectionWithoutATransport(t *testing.T) {
+	r, _ := router(t, 3)
+
+	if got := r.SelectConnected(); got != 0 {
+		t.Fatalf("SelectConnected() = %d without a transport", got)
+	}
+	if got := r.SelectDisconnected(); got != 0 {
+		t.Fatalf("SelectDisconnected() = %d without a transport", got)
+	}
+}
+
+func TestSelectWhereWithoutAPredicate(t *testing.T) {
+	r, _ := router(t, 3)
+	r.Select("web-01")
+	if got := r.SelectWhere(nil); got != 1 {
+		t.Fatalf("SelectWhere(nil) = %d", got)
+	}
+}

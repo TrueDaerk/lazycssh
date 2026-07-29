@@ -114,6 +114,14 @@ func (a App) sendCommandLine() (tea.Model, tea.Cmd) {
 
 	a.cmdHistory = appendHistory(a.cmdHistory, command)
 	a = a.closeCommandLine()
+
+	// A selection instruction is for lazycssh, not for the hosts: nothing is
+	// written to a remote shell and nothing is recorded as a command.
+	if report, meta := a.applySelection(command); meta {
+		a.lastDelivery = report
+		return a, nil
+	}
+
 	return a.sendCommand(command)
 }
 
