@@ -2,6 +2,14 @@
 
 ## 2026-07-29
 
+- Close and remove single hosts: `x` is state-dependent — on a connected host it closes the
+  session (the pane stays and says so), on a failed or closed host it removes the pane from the
+  run. Works in the grid and, new, on the row under the cursor in the Hosts panel (`r` there
+  reconnects). `Manager.Remove` and `Router.Forget` are new; removal updates the working set,
+  prunes scroll offsets, and a removed ssh-config host reappears as a connect candidate.
+  `core/manager.md`, `core/broadcast-scope.md`, `core/keys.md`, `core/tui.md` and
+  `core/program.md` updated. Version 0.4.1.
+
 - Connect from inside the TUI: the Hosts panel lists the concrete `~/.ssh/config` aliases as
   connect candidates under a `─ ssh config ─` divider (`Resolver.Aliases()` is new) — `enter`
   connects the one under the cursor, `space` marks several, and `n` opens a free-text prompt

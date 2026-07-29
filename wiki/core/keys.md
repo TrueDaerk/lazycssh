@@ -52,10 +52,12 @@ are tests, not conventions.
 | `w` | sidebar | save the working set or session |
 | `[` / `]` | sidebar | previous / next chunk of hosts |
 | `n` | sidebar | connect a new host: opens the free-text pattern prompt |
+| `x` | sidebar | close the host under the cursor; on a dead host, remove its pane |
+| `r` | sidebar | reconnect the host under the cursor |
 | `←`/`h`, `→`/`l`, `↑`/`k`, `↓`/`j` | panes | move between panes |
 | `f` | panes | full-screen this pane |
 | `r` | panes | reconnect this host |
-| `x` | panes | close this session |
+| `x` | panes | close this session; on a dead host, remove its pane |
 | `pgup`/`p`, `pgdn`/`n` | panes | page through the panes |
 | `ctrl+u` / `ctrl+d` | panes | scroll the focused pane back / forward |
 | `g` / `G` | panes | oldest retained output / back to the tail |

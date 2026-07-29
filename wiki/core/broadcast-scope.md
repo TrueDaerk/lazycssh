@@ -4,7 +4,7 @@ title: Broadcast scope
 description: What `BROADCAST all` means when a working set is active, and how the target count is made unmissable.
 resource: internal/broadcast
 tags: [broadcast, working-set, safety]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-07-29T13:00:00Z
 ---
 
 # Broadcast scope
@@ -81,6 +81,13 @@ Rules the tests enforce:
   than every host is addressed,
 - `fleet` renders as `EVERY HOST` and sets `Router.Warning`, which the status bar draws in the
   warning style.
+
+## Forgetting hosts
+
+`Forget(ids...)` drops every trace of hosts that left the run: their selection entries, and the
+focus if it pointed at one of them. Selection state that outlives its host over-reports counts
+and prints a dead host in the single-mode label; the program calls `Forget` whenever it removes
+a host.
 
 ## Switching modes
 

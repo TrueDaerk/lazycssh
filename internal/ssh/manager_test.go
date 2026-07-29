@@ -526,3 +526,44 @@ func TestManagerAddDisambiguatesAgainstTheRun(t *testing.T) {
 		t.Error("the added duplicate did not connect under its own identity")
 	}
 }
+
+func TestRemoveTakesTheSessionOutOfTheFleet(t *testing.T) {
+	m, _ := newTestManager(t, fakeFleet(3), nil)
+	m.Start(t.Context())
+	m.Wait()
+
+	if err := m.Remove("srv2"); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+
+	got := m.IDs()
+	if len(got) != 2 || got[0] != "srv1" || got[1] != "srv3" {
+		t.Fatalf("IDs() = %v after removing the middle host", got)
+	}
+	if _, ok := m.Session("srv2"); ok {
+		t.Fatal("the removed session is still looked up")
+	}
+	if m.Counts().Total != 2 {
+		t.Fatalf("Counts().Total = %d", m.Counts().Total)
+	}
+}
+
+func TestRemoveClosesTheSession(t *testing.T) {
+	m, lookup := newTestManager(t, fakeFleet(1), nil)
+	m.Start(t.Context())
+	m.Wait()
+
+	if err := m.Remove("srv1"); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if state := lookup("srv1").State(); state != StateClosed {
+		t.Fatalf("State() = %v after Remove, want closed", state)
+	}
+}
+
+func TestRemoveUnknownID(t *testing.T) {
+	m, _ := newTestManager(t, fakeFleet(1), nil)
+	if err := m.Remove("nope"); err == nil {
+		t.Fatal("removing an unknown id did not error")
+	}
+}

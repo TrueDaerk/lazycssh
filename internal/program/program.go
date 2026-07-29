@@ -255,6 +255,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return fleetEventMsg{inner: ui.FleetUpdatedMsg{}}
 		}
 
+	case ui.RemoveHostMsg:
+		// The error is not actionable here: an unknown id means the host is
+		// already gone, which is what removing asked for.
+		_ = m.mgr.Remove(msg.ID)
+		m.router.Forget(msg.ID)
+		m.ws.SetHosts(m.mgr.IDs())
+		m.resizePTYs()
+		return m, m.forward(ui.HostsChangedMsg{Hosts: m.mgr.IDs()})
+
 	case ui.SessionLaunchMsg:
 		return m.launchSession(msg)
 

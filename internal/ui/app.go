@@ -615,6 +615,16 @@ func (a App) handleHostsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, a.keys.NewHost):
 		a.hostInput.Focus()
 		return a, nil
+	case key.Matches(msg, a.keys.CloseHost):
+		if id := a.SelectedHost(); id != "" {
+			return a, a.closeOrRemove(id)
+		}
+		return a, nil
+	case key.Matches(msg, a.keys.Reconn):
+		if id := a.SelectedHost(); id != "" {
+			return a, func() tea.Msg { return ReconnectHostMsg{ID: id} }
+		}
+		return a, nil
 	}
 
 	if next, handled := a.handleSelectionKey(msg.String()); handled {
@@ -653,7 +663,7 @@ func (a App) handleGridKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case key.Matches(msg, a.keys.ClosePane):
 		if id := a.FocusedHost(); id != "" {
-			return a, func() tea.Msg { return CloseHostMsg{ID: id} }
+			return a, a.closeOrRemove(id)
 		}
 		return a, nil
 
@@ -675,6 +685,17 @@ func (a App) handleGridKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.clearSearch(), nil
 	}
 	return a, nil
+}
+
+// closeOrRemove is what x means on a host: a live session is closed - the
+// pane stays, saying so - and a dead one is removed, so the second x takes the
+// pane off the screen. Both are emitted, not handled: the UI cannot touch the
+// transport.
+func (a App) closeOrRemove(id string) tea.Cmd {
+	if a.state(id).Done() {
+		return func() tea.Msg { return RemoveHostMsg{ID: id} }
+	}
+	return func() tea.Msg { return CloseHostMsg{ID: id} }
 }
 
 // grid is the current tiling of the main area.

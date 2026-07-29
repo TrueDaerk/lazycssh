@@ -616,3 +616,32 @@ func TestSelectWhereWithoutAPredicate(t *testing.T) {
 		t.Fatalf("SelectWhere(nil) = %d", got)
 	}
 }
+
+func TestForgetDropsSelectionAndFocus(t *testing.T) {
+	ws := workingset.New([]string{"h1", "h2", "h3"})
+	r, err := NewRouter(ws)
+	if err != nil {
+		t.Fatalf("NewRouter: %v", err)
+	}
+
+	r.Toggle("h1")
+	r.Toggle("h2")
+	r.SetFocus("h2")
+
+	r.Forget("h2")
+	if r.IsSelected("h2") {
+		t.Fatal("the forgotten host is still selected")
+	}
+	if r.SelectionCount() != 1 {
+		t.Fatalf("SelectionCount() = %d, want 1", r.SelectionCount())
+	}
+	if r.Focus() != "" {
+		t.Fatalf("Focus() = %q after forgetting the focused host", r.Focus())
+	}
+
+	// Forgetting a host that was never known changes nothing.
+	r.Forget("nope")
+	if !r.IsSelected("h1") || r.SelectionCount() != 1 {
+		t.Fatal("forgetting an unknown host disturbed the selection")
+	}
+}
