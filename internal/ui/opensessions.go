@@ -133,7 +133,7 @@ func (a App) syncBroadcastLimit() App {
 	if a.cfg.Targets == nil {
 		return a
 	}
-	if (a.active < 0 || a.active >= len(a.open)) && !a.connectedOnly {
+	if (a.active < 0 || a.active >= len(a.open)) && !a.connectedOnly && a.splitSize <= 0 {
 		a.cfg.Targets.SetLimit(nil)
 		return a
 	}

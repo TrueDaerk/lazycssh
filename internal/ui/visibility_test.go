@@ -1,8 +1,12 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/TrueDaerk/lazycssh/internal/broadcast"
+	"github.com/TrueDaerk/lazycssh/internal/ssh"
 )
 
 // The acceptance criterion: 8 hosts, 2 down - ctrl+a shows 6 panes and
@@ -129,5 +133,149 @@ func TestFilterAppliesToTheForegroundSession(t *testing.T) {
 
 	if got := strings.Join(a.hostIDs(), ","); got != "web-01" {
 		t.Fatalf("visible hosts = %q; db-01 is connected but not in the session", got)
+	}
+}
+
+// splitApp is ten connected hosts with the router attached.
+func splitApp(t *testing.T) (App, *fakeFleet, Selector) {
+	t.Helper()
+	names := make([]string, 10)
+	for i := range names {
+		names[i] = fmt.Sprintf("web-%02d", i+1)
+	}
+	a, fleet, router, _ := statusApp(t, names...)
+	router.Attach(fleetSessions{fleet})
+	for _, id := range names {
+		fleet.connect(t, id)
+	}
+	return a, fleet, router
+}
+
+// applySplitSize types a size into the ctrl+s prompt and applies it.
+func applySplitSize(t *testing.T, a App, size string) App {
+	t.Helper()
+	a = pressKey(t, a, "ctrl+s")
+	a = typeInto(t, a, size)
+	return pressKey(t, a, "enter")
+}
+
+// The acceptance criterion: 10 hosts, ctrl+s 5 - the grid shows the first 5
+// and broadcast all reaches 5.
+func TestSplitShowsTheFirstChunk(t *testing.T) {
+	a, _, router := splitApp(t)
+
+	a = applySplitSize(t, a, "5")
+	if got := strings.Join(a.hostIDs(), ","); got != "web-01,web-02,web-03,web-04,web-05" {
+		t.Fatalf("visible hosts = %q after splitting by 5", got)
+	}
+	if got := len(router.(*broadcast.Router).Targets()); got != 5 {
+		t.Fatalf("broadcast reaches %d hosts, want the visible 5", got)
+	}
+	if got := plain(a.View().Content); !strings.Contains(got, "SPLIT 1/2 (5 hosts)") {
+		t.Fatalf("the split is not on the status bar:\n%s", got)
+	}
+}
+
+// ctrl+right shows the next chunk and stops at the end rather than wrapping.
+func TestSplitStepsBetweenChunksAndStopsAtTheEnds(t *testing.T) {
+	a, _, _ := splitApp(t)
+	a = applySplitSize(t, a, "5")
+
+	a = pressKey(t, a, "ctrl+right")
+	if got := strings.Join(a.hostIDs(), ","); got != "web-06,web-07,web-08,web-09,web-10" {
+		t.Fatalf("visible hosts = %q after ctrl+right", got)
+	}
+	if got := plain(a.View().Content); !strings.Contains(got, "SPLIT 2/2") {
+		t.Fatalf("the indicator did not follow:\n%s", got)
+	}
+
+	a = pressKey(t, a, "ctrl+right") // already the last chunk
+	if got := strings.Join(a.hostIDs(), ","); got != "web-06,web-07,web-08,web-09,web-10" {
+		t.Fatalf("visible hosts = %q after stepping past the end", got)
+	}
+
+	a = pressKey(t, a, "ctrl+left")
+	if got := a.hostIDs()[0]; got != "web-01" {
+		t.Fatalf("visible hosts start at %q after ctrl+left", got)
+	}
+}
+
+// Empty input or 0 clears the split and restores the full grid and scope.
+func TestSplitClears(t *testing.T) {
+	a, _, router := splitApp(t)
+	a = applySplitSize(t, a, "5")
+
+	a = applySplitSize(t, a, "")
+	if a.SplitSize() != 0 {
+		t.Fatalf("SplitSize() = %d after an empty input", a.SplitSize())
+	}
+	if got := len(a.hostIDs()); got != 10 {
+		t.Fatalf("%d hosts visible after clearing, want 10", got)
+	}
+	if got := len(router.(*broadcast.Router).Targets()); got != 10 {
+		t.Fatalf("broadcast reaches %d hosts after clearing, want 10", got)
+	}
+
+	a = applySplitSize(t, a, "5")
+	a = applySplitSize(t, a, "0")
+	if a.SplitSize() != 0 {
+		t.Fatalf("SplitSize() = %d after 0", a.SplitSize())
+	}
+}
+
+func TestSplitEscKeepsTheSplit(t *testing.T) {
+	a, _, _ := splitApp(t)
+	a = applySplitSize(t, a, "5")
+
+	a = pressKey(t, a, "ctrl+s")
+	a = pressKey(t, a, "esc")
+	if a.SplitSize() != 5 {
+		t.Fatalf("SplitSize() = %d after esc, want the split kept", a.SplitSize())
+	}
+}
+
+// The split composes with the connected-only filter: chunks are cut from the
+// filtered list.
+func TestSplitComposesWithConnectedOnly(t *testing.T) {
+	a, fleet, _ := splitApp(t)
+	fleet.sessions["web-02"].Disconnect(ssh.ErrDisconnected())
+
+	a = pressKey(t, a, "ctrl+a")
+	a = applySplitSize(t, a, "5")
+	if got := strings.Join(a.hostIDs(), ","); got != "web-01,web-03,web-04,web-05,web-06" {
+		t.Fatalf("visible hosts = %q with filter and split", got)
+	}
+	if got := plain(a.View().Content); !strings.Contains(got, "SPLIT 1/2") {
+		t.Fatalf("chunk count ignores the filter:\n%s", got)
+	}
+}
+
+// A chunk past the end - hosts left the run - clamps to the last one instead
+// of rendering an empty grid.
+func TestSplitChunkClampsWhenHostsLeave(t *testing.T) {
+	a, fleet, _ := splitApp(t)
+	a = applySplitSize(t, a, "4") // chunks: 4, 4, 2
+	a = pressKey(t, a, "ctrl+right")
+	a = pressKey(t, a, "ctrl+right") // chunk 3: web-09, web-10
+
+	fleet.ids = fleet.ids[:4]
+	model, _ := a.Update(HostsChangedMsg{Hosts: fleet.IDs()})
+	a = model.(App)
+
+	if got := len(a.hostIDs()); got == 0 {
+		t.Fatal("a vanished chunk rendered an empty grid")
+	}
+}
+
+// While typing, ctrl+s is flow control for the host, not a prompt.
+func TestCtrlSIsForwardedWhileTyping(t *testing.T) {
+	a, fleet := typingApp(t, "web-01")
+	a = pressKey(t, a, "ctrl+s")
+
+	if a.splitInput.Focused() {
+		t.Fatal("ctrl+s opened the split prompt while typing")
+	}
+	if got := fleet.sessions["web-01"].Written(); got != "\x13" {
+		t.Fatalf("the host received %q, want the raw ctrl+s byte", got)
 	}
 }

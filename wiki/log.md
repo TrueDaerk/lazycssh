@@ -2,6 +2,13 @@
 
 ## 2026-07-29
 
+- `ctrl+s` splits the grid into chunks of a chosen size — ten hosts split by five shows the
+  first five terminals — and `ctrl+→`/`ctrl+←` step between chunks without wrapping. Broadcast
+  `all`/`selected` reach only the visible chunk via the visibility limit; the status bar says
+  `SPLIT 1/2 (5 hosts)`. Empty or `0` clears, `esc` keeps, composes with `ctrl+a`, and the
+  chords stay keystrokes for the hosts while typing. `core/tui.md` and `core/keys.md` updated.
+  Version 0.9.0 — the minor bump closes the groups/sessions/visibility epic (#116).
+
 - `ctrl+a` toggles a connected-only view: panes of hosts that cannot take input leave the grid,
   broadcast `all`/`selected` follow the visible set via the router's visibility limit, and the
   status bar says `CONNECTED HOSTS ONLY` for as long as it narrows anything. While typing into a
