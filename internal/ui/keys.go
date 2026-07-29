@@ -21,6 +21,8 @@ const (
 	AreaSidebar
 	// AreaGrid covers the host panes on the right.
 	AreaGrid
+	// AreaBroadcast covers the broadcast input bar under the grid.
+	AreaBroadcast
 )
 
 // String returns the name shown as a help column heading.
@@ -32,6 +34,8 @@ func (a Area) String() string {
 		return "sidebar"
 	case AreaGrid:
 		return "panes"
+	case AreaBroadcast:
+		return "broadcast"
 	default:
 		return "unknown(" + strconv.Itoa(int(a)) + ")"
 	}
@@ -53,6 +57,7 @@ type KeyMap struct {
 	Panel3  key.Binding
 	Panel4  key.Binding
 	Panel5  key.Binding
+	Panel6  key.Binding
 
 	// Broadcast scope. Fleet is deliberately awkward - it is the one mode that
 	// ignores the working set, and it should not be reachable by cycling.
@@ -120,6 +125,7 @@ func DefaultKeyMap() KeyMap {
 		Panel3:  key.NewBinding(key.WithKeys("3"), key.WithHelp("3", "groups panel")),
 		Panel4:  key.NewBinding(key.WithKeys("4"), key.WithHelp("4", "sessions panel")),
 		Panel5:  key.NewBinding(key.WithKeys("5"), key.WithHelp("5", "command log")),
+		Panel6:  key.NewBinding(key.WithKeys("6"), key.WithHelp("6", "broadcast bar")),
 
 		BroadcastAll:      key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "broadcast to the working set")),
 		BroadcastSelected: key.NewBinding(key.WithKeys("B"), key.WithHelp("B", "broadcast to the selection")),
@@ -173,7 +179,7 @@ func DefaultKeyMap() KeyMap {
 func (k KeyMap) global() []key.Binding {
 	return []key.Binding{
 		k.Help, k.Quit, k.NextTab, k.PrevTab,
-		k.Panel1, k.Panel2, k.Panel3, k.Panel4, k.Panel5,
+		k.Panel1, k.Panel2, k.Panel3, k.Panel4, k.Panel5, k.Panel6,
 		k.BroadcastAll, k.BroadcastSelected, k.BroadcastSingle, k.BroadcastFleet,
 		k.CommandLine, k.NextFailure,
 	}
@@ -199,6 +205,12 @@ func (k KeyMap) grid() []key.Binding {
 	}
 }
 
+// broadcastBar returns the bindings that act while the broadcast bar has the
+// keyboard. Everything else is a keystroke for the targets.
+func (k KeyMap) broadcastBar() []key.Binding {
+	return []key.Binding{k.LeaveTyping}
+}
+
 // Bindings returns the bindings of one area.
 func (k KeyMap) Bindings(area Area) []key.Binding {
 	switch area {
@@ -206,6 +218,8 @@ func (k KeyMap) Bindings(area Area) []key.Binding {
 		return k.sidebar()
 	case AreaGrid:
 		return k.grid()
+	case AreaBroadcast:
+		return k.broadcastBar()
 	default:
 		return k.global()
 	}
@@ -220,7 +234,7 @@ func (k KeyMap) All() []key.Binding {
 }
 
 // Areas returns the areas in the order the help shows them.
-func Areas() []Area { return []Area{AreaGlobal, AreaSidebar, AreaGrid} }
+func Areas() []Area { return []Area{AreaGlobal, AreaSidebar, AreaGrid, AreaBroadcast} }
 
 // For returns a [help.KeyMap] describing the bindings that apply while area has
 // focus: the area's own bindings plus the global ones.
@@ -249,6 +263,8 @@ func (c contextHelp) ShortHelp() []key.Binding {
 		// While typing, every plain key goes to the host - the hints may only
 		// name chords lazycssh actually keeps.
 		return []key.Binding{k.LeaveTyping, k.PaneLeft, k.PaneRight, k.FullScreen, k.ClosePane}
+	case AreaBroadcast:
+		return []key.Binding{k.LeaveTyping}
 	default:
 		return []key.Binding{k.NextTab, k.CommandLine, k.Help, k.Quit}
 	}

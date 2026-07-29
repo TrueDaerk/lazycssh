@@ -21,6 +21,9 @@ const (
 	// CollapsedPanelHeight is a titled sidebar box with no body: the title
 	// line, one empty row, the bottom border.
 	CollapsedPanelHeight = 3
+	// BroadcastBarHeight is the always-visible broadcast input: a titled box
+	// with one content line.
+	BroadcastBarHeight = 3
 )
 
 // SidebarHeights divides the sidebar's height over the stacked panels, lazygit
@@ -86,6 +89,9 @@ type Layout struct {
 	Sidebar Rect
 	// Main is the pane grid.
 	Main Rect
+	// Broadcast is the always-visible broadcast input between the body and
+	// the status bar. Empty when the terminal is too short to hold it.
+	Broadcast Rect
 	// StatusBar is the bar along the bottom.
 	StatusBar Rect
 	// TooSmall reports that the terminal cannot hold the interface at all. The
@@ -95,6 +101,9 @@ type Layout struct {
 
 // SidebarVisible reports whether the panel list is drawn at this size.
 func (l Layout) SidebarVisible() bool { return !l.Sidebar.Empty() }
+
+// BroadcastVisible reports whether the broadcast bar is drawn at this size.
+func (l Layout) BroadcastVisible() bool { return !l.Broadcast.Empty() }
 
 // ComputeLayout divides a terminal into the sidebar, the grid and the status
 // bar.
@@ -115,6 +124,21 @@ func ComputeLayout(width, height int) Layout {
 	// many machines their next keystroke reaches.
 	bodyHeight := height - StatusBarHeight
 	l.StatusBar = Rect{X: 0, Y: bodyHeight, Width: width, Height: StatusBarHeight}
+
+	// The broadcast bar sits above it and degrades before the body does: a
+	// titled box when there is room, a bare line when it is tight, gone when
+	// even the body barely fits.
+	barHeight := 0
+	switch {
+	case height >= MinHeight+BroadcastBarHeight:
+		barHeight = BroadcastBarHeight
+	case height >= MinHeight+1:
+		barHeight = 1
+	}
+	if barHeight > 0 {
+		bodyHeight -= barHeight
+		l.Broadcast = Rect{X: 0, Y: bodyHeight, Width: width, Height: barHeight}
+	}
 
 	sidebarWidth := 0
 	if width >= SidebarMinWidth+MainMinWidth {

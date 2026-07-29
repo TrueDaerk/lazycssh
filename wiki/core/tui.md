@@ -4,15 +4,15 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-29T14:00:00Z
+timestamp: 2026-07-29T15:00:00Z
 ---
 
 # TUI shell
 
 `App` is the root bubbletea model. It owns the layout, the focus and the panel selection, and it
 draws the frame every other view renders into: a lazygit-style stack of titled panel boxes on the
-left, the pane grid on the right, a status bar along the bottom, and the `?` popup composited over
-the frame.
+left, the pane grid on the right, the always-visible broadcast bar under them, a status bar along
+the bottom, and the `?` popup composited over the frame.
 
 Model mutation happens only in `Update`. Nothing in `internal/ui` dials a host; the transport
 reports through messages — see [Session manager](./manager.md) — and the only bytes the UI
@@ -356,6 +356,25 @@ acts on it, which keeps `internal/ui` unable to open a connection.
 Every command sent this run, newest last, each with its target count and mode — see
 [Command log](./command-log.md). `enter` sends an entry again, to the **current** target set.
 
+## The broadcast bar
+
+An input line under the grid, always on screen, focused with `6`, tab-cycled after the last
+panel, left with `ctrl+]`. While it has the keyboard it is a terminal for the whole target set:
+every keystroke is encoded and fanned out live through the broadcast scope — `ctrl+c`
+interrupts every target, `tab` completes on every target, and each pane shows its own host's
+echo, so a divergent completion is visible as N panes disagreeing rather than as one garbled
+line.
+
+The bar keeps a local echo line — printable text appends, backspace trims — as a reminder of
+what was typed; the truth is on the hosts. `enter` sends a carriage return and records the
+assembled non-empty line in the [command log](./command-log.md) once; the individual keystrokes
+are never recorded, because this is where a password may be typed. The title always carries the
+live target count (`Broadcast [6] → 7 hosts`), and the status bar says `BROADCASTING → 7 hosts`
+in the warning style while the bar has the keyboard. On short terminals the bar degrades to a
+bare line and then disappears before the grid gives up a row.
+
+The pane-management chords (`alt+arrows` and friends) keep working from the bar.
+
 ## The command line
 
 `:` opens a prompt for one command sent to the whole active broadcast set.
@@ -382,8 +401,7 @@ encoding (`keystrokeBytes` in `internal/ui/keystroke.go`) is explicit and table-
 `ctrl+<letter>` → `0x01`–`0x1a`. `ctrl+]` is kept from the old passthrough mode — the telnet
 escape, because a user who is stuck needs one sequence that always means "give me my keyboard
 back". The passthrough mode itself is gone: typing into a focused pane replaces
-passthrough-to-one-host; the `:` command line covers whole-fleet sends until the live
-broadcast bar lands.
+passthrough-to-one-host and the broadcast bar replaces passthrough-to-all.
 
 Typed keys are never written to the [command log](./command-log.md). This is where a password is
 typed, and the audit trail is for commands.

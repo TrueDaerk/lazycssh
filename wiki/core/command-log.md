@@ -4,7 +4,7 @@ title: Command log
 description: The in-memory audit trail of what this run sent, to how many hosts, in which mode — and what it deliberately never records.
 resource: internal/commandlog
 tags: [audit, broadcast, security, ui]
-timestamp: 2026-07-29T14:00:00Z
+timestamp: 2026-07-29T15:00:00Z
 ---
 
 # Command log
@@ -27,7 +27,8 @@ is about what the user did, not about what the wire carried.
 
 ## What is never recorded
 
-Keystrokes typed into a focused pane. Typing is where a sudo password is entered, and a log that
+Keystrokes typed into a focused pane or the broadcast bar (the bar records only its assembled
+line, once, on enter). Typing is where a sudo password is entered, and a log that
 captured it would be a plaintext password file nobody asked for; the typing path never calls
 `Record` at all.
 

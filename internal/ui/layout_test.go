@@ -47,9 +47,12 @@ func TestComputeLayout(t *testing.T) {
 			if l.Main.Width < MainMinWidth && l.SidebarVisible() {
 				t.Fatalf("the grid was squeezed to %d columns", l.Main.Width)
 			}
-			if l.Main.Height+l.StatusBar.Height != tc.height {
-				t.Fatalf("rows do not add up: %d + %d != %d",
-					l.Main.Height, l.StatusBar.Height, tc.height)
+			if got := l.Main.Height + l.Broadcast.Height + l.StatusBar.Height; got != tc.height {
+				t.Fatalf("rows do not add up: %d + %d + %d != %d",
+					l.Main.Height, l.Broadcast.Height, l.StatusBar.Height, tc.height)
+			}
+			if tc.height >= MinHeight+BroadcastBarHeight && l.Broadcast.Height != BroadcastBarHeight {
+				t.Fatalf("Broadcast.Height = %d at %dx%d", l.Broadcast.Height, tc.width, tc.height)
 			}
 		})
 	}
@@ -92,8 +95,12 @@ func TestMainStartsWhereTheSidebarEnds(t *testing.T) {
 	if l.Main.X != l.Sidebar.Width {
 		t.Fatalf("Main.X = %d, sidebar is %d wide", l.Main.X, l.Sidebar.Width)
 	}
-	if l.StatusBar.Y != l.Main.Height {
-		t.Fatalf("StatusBar.Y = %d, the body is %d tall", l.StatusBar.Y, l.Main.Height)
+	if l.Broadcast.Y != l.Main.Height {
+		t.Fatalf("Broadcast.Y = %d, the body is %d tall", l.Broadcast.Y, l.Main.Height)
+	}
+	if l.StatusBar.Y != l.Main.Height+l.Broadcast.Height {
+		t.Fatalf("StatusBar.Y = %d below a %d-tall body and %d-tall bar",
+			l.StatusBar.Y, l.Main.Height, l.Broadcast.Height)
 	}
 }
 
