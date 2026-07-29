@@ -117,7 +117,7 @@ type KeyMap struct {
 // never overlap inside one area; a test proves the second part.
 func DefaultKeyMap() KeyMap {
 	return KeyMap{
-		Help:    key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+		Help: key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		// Plain q quits, lazygit style. Every context where q is typed rather
 		// than pressed — a pane, the broadcast bar, any text input — takes the
 		// keyboard before global bindings are consulted, so the letter still
