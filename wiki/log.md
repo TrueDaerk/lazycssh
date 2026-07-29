@@ -2,6 +2,11 @@
 
 ## 2026-07-29
 
+- Plain `q` quits, lazygit style, wherever no input has the keyboard — sidebar, app level, the
+  help overlay. While typing to a host, in the broadcast bar or in any text input, `q` stays a
+  letter and is forwarded as before; `ctrl+q` keeps working everywhere it did. `core/keys.md`
+  updated. Version 0.7.5.
+
 - Minimal line discipline in the scrollback buffer: backspace removes the last rune of the line
   being assembled and `ESC[K` erase-line sequences are interpreted (right-of-cursor silently
   consumed, `1K`/`2K` discard the line), with escape sequences reassembled across write
