@@ -133,7 +133,9 @@ func (a App) hostsPanel(width, height int) string {
 	return a.theme.Base.Width(max(0, width)).Render(b.String())
 }
 
-// hostLine renders one host: pane number, selection marker, name and state.
+// hostLine renders one host: pane number, selection marker, name, state and -
+// when the last command failed - its exit code, so a failing host is findable
+// in the list as well as in the grid.
 func (a App) hostLine(row hostRow, underCursor bool) string {
 	marker := ""
 	if a.cfg.Targets != nil && a.cfg.Targets.IsSelected(row.ID) {
@@ -143,16 +145,27 @@ func (a App) hostLine(row hostRow, underCursor bool) string {
 	state := a.state(row.ID)
 	name := fmt.Sprintf("%d%s %s", row.Index+1, marker, row.ID)
 
-	line := a.theme.Base.Render(name) + " " + a.theme.State(state).Render(state.String())
+	// Only a failure is worth a column in the list; "ok" on two hundred rows
+	// would bury the three that matter.
+	exit := ""
+	if code, ok := a.lastExit(row.ID); ok && code != 0 {
+		exit = fmt.Sprintf(" exit %d", code)
+	}
+
 	if underCursor {
 		// The cursor is a style, not a character, so a host name is never
 		// shifted sideways by where the cursor happens to be.
-		return a.theme.Cursor.Render(name + " " + state.String())
+		return a.theme.Cursor.Render(name + " " + state.String() + exit)
+	}
+
+	styledExit := ""
+	if exit != "" {
+		styledExit = " " + a.theme.Failure.Render(exit[1:])
 	}
 	if marker == "*" {
-		return a.theme.Selected.Render(name) + " " + a.theme.State(state).Render(state.String())
+		return a.theme.Selected.Render(name) + " " + a.theme.State(state).Render(state.String()) + styledExit
 	}
-	return line
+	return a.theme.Base.Render(name) + " " + a.theme.State(state).Render(state.String()) + styledExit
 }
 
 // visibleRange returns the half-open range of rows to draw so that the cursor is

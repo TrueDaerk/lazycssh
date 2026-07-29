@@ -250,9 +250,12 @@ func (s *testServer) runShell(channel ssh.Channel) {
 		}
 
 		for {
+			// The first line ending of either kind: taking the first '\r' in
+			// the whole buffer would swallow a '\n'-terminated command that
+			// arrived in the same read.
 			i := indexByte(line, '\r')
-			if i < 0 {
-				i = indexByte(line, '\n')
+			if j := indexByte(line, '\n'); j >= 0 && (i < 0 || j < i) {
+				i = j
 			}
 			if i < 0 {
 				break
@@ -270,6 +273,12 @@ func (s *testServer) runShell(channel ssh.Channel) {
 				return
 			case "stderr":
 				channel.Stderr().Write([]byte("to stderr\r\n"))
+			case "ok":
+				// A hooked shell printing its prompt after a success.
+				channel.Write([]byte("done\r\n\x1b]133;D;0\a$ "))
+			case "oops":
+				// A hooked shell printing its prompt after a failure.
+				channel.Write([]byte("no such file\r\n\x1b]133;D;1\a$ "))
 			case "flood":
 				for i := 0; i < 5000; i++ {
 					channel.Write([]byte("flood line\r\n"))

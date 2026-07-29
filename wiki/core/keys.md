@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-07-29T00:00:00Z
 ---
 
 # Keymap and help
@@ -39,6 +39,7 @@ are tests, not conventions.
 | `ctrl+alt+b` | global | broadcast to **every** host |
 | `:` | global | send a command |
 | `ctrl+]` | global | raw keystrokes to the hosts, and back again |
+| `!` | global | jump to the next host whose last command failed |
 | `↑`/`k`, `↓`/`j` | sidebar | move |
 | `enter` | sidebar | focus that host's pane |
 | `space` | sidebar | toggle selection |

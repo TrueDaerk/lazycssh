@@ -4,7 +4,7 @@ title: SSH session lifecycle
 description: One host, end to end — dial, handshake, PTY, streams, resize and close — and the event contract the UI depends on.
 resource: internal/ssh/session.go
 tags: [ssh, transport, concurrency, lifecycle]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-07-29T00:00:00Z
 ---
 
 # SSH session lifecycle
@@ -36,6 +36,7 @@ Two event types, and one rule that governs both:
 |-------|---------|
 | `OutputEvent` | new output is available in the session's scrollback |
 | `StateEvent` | the session changed state; `Err` is set for `failed` |
+| `ExitEvent` | the shell reported a command's exit status; also readable via `LastExit()` |
 
 **Events are hints, never the source of truth.** They are delivered with a non-blocking send and
 dropped when the consumer is behind. A consumer that receives any event must read `State()`,
@@ -69,6 +70,25 @@ before returning — which is what makes "no goroutine leaks" testable rather th
 
 `Resize` before `Start` is remembered and applied when the PTY is requested.
 
+## Exit codes
+
+A PTY is one byte stream: nothing out-of-band says how the last command ended, so the shell is
+asked to say it in-band. Right after the shell starts, the session writes one line to its stdin
+that arms a prompt hook — `PROMPT_COMMAND` for bash, `precmd` for zsh, each shell ignoring the
+other's mechanism — printing the OSC 133;D sequence (the FinalTerm / shell-integration
+convention) with `$?` before every prompt. The line starts with a space so
+`HISTCONTROL=ignorespace` keeps it out of the history.
+
+A scanner on the stdout pump watches for the marker — a byte state machine, because the sequence
+can be split across any read boundary — records the code, and emits an `ExitEvent`. The bytes
+themselves still land in the scrollback verbatim; terminals ignore unknown OSC sequences and the
+pane renderer strips OSC before drawing, so the marker is invisible everywhere.
+
+**Degradation is graceful by design.** A shell that does not run the hook — plain POSIX `sh`, a
+restricted shell, a profile that overwrites the variables — simply never emits the marker, and
+`LastExit()` reports "nothing known" rather than a wrong number. The hook line itself echoes in
+the scrollback once at connect; that is the honest cost of asking.
+
 ## The fake
 
 `ssh.Fake` implements the same interface without opening a socket. Everything above the
@@ -85,6 +105,7 @@ f.Emit("...")            // output as if from the remote
 f.Flood(20000)           // overwhelm the scrollback
 f.Disconnect(err)        // drop mid-session
 f.ExitWithStatus(3)      // remote shell exits non-zero
+f.ReportExit(1)          // a command finishes; goes through the real marker parsing
 f.Written()              // what a broadcast actually delivered
 f.Resizes()              // that a terminal resize reached this session once
 ```

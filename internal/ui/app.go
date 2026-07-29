@@ -314,6 +314,11 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return next.syncFocusTarget(), nil
 	case key.Matches(msg, a.keys.BroadcastFleet):
 		return a.setBroadcastMode(broadcast.ModeFleet), nil
+
+	case key.Matches(msg, a.keys.NextFailure):
+		// Global, not a grid key: "which host went wrong" is the question
+		// whatever has focus.
+		return a.jumpToNextFailure().syncFocusTarget(), nil
 	}
 
 	if panel, ok := a.panelForKey(msg); ok {
@@ -666,7 +671,7 @@ func (a App) renderMain() string {
 	focused := a.focus == AreaGrid
 
 	if len(a.hostIDs()) == 0 {
-		return a.frame(a.theme.PaneFrame(focused), r, a.theme.Muted.Render("no hosts"))
+		return a.frame(a.theme.PaneFrame(focused, false), r, a.theme.Muted.Render("no hosts"))
 	}
 
 	// Full screen is one pane in the whole area, which is what reading a stack
@@ -677,7 +682,7 @@ func (a App) renderMain() string {
 
 	g := a.grid()
 	if g.Empty() {
-		return a.frame(a.theme.PaneFrame(focused), r, a.theme.Muted.Render("no room for a pane"))
+		return a.frame(a.theme.PaneFrame(focused, false), r, a.theme.Muted.Render("no room for a pane"))
 	}
 
 	first := a.clampedPage(g) * g.PerPage
@@ -723,7 +728,7 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 		content = content + "\n" + body
 	}
 
-	return a.frame(a.theme.PaneFrame(focused), cell, content)
+	return a.frame(a.theme.PaneFrame(focused, a.commandFailed(a.hostIDs()[host])), cell, content)
 }
 
 // renderStatusBar draws the bottom line: what is selected, how many hosts are in
@@ -747,6 +752,9 @@ func (a App) renderStatusBar() string {
 	}
 	if a.lastDelivery != "" {
 		parts = append(parts, a.theme.Muted.Render(a.lastDelivery))
+	}
+	if summary := a.failureSummary(); summary != "" {
+		parts = append(parts, summary)
 	}
 
 	// The flags that weaken a default live on the status bar as well as in the

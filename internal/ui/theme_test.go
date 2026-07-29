@@ -96,8 +96,17 @@ func TestFrameHelpers(t *testing.T) {
 	if th.PanelFrame(true).GetBorderStyle() == th.PanelFrame(false).GetBorderStyle() {
 		t.Fatal("PanelFrame does not distinguish focus")
 	}
-	if th.PaneFrame(true).GetBorderStyle() == th.PaneFrame(false).GetBorderStyle() {
+	if th.PaneFrame(true, false).GetBorderStyle() == th.PaneFrame(false, false).GetBorderStyle() {
 		t.Fatal("PaneFrame does not distinguish focus")
+	}
+	if th.PaneFrame(false, true).GetBorderTopForeground() == th.PaneFrame(false, false).GetBorderTopForeground() {
+		t.Fatal("PaneFrame does not distinguish a failing host")
+	}
+	if th.PaneFrame(true, true).GetBorderStyle() != th.PaneFrame(true, false).GetBorderStyle() {
+		t.Fatal("a failing focused pane lost the focus border")
+	}
+	if th.PaneFrame(true, true).GetBorderTopForeground() == th.PaneFrame(true, false).GetBorderTopForeground() {
+		t.Fatal("a focused failing pane lost the failure colour")
 	}
 	if th.PanelTitle(true).Render("x") == th.PanelTitle(false).Render("x") {
 		t.Fatal("PanelTitle does not distinguish focus")

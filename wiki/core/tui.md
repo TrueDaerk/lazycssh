@@ -149,12 +149,28 @@ keystroke — that is the entire reason the two are separate concepts.
 
 ## Pane output
 
-Each pane carries a one-line header — pane number, host name, connection state — all read from
-live state at render time, so a state change is on screen the moment the redraw happens. When the
-width cannot hold everything the state gives up its space first, and the host name truncates
-**from the left** (`…-1a-40.example.com`): in a fleet of near-identical names the suffix is the
-distinguishing part. The last exit code joins the header with
-[#41](https://github.com/TrueDaerk/lazycssh/issues/41), which owns the detection mechanism.
+Each pane carries a one-line header — pane number, host name, connection state and the last exit
+code (`ok` / `exit 1`) — all read from live state at render time, so a change is on screen the
+moment the redraw happens. When the width cannot hold everything the state gives up its space
+first and the exit code second — a failure must outlive the state label — and the host name
+truncates **from the left** (`…-1a-40.example.com`): in a fleet of near-identical names the
+suffix is the distinguishing part.
+
+### Failure visibility
+
+The transport reports each command's exit status through a prompt hook — see
+[SSH session lifecycle](./session.md). What the interface does with it:
+
+- a pane whose last command exited non-zero gets a **danger-coloured border**, focused or not,
+  and the header states `exit N` in text, because colour alone is not allowed to carry meaning;
+- the Hosts panel marks failing rows with `exit N` — and only those; `ok` on two hundred rows
+  would bury the three that matter;
+- the status bar counts them: `3 hosts failed`, in the failure style;
+- `!` jumps the pane focus to the next failing host, from anywhere, wrapping around — the wrap
+  is deliberate, unlike pane movement, because this is a search and a failure behind the cursor
+  must be as reachable as one ahead;
+- a shell that never ran the hook reports nothing, and the interface shows nothing rather than
+  a made-up zero.
 
 Below the header the pane renders its session's [scrollback](./scrollback.md), following the
 tail: the newest output is what the user is watching for. Rendering is a pure
@@ -234,7 +250,7 @@ Filtering never renumbers panes: a row shows the host's position in the **full**
 Only the visible rows are rendered, with a `+N more` marker for the rest, so a redraw costs the
 size of the panel rather than the size of the fleet — two hundred hosts included.
 
-Exit-code tracking is not here yet; it is [#41](https://github.com/TrueDaerk/lazycssh/issues/41).
+A host whose last command exited non-zero carries `exit N` on its row, in the failure style.
 
 ### [3] Groups / Views
 
