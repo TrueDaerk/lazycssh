@@ -305,8 +305,9 @@ and `!` jumps to the next failure. What a dedicated Hosts panel used to add live
   identifier**, so it survives a reconnect and a page turn — the pane moves, the host keeps its
   name.
 
-An argumentless start opens the Status panel with the host prompt already open, so a fresh
-install with no saved sessions can reach a fleet with the keyboard alone.
+An argumentless start opens on the Status panel with **no** input focused: the empty grid names
+the options — `n` to connect, the Sessions panel, the CLI — and which of them comes first is the
+user's call, not the program's.
 
 ### [2] Groups / Views
 

@@ -50,7 +50,6 @@ func TestCloseKeyEmitsCloseHostMsg(t *testing.T) {
 
 func TestReconnectKeyWithoutHostsEmitsNothing(t *testing.T) {
 	a := resize(t, NewApp(Config{Theme: Options{Dark: true}}), 120, 40)
-	a = pressKey(t, a, "esc") // close the auto-opened host prompt
 	a = pressKey(t, a, "tab")
 	if got := keyMsgResult(t, a, "r"); got != nil {
 		t.Fatalf("pressing r with no hosts produced %T, want nothing", got)

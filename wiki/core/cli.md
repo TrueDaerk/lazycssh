@@ -13,10 +13,10 @@ timestamp: 2026-07-29T19:00:00Z
 lazycssh [flags] [<host|@session>...]
 ```
 
-Without arguments the TUI opens on an empty run: the Status panel is focused with the host
-prompt already open — any host pattern connects, and the concrete aliases of `~/.ssh/config`
-are offered beneath it with `tab` completion — and the Sessions panel launches a saved session
-— the lazygit model, applied to cssh. Once connected, clicking or entering a pane types
+Without arguments the TUI opens on an empty run with nothing focused for input: `n` opens the
+host prompt — any host pattern connects, and the concrete aliases of `~/.ssh/config` are
+offered beneath it with `tab` completion — and the Sessions panel launches a saved session —
+the lazygit model, applied to cssh. Once connected, clicking or entering a pane types
 straight into that host and `5` broadcasts to all of them; the empty grid says all of that.
 
 Host arguments may use brace expansion, for example `srv1-{01..40}.example.com`. Expansion is

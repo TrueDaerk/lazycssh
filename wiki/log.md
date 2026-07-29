@@ -2,6 +2,11 @@
 
 ## 2026-07-29
 
+- An argumentless start no longer opens the host prompt: it starts on the Status panel with no
+  input focused, and the empty-grid hint names the options. Forcing the first action was wrong —
+  connect, launch a session or just look around is the user's call. `n` opens the prompt as
+  before. `core/tui.md` and `core/cli.md` updated. Version 0.8.1.
+
 - The Hosts panel is gone; the pane grid is the host list. The sidebar is Status `1`, Groups
   `2`, Sessions `3`, Command log `4`, and the broadcast bar moved to `5`. `n` now works from
   anywhere: the free-text host prompt opens in the Status panel with the not-yet-connected

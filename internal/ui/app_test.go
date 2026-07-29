@@ -460,19 +460,15 @@ func TestUnknownMessageIsIgnored(t *testing.T) {
 	}
 }
 
-func TestArgumentlessStartOpensTheHostPrompt(t *testing.T) {
+// An argumentless start forces nothing: no input has the keyboard, the empty
+// grid names the options, and the first action is the user's call.
+func TestArgumentlessStartFocusesNoInput(t *testing.T) {
 	a := NewApp(Config{Theme: Options{Dark: true}})
 	if a.Panel() != PanelStatus {
 		t.Fatalf("Panel() = %v, want the Status panel on an empty start", a.Panel())
 	}
-	if !a.ConnectPromptOpen() {
-		t.Fatal("the host prompt is not open on an empty start")
-	}
-
-	// A run that has hosts starts with the prompt closed.
-	b := NewApp(Config{Hosts: []string{"h1"}, Theme: Options{Dark: true}})
-	if b.ConnectPromptOpen() {
-		t.Fatal("the host prompt is open although the run has hosts")
+	if a.ConnectPromptOpen() || a.CommandLineOpen() || a.Saving() {
+		t.Fatal("an input has the keyboard on an empty start")
 	}
 }
 
