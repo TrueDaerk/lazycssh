@@ -117,9 +117,16 @@ type App struct {
 	help   help.Model
 	layout Layout
 
-	filter    textinput.Model
-	saveInput textinput.Model
-	cmdInput  textinput.Model
+	filter      textinput.Model
+	saveInput   textinput.Model
+	cmdInput    textinput.Model
+	searchInput textinput.Model
+
+	// scroll is each pane's scrollback offset in wrapped lines from the
+	// bottom; a missing entry is the tail. searchTerm is the one term every
+	// pane highlights.
+	scroll     map[string]int
+	searchTerm string
 
 	cmdHistory    []string
 	cmdHistoryPos int
@@ -166,16 +173,22 @@ func NewApp(cfg Config) App {
 	command.Placeholder = "command"
 	command.Prompt = ""
 
+	search := textinput.New()
+	search.Placeholder = "search"
+	search.Prompt = ""
+
 	a := App{
-		cfg:       cfg,
-		keys:      keys,
-		theme:     theme,
-		help:      h,
-		filter:    filter,
-		saveInput: save,
-		cmdInput:  command,
-		focus:     AreaSidebar,
-		panel:     PanelStatus,
+		cfg:         cfg,
+		keys:        keys,
+		theme:       theme,
+		help:        h,
+		filter:      filter,
+		saveInput:   save,
+		cmdInput:    command,
+		searchInput: search,
+		scroll:      make(map[string]int),
+		focus:       AreaSidebar,
+		panel:       PanelStatus,
 	}
 	return a.loadSessions()
 }
@@ -269,6 +282,11 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// must be typeable without closing a pane.
 	if a.filter.Focused() {
 		return a.handleFilterKey(msg)
+	}
+
+	// So does the scrollback search, for the same reason.
+	if a.searchInput.Focused() {
+		return a.handleSearchKey(msg)
 	}
 
 	// While the overlay is open it is the only thing listening: a user reading
@@ -559,6 +577,23 @@ func (a App) handleGridKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, a.keys.FullScreen):
 		a.fullScreen = !a.fullScreen
 		return a, nil
+
+	case key.Matches(msg, a.keys.ScrollUp):
+		return a.scrollBy(+a.scrollPage()), nil
+	case key.Matches(msg, a.keys.ScrollDown):
+		return a.scrollBy(-a.scrollPage()), nil
+	case key.Matches(msg, a.keys.ScrollTop):
+		return a.scrollToTop(), nil
+	case key.Matches(msg, a.keys.ScrollBottom):
+		return a.scrollToBottom(), nil
+	case key.Matches(msg, a.keys.SearchPane):
+		return a.openSearch(), nil
+	case key.Matches(msg, a.keys.NextMatch):
+		return a.stepMatch(-1), nil
+	case key.Matches(msg, a.keys.PrevMatch):
+		return a.stepMatch(+1), nil
+	case key.Matches(msg, a.keys.ClearSearch):
+		return a.clearSearch(), nil
 	}
 	return a, nil
 }
@@ -621,6 +656,9 @@ func (a App) View() tea.View {
 	bottom := a.renderStatusBar()
 	if a.cmdInput.Focused() {
 		bottom = a.renderCommandLine()
+	}
+	if a.searchInput.Focused() {
+		bottom = a.renderSearchLine()
 	}
 
 	view := lipgloss.JoinVertical(lipgloss.Left, body, bottom)
@@ -755,6 +793,14 @@ func (a App) renderStatusBar() string {
 	}
 	if summary := a.failureSummary(); summary != "" {
 		parts = append(parts, summary)
+	}
+	if label := a.scrollLabel(); label != "" {
+		// A pane that is not following its tail says so: fresh output landing
+		// behind a frozen window must not look like a quiet host.
+		parts = append(parts, a.theme.StatusWarning.Render(label))
+	}
+	if a.searchTerm != "" {
+		parts = append(parts, a.theme.Muted.Render(fmt.Sprintf("search %q", a.searchTerm)))
 	}
 
 	// The flags that weaken a default live on the status bar as well as in the

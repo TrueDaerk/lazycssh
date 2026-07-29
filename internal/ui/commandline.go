@@ -115,6 +115,13 @@ func (a App) sendCommandLine() (tea.Model, tea.Cmd) {
 	a.cmdHistory = appendHistory(a.cmdHistory, command)
 	a = a.closeCommandLine()
 
+	// A find instruction is for lazycssh too: it sets the shared search term
+	// and reports which hosts matched, and nothing reaches a remote shell.
+	if next, report, meta := a.applyFind(command); meta {
+		next.lastDelivery = report
+		return next, nil
+	}
+
 	// A selection instruction is for lazycssh, not for the hosts: nothing is
 	// written to a remote shell and nothing is recorded as a command.
 	if report, meta := a.applySelection(command); meta {

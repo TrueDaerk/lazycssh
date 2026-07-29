@@ -2,6 +2,13 @@
 
 ## 2026-07-29
 
+- Scrollback navigation and search: `ctrl+u`/`ctrl+d` scroll the focused pane, `g`/`G` jump to
+  the oldest output and back to the tail, and the status bar warns `scrollback +N` while a pane
+  is not following. `/` searches the focused pane, `[`/`]` walk the matches, and the command
+  line's `/find <text>` reports which hosts printed it across the whole run. The offset is a
+  render-time window - the buffer keeps receiving while scrolled. `core/tui.md` and
+  `core/keys.md` updated. Version 0.1.34.
+
 - Exit codes and failure visibility: sessions arm a prompt hook (OSC 133;D with `$?`, bash and
   zsh) and a scanner on the stdout pump records each command's status, degrading to "unknown" on
   shells without the hook. A failing pane gets a danger border and `exit N` in its header, the

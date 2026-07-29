@@ -56,6 +56,11 @@ are tests, not conventions.
 | `r` | panes | reconnect this host |
 | `x` | panes | close this session |
 | `pgup`/`p`, `pgdn`/`n` | panes | page through the panes |
+| `ctrl+u` / `ctrl+d` | panes | scroll this pane back / forward |
+| `g` / `G` | panes | oldest retained output / back to the tail |
+| `/` | panes | search the scrollback |
+| `[` / `]` | panes | older / newer match |
+| `esc` | panes | clear the search |
 
 The fleet broadcast mode is `ctrl+alt+b` on purpose. It is the one mode that ignores the working
 set, so it is not a single letter and not reachable by cycling through the others — see
