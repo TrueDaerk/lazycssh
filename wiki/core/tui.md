@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-29T16:00:00Z
+timestamp: 2026-07-29T18:00:00Z
 ---
 
 # TUI shell
@@ -265,8 +265,10 @@ screen.
 
 ### [1] Status
 
-The panel that answers "what happens if I type": the session name, the broadcast scope with its
-live target count, the working set, hosts up/total, and every flag that weakens a default.
+The panel that answers "what happens if I type": first a literal `keys go to:` line — the
+focused host, the broadcast targets, or lazycssh itself — then the session name, the broadcast
+scope with its live target count, the working set, hosts up/total, and every flag that weakens a
+default.
 
 Every number is read from live state **at render time**. A cached target count is a lie waiting
 to be told: the fleet changes under the user, and the one moment the count matters is the moment
