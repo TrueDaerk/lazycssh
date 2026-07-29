@@ -69,6 +69,9 @@ type KeyMap struct {
 	QuickSave         key.Binding
 	NewHost           key.Binding
 	ConnectedOnly     key.Binding
+	Split             key.Binding
+	NextSplit         key.Binding
+	PrevSplit         key.Binding
 
 	// Selection. App-level: a selection is about the run, not about a panel,
 	// and it must be editable from wherever the user is reading.
@@ -150,6 +153,14 @@ func DefaultKeyMap() KeyMap {
 		// everywhere else.
 		ConnectedOnly: key.NewBinding(key.WithKeys("ctrl+a"),
 			key.WithHelp("ctrl+a", "show only the connected hosts")),
+		// Same typing exception as ctrl+a: while a pane or the broadcast bar
+		// has the keyboard, these chords belong to the hosts.
+		Split: key.NewBinding(key.WithKeys("ctrl+s"),
+			key.WithHelp("ctrl+s", "split the grid into chunks of N panes")),
+		NextSplit: key.NewBinding(key.WithKeys("ctrl+right"),
+			key.WithHelp("ctrl+→", "next split chunk")),
+		PrevSplit: key.NewBinding(key.WithKeys("ctrl+left"),
+			key.WithHelp("ctrl+←", "previous split chunk")),
 
 		SelectAll: key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "select every host")),
 		Invert:    key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "invert the selection")),
@@ -200,7 +211,8 @@ func (k KeyMap) global() []key.Binding {
 		k.Help, k.Quit, k.NextTab, k.PrevTab,
 		k.Panel1, k.Panel2, k.Panel3, k.Panel4, k.Panel5,
 		k.BroadcastAll, k.BroadcastSelected, k.BroadcastSingle, k.BroadcastFleet,
-		k.CommandLine, k.NextFailure, k.QuickSave, k.NewHost, k.ConnectedOnly,
+		k.CommandLine, k.NextFailure, k.QuickSave, k.NewHost,
+		k.ConnectedOnly, k.Split, k.NextSplit, k.PrevSplit,
 		k.SelectAll, k.Invert, k.ClearSel, k.SelectUp, k.SelectDwn,
 	}
 }

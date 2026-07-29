@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-29T22:00:00Z
+timestamp: 2026-07-29T23:00:00Z
 ---
 
 # TUI shell
@@ -107,6 +107,18 @@ The filter is a view over live state, not a removal: a host that reconnects reap
 keypress. While it is on, the status bar carries `CONNECTED HOSTS ONLY`; a filter that hides
 every pane renders `no connected hosts` rather than an empty run. While typing into a pane or
 the broadcast bar, `ctrl+a` stays a keystroke for the hosts — readline start-of-line.
+
+### Split
+
+`ctrl+s` asks for a number and splits the visible hosts into consecutive chunks of that size:
+ten hosts split by five shows the first five terminals. `ctrl+→`/`ctrl+←` show the next and
+previous chunk, stopping at the ends rather than wrapping. Broadcast follows the visible chunk
+through the same [visibility limit](./broadcast-scope.md) the connected-only filter uses, and
+the status bar carries `SPLIT 1/2 (5 hosts)` in the warning style for as long as the split
+narrows anything. An empty prompt or `0` clears the split, `esc` keeps it; the split composes
+with `ctrl+a` — chunks are cut from the filtered list — and a chunk whose hosts left the run
+clamps to the last one instead of rendering an empty grid. The typing exception applies here
+too: in a pane, `ctrl+s` is flow control for the host.
 
 ## Focus
 

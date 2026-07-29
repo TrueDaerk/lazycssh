@@ -146,6 +146,11 @@ type App struct {
 	// the hosts that can take input right now.
 	connectedOnly bool
 
+	// The split: chunks of splitSize panes, splitChunk on screen. 0 is off.
+	splitInput textinput.Model
+	splitSize  int
+	splitChunk int
+
 	// broadcastLine is the broadcast bar's local echo of what was typed
 	// since the last enter. The truth is on the hosts; this is the reminder.
 	broadcastLine []rune
@@ -215,6 +220,10 @@ func NewApp(cfg Config) App {
 	groupHosts.Placeholder = "host patterns, space separated"
 	groupHosts.Prompt = ""
 
+	split := textinput.New()
+	split.Placeholder = "panes per view"
+	split.Prompt = ""
+
 	a := App{
 		cfg:             cfg,
 		keys:            keys,
@@ -226,6 +235,7 @@ func NewApp(cfg Config) App {
 		hostInput:       host,
 		groupNameInput:  groupName,
 		groupHostsInput: groupHosts,
+		splitInput:      split,
 		scroll:          make(map[string]int),
 		focus:           AreaSidebar,
 		panel:           PanelStatus,
@@ -296,7 +306,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// render. Redrawing is (almost) the whole effect - under the
 		// connected-only filter the visible set follows liveness, so the
 		// broadcast limit must follow too.
-		if a.connectedOnly {
+		if a.connectedOnly || a.splitSize > 0 {
 			a = a.syncBroadcastLimit()
 		}
 		return a.followFocus(), nil
@@ -348,7 +358,7 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// the pane forwards.
 	if msg.String() == "ctrl+q" &&
 		(a.cmdInput.Focused() || a.hostInput.Focused() ||
-			a.searchInput.Focused() || a.Saving() ||
+			a.searchInput.Focused() || a.Saving() || a.splitInput.Focused() ||
 			a.GroupDialogOpen() || a.deleteGroup != "") {
 		return a, tea.Quit
 	}
@@ -386,6 +396,11 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// So does the scrollback search, for the same reason.
 	if a.searchInput.Focused() {
 		return a.handleSearchKey(msg)
+	}
+
+	// And the split prompt: it is one number, typed.
+	if a.splitInput.Focused() {
+		return a.handleSplitKey(msg)
 	}
 
 	// While the overlay is open it is the only thing listening: a user reading
@@ -461,6 +476,13 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, a.keys.ConnectedOnly):
 		return a.toggleConnectedOnly()
+
+	case key.Matches(msg, a.keys.Split):
+		return a.beginSplit(), nil
+	case key.Matches(msg, a.keys.NextSplit):
+		return a.stepSplit(+1)
+	case key.Matches(msg, a.keys.PrevSplit):
+		return a.stepSplit(-1)
 
 	case key.Matches(msg, a.keys.NextFailure):
 		// Global, not a grid key: "which host went wrong" is the question
@@ -754,6 +776,9 @@ func (a App) View() tea.View {
 	if a.searchInput.Focused() {
 		bottom = a.renderSearchLine()
 	}
+	if a.splitInput.Focused() {
+		bottom = a.renderSplitLine()
+	}
 
 	rows := []string{body}
 	if a.layout.BroadcastVisible() {
@@ -937,6 +962,11 @@ func (a App) renderStatusBar() string {
 			scope = a.theme.StatusWarning
 		}
 		parts = append(parts, scope.Render(a.cfg.Targets.Describe()))
+	}
+	if label := a.splitLabel(); label != "" {
+		// The split narrows what a keystroke reaches, so it renders in the
+		// warning style for as long as it is in force.
+		parts = append(parts, a.theme.StatusWarning.Render(label))
 	}
 	if label := a.windowLabel(); label != "" {
 		parts = append(parts, a.theme.Muted.Render(label))
