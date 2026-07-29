@@ -61,6 +61,11 @@ type Model struct {
 	resolver *hosts.Resolver
 	store    *sessions.Store
 
+	// patterns is how the run was assembled, as the user gave it: the CLI
+	// arguments, then everything connected or launched at runtime, deduped in
+	// order. Saving the run writes patterns, so they must track every change.
+	patterns []string
+
 	// ctx bounds every dial. Cancelled when the program shuts down.
 	ctx context.Context
 
@@ -146,6 +151,7 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 		router:   router,
 		resolver: resolver,
 		store:    cfg.Store,
+		patterns: append([]string(nil), cfg.Patterns...),
 		ctx:      ctx,
 	}, nil
 }
@@ -261,9 +267,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// already gone, which is what removing asked for.
 		_ = m.mgr.Remove(msg.ID)
 		m.router.Forget(msg.ID)
+		m.dropPattern(msg.ID)
 		m.ws.SetHosts(m.mgr.IDs())
 		m.resizePTYs()
-		return m, m.forward(ui.HostsChangedMsg{Hosts: m.mgr.IDs()})
+		return m, m.forward(ui.HostsChangedMsg{Hosts: m.mgr.IDs(), Patterns: m.patterns})
 
 	case ui.SessionLaunchMsg:
 		return m.launchSession(msg)
@@ -307,6 +314,7 @@ func (m *Model) launchSession(msg ui.SessionLaunchMsg) (tea.Model, tea.Cmd) {
 	for _, host := range fleet {
 		m.mgr.Add(m.ctx, host)
 	}
+	m.addPatterns(sess.Patterns())
 	m.ws.SetHosts(m.mgr.IDs())
 
 	if !msg.Merge {
@@ -319,7 +327,7 @@ func (m *Model) launchSession(msg ui.SessionLaunchMsg) (tea.Model, tea.Cmd) {
 	}
 
 	m.resizePTYs()
-	return m, m.forward(ui.HostsChangedMsg{Hosts: m.mgr.IDs()})
+	return m, m.forward(ui.HostsChangedMsg{Hosts: m.mgr.IDs(), Patterns: m.patterns})
 }
 
 // connectHosts adds the hosts the UI asked to connect - an ssh-config alias
@@ -352,9 +360,39 @@ func (m *Model) connectHosts(msg ui.HostConnectMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	m.addPatterns(msg.Patterns)
 	m.ws.SetHosts(m.mgr.IDs())
 	m.resizePTYs()
-	return m, m.forward(ui.HostsChangedMsg{Hosts: m.mgr.IDs()})
+	return m, m.forward(ui.HostsChangedMsg{Hosts: m.mgr.IDs(), Patterns: m.patterns})
+}
+
+// addPatterns appends patterns the run grew by, deduplicated in order, so a
+// later save writes how the run was actually assembled - the drift between a
+// run extended at runtime and the session it saves was a bug.
+func (m *Model) addPatterns(patterns []string) {
+	seen := make(map[string]bool, len(m.patterns))
+	for _, p := range m.patterns {
+		seen[p] = true
+	}
+	for _, p := range patterns {
+		if !seen[p] {
+			seen[p] = true
+			m.patterns = append(m.patterns, p)
+		}
+	}
+}
+
+// dropPattern removes a pattern that names the removed host exactly. A glob or
+// brace pattern stays: it cannot be narrowed by one host, and keeping it is
+// the honest description of how the run was asked for.
+func (m *Model) dropPattern(id string) {
+	out := m.patterns[:0]
+	for _, p := range m.patterns {
+		if p != id {
+			out = append(out, p)
+		}
+	}
+	m.patterns = out
 }
 
 // resizePTYs tells every remote PTY how big its pane's content is right now.

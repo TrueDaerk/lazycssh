@@ -360,3 +360,56 @@ func (failingStore) Exists(string) bool                     { return false }
 func (failingStore) SaveRun(sessions.Run, bool) (*sessions.Session, error) {
 	return nil, errors.New("read-only file system")
 }
+
+// S opens the save prompt from anywhere at the app level - saving must not
+// require finding the Sessions panel first.
+func TestQuickSaveOpensThePromptFromAnywhere(t *testing.T) {
+	a, _, _, _ := statusApp(t, "web-01")
+	if a.Panel() == PanelSessions {
+		t.Fatal("setup: already on the Sessions panel")
+	}
+
+	a = pressKey(t, a, "S")
+	if !a.Saving() {
+		t.Fatal("S did not open the save prompt")
+	}
+}
+
+// While typing, S is a keystroke for the host like any other letter.
+func TestQuickSaveIsForwardedWhileTyping(t *testing.T) {
+	a, fleet := typingApp(t, "web-01")
+	a = press(t, a, tea.KeyPressMsg{Code: 'S', Text: "S"})
+
+	if a.Saving() {
+		t.Fatal("S opened the save prompt while typing")
+	}
+	if got := string(fleet.sessions["web-01"].Written()); got != "S" {
+		t.Fatalf("the host received %q", got)
+	}
+}
+
+// Saving an empty run says so without discarding the prompt or the typed
+// name: the user may connect a host and press enter again.
+func TestSavingAnEmptyRunKeepsThePrompt(t *testing.T) {
+	store, err := sessions.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	a := resize(t, NewApp(Config{Sessions: store, Theme: Options{Dark: true}}), 120, 40)
+
+	a = pressKey(t, a, "S")
+	for _, r := range "prod" {
+		a = pressKey(t, a, string(r))
+	}
+	a = pressKey(t, a, "enter")
+
+	if a.SaveError() == nil {
+		t.Fatal("an empty run saved without an error")
+	}
+	if !a.Saving() || a.saveInput.Value() != "prod" {
+		t.Fatalf("the prompt did not survive: saving=%v value=%q", a.Saving(), a.saveInput.Value())
+	}
+	if list, _ := store.List(); len(list) != 0 {
+		t.Fatalf("an empty run wrote a session: %v", list)
+	}
+}

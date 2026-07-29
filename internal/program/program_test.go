@@ -2,6 +2,7 @@ package program
 
 import (
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -304,5 +305,30 @@ func TestRemoveHostRequestDropsThePane(t *testing.T) {
 	}
 	if m.ws.Count() != 1 {
 		t.Fatalf("working set Count() = %d after the removal", m.ws.Count())
+	}
+}
+
+// The drift bug: a run started with a pattern and extended at runtime must
+// save both. The program tracks the live pattern list and hands it to the UI
+// with every change.
+func TestRunPatternsFollowRuntimeConnects(t *testing.T) {
+	m, _ := testModel(t, "web-{01..02}")
+
+	drive(t, m, ui.HostConnectMsg{Patterns: []string{"db-01"}})
+	if got := strings.Join(m.patterns, ","); got != "web-{01..02},db-01" {
+		t.Fatalf("patterns = %q after a runtime connect", got)
+	}
+
+	// Connecting the same pattern again does not duplicate it.
+	drive(t, m, ui.HostConnectMsg{Patterns: []string{"cache-01", "db-01"}})
+	if got := strings.Join(m.patterns, ","); got != "web-{01..02},db-01,cache-01" {
+		t.Fatalf("patterns = %q after a repeated connect", got)
+	}
+
+	// Removing a host drops its exact pattern; a brace pattern stays.
+	drive(t, m, ui.RemoveHostMsg{ID: "db-01"})
+	drive(t, m, ui.RemoveHostMsg{ID: "web-01"})
+	if got := strings.Join(m.patterns, ","); got != "web-{01..02},cache-01" {
+		t.Fatalf("patterns = %q after removals", got)
 	}
 }

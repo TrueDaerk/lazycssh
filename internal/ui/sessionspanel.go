@@ -174,6 +174,12 @@ func (a App) commitSave(overwrite bool) (App, tea.Cmd) {
 		// they are now is the honest thing to write.
 		run.Patterns = a.hostIDs()
 	}
+	if len(run.Patterns) == 0 {
+		// An empty run cannot be saved, but the typed name must survive the
+		// telling: the user may connect a host and press enter again.
+		a.saveErr = errors.New("nothing to save: no hosts in the run")
+		return a, nil
+	}
 
 	if _, err := a.cfg.Sessions.SaveRun(run, overwrite); err != nil {
 		if errors.Is(err, sessions.ErrExists) {
@@ -212,7 +218,10 @@ func (a App) sessionsPanel(width, height int) string {
 	case a.saveInput.Focused():
 		b.WriteString(a.theme.Base.Render("save as: " + a.saveInput.Value()))
 		b.WriteString("\n")
-	case a.saveErr != nil:
+	}
+	if a.saveErr != nil {
+		// The error must be visible while the prompt is still open: an empty
+		// run keeps the prompt so the name survives.
 		b.WriteString(a.theme.Failure.Render(a.saveErr.Error()))
 		b.WriteString("\n")
 	}

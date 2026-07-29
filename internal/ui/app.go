@@ -282,6 +282,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		next := a.withHosts(msg.Hosts).followFocus()
 		// The fleet changed, so whatever a connect complained about is stale.
 		next.connectErr = ""
+		if msg.Patterns != nil {
+			// The program tracks how the run was assembled; saving writes
+			// patterns, so they must follow every change.
+			next.cfg.RunPatterns = msg.Patterns
+		}
 		return next, nil
 
 	case ConnectErrorMsg:
@@ -375,6 +380,14 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, a.keys.CommandLine):
 		return a.openCommandLine(), nil
+
+	case key.Matches(msg, a.keys.QuickSave):
+		// Saving works from anywhere at the app level: the prompt is
+		// prefilled and enter confirms, so the common case is three keys.
+		// The Sessions panel is where the prompt renders, so it opens too.
+		a.panel = PanelSessions
+		a.focus = AreaSidebar
+		return a.beginSave(), nil
 
 	case key.Matches(msg, a.keys.BroadcastAll):
 		return a.setBroadcastMode(broadcast.ModeAll), nil

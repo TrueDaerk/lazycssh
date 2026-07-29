@@ -2,6 +2,14 @@
 
 ## 2026-07-29
 
+- Quick save and truthful patterns: global `S` opens the prefilled save prompt from anywhere at
+  the app level (forwarded to the hosts while typing, by design). The program now tracks the
+  run's live pattern list — CLI arguments plus runtime connects and session launches, deduped;
+  exact-name patterns dropped on removal — and hands it to the UI with every `HostsChangedMsg`,
+  fixing the bug where a run extended at runtime saved only its original patterns. Saving an
+  empty run reports the error without discarding the prompt or the typed name.
+  `core/session-files.md`, `core/program.md` and `core/keys.md` updated. Version 0.7.1.
+
 - Mouse support: cell-motion reporting is on. Clicking a pane focuses it (typing starts there),
   the new `[x]` button at the right of every pane header closes a live host or removes a dead
   one, clicking a sidebar box selects its panel and a row moves that panel's cursor, and
