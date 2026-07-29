@@ -2,6 +2,11 @@
 
 ## 2026-07-29
 
+- Focus borders match lazygit: the focused panel and pane keep the same border weight and only
+  change colour, and `Focus` is now green (`#9ece6a` dark, `#2e7d32` light) instead of blue.
+  The thick border survives only as the `NoColor` fallback, where colour cannot carry focus.
+  `core/theme.md` updated. Version 0.7.3.
+
 - Simplification sweep for the three-destination model: the Status panel opens with a literal
   `keys go to:` line naming the focused host, the broadcast targets, or lazycssh; the empty-run
   hint explains typing and the `6` bar; tab's help text says "next panel". `core/tui.md` and
