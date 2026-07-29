@@ -127,17 +127,17 @@ func (a App) foregroundSession(index int) App {
 }
 
 // syncBroadcastLimit pushes the visible host set into the router. With no
-// session open there is nothing to limit; with one open, all and selected mode
-// stop at its edge.
+// session open and no filter there is nothing to limit; otherwise all and
+// selected mode stop at the edge of what is on screen.
 func (a App) syncBroadcastLimit() App {
 	if a.cfg.Targets == nil {
 		return a
 	}
-	if a.active < 0 || a.active >= len(a.open) {
+	if (a.active < 0 || a.active >= len(a.open)) && !a.connectedOnly {
 		a.cfg.Targets.SetLimit(nil)
 		return a
 	}
-	a.cfg.Targets.SetLimit(a.sessionHosts())
+	a.cfg.Targets.SetLimit(a.visibleHosts())
 	return a
 }
 

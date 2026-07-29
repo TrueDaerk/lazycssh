@@ -68,6 +68,7 @@ type KeyMap struct {
 	NextFailure       key.Binding
 	QuickSave         key.Binding
 	NewHost           key.Binding
+	ConnectedOnly     key.Binding
 
 	// Selection. App-level: a selection is about the run, not about a panel,
 	// and it must be editable from wherever the user is reading.
@@ -144,6 +145,11 @@ func DefaultKeyMap() KeyMap {
 		QuickSave: key.NewBinding(key.WithKeys("S"),
 			key.WithHelp("S", "save the run as a session")),
 		NewHost: key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "connect a new host")),
+		// While typing into a pane or the broadcast bar, ctrl+a stays a
+		// keystroke for the hosts (readline start-of-line); the toggle works
+		// everywhere else.
+		ConnectedOnly: key.NewBinding(key.WithKeys("ctrl+a"),
+			key.WithHelp("ctrl+a", "show only the connected hosts")),
 
 		SelectAll: key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "select every host")),
 		Invert:    key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "invert the selection")),
@@ -194,7 +200,7 @@ func (k KeyMap) global() []key.Binding {
 		k.Help, k.Quit, k.NextTab, k.PrevTab,
 		k.Panel1, k.Panel2, k.Panel3, k.Panel4, k.Panel5,
 		k.BroadcastAll, k.BroadcastSelected, k.BroadcastSingle, k.BroadcastFleet,
-		k.CommandLine, k.NextFailure, k.QuickSave, k.NewHost,
+		k.CommandLine, k.NextFailure, k.QuickSave, k.NewHost, k.ConnectedOnly,
 		k.SelectAll, k.Invert, k.ClearSel, k.SelectUp, k.SelectDwn,
 	}
 }

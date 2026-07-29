@@ -109,10 +109,11 @@ func (a App) fleetIDs() []string {
 	return a.cfg.Hosts
 }
 
-// hostIDs returns the hosts whose panes are drawn: the foreground session's,
-// or the whole fleet when no session is open. Everything pane-shaped - the
-// grid, the focus, paging, hit-testing - indexes into this list.
-func (a App) hostIDs() []string { return a.sessionHosts() }
+// hostIDs returns the hosts whose panes are drawn: the foreground session's -
+// or the whole fleet when no session is open - after the visibility filters.
+// Everything pane-shaped - the grid, the focus, paging, hit-testing - indexes
+// into this list.
+func (a App) hostIDs() []string { return a.visibleHosts() }
 
 // counts summarises the fleet for the status panel. Without a transport only
 // the total is known, and it says so by leaving the rest at zero.

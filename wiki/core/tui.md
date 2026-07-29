@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-29T21:00:00Z
+timestamp: 2026-07-29T22:00:00Z
 ---
 
 # TUI shell
@@ -97,6 +97,16 @@ keystroke — that is the entire reason the two are separate concepts.
 - the page indicator (`page 2/5`) appears in the status bar only when there is more than one page,
 - the page is clamped on every render: a terminal that shrinks produces more pages, and the page
   the user was on may stop existing.
+
+### Connected-only filter
+
+`ctrl+a` narrows the grid to the hosts that can take input right now, and — unlike paging — it
+narrows the broadcast with it: the visible set is pushed into the router's
+[visibility limit](./broadcast-scope.md), so `all`/`selected` reach only what is on screen.
+The filter is a view over live state, not a removal: a host that reconnects reappears without a
+keypress. While it is on, the status bar carries `CONNECTED HOSTS ONLY`; a filter that hides
+every pane renders `no connected hosts` rather than an empty run. While typing into a pane or
+the broadcast bar, `ctrl+a` stays a keystroke for the hosts — readline start-of-line.
 
 ## Focus
 
