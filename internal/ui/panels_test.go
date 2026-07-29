@@ -335,8 +335,8 @@ func scopeLabel(m broadcast.Mode) string {
 func TestSingleModeFollowsTheFocusedPane(t *testing.T) {
 	a, _, router, _ := statusApp(t, "web-01", "web-02", "web-03")
 
-	a = pressKey(t, a, "tab") // focus the grid
-	a = pressKey(t, a, "l")   // move to web-02
+	a = focusGrid(t, a)
+	a = pressKey(t, a, "l") // move to web-02
 	a = pressKey(t, a, "s")
 
 	if router.Mode() != broadcast.ModeSingle {

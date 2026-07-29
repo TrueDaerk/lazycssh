@@ -15,7 +15,7 @@ func scrollApp(t *testing.T, lines int) (App, *fakeFleet) {
 	for i := 1; i <= lines; i++ {
 		fleet.sessions["web-01"].Emitf("line-%03d\n", i)
 	}
-	a = pressKey(t, a, "tab") // focus the grid
+	a = focusGrid(t, a)
 	return a, fleet
 }
 

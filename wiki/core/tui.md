@@ -4,14 +4,15 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-29T00:00:00Z
+timestamp: 2026-07-29T12:00:00Z
 ---
 
 # TUI shell
 
 `App` is the root bubbletea model. It owns the layout, the focus and the panel selection, and it
-draws the frame every other view renders into: a numbered sidebar on the left, the pane grid on
-the right, a status bar along the bottom, and the `?` overlay on top.
+draws the frame every other view renders into: a lazygit-style stack of titled panel boxes on the
+left, the pane grid on the right, a status bar along the bottom, and the `?` popup composited over
+the frame.
 
 Model mutation happens only in `Update`. Nothing in `internal/ui` dials, reads or writes a host;
 the transport reports through messages — see [Session manager](./manager.md).
@@ -23,16 +24,23 @@ terminal. That matters more than it sounds: a layout that underflows to a negati
 a TUI panics on a resize.
 
 ```
-┌─────────────┬──────────────────────────────┐
-│ [1] Status  │                              │
-│ [2] Hosts   │        pane grid             │
-│ [3] Groups  │                              │
-│ [4] Sessions│                              │
-│ [5] Log     │                              │
-├─────────────┴──────────────────────────────┤
-│ status bar                                 │
-└────────────────────────────────────────────┘
+╭ Status [1] ─╮┌────────────────────────────┐
+│ …           ││                            │
+╰─────────────╯│        pane grid           │
+╭ Hosts [2] ──╮│                            │
+╰─────────────╯│                            │
+╭ Groups [3] ─╮│                            │
+╰─────────────╯│                            │
+ status bar                      key hints
 ```
+
+Every sidebar panel is its own bordered box with its title and number in the top border line —
+lazygit's look. lipgloss has no border-title support, so `titledBox` assembles the top line by
+hand from the border's character set; the body supplies the other three sides.
+`SidebarHeights(total, panels, selected)` is the pure height split: the selected panel takes
+everything the collapsed boxes (3 rows each) leave, tighter sidebars collapse the others to bare
+one-line titles, and tighter still leaves only the selected panel. Sums and signs are asserted at
+hostile sizes.
 
 Rules:
 
@@ -94,7 +102,8 @@ Focus is one explicit piece of model state and it is always visible: the focused
 with the focused border from the [theme](./theme.md), which differs in thickness as well as
 colour so it survives a terminal without colour.
 
-- `tab` / `shift+tab` move between the sidebar and the grid,
+- `tab` / `shift+tab` walk the lazygit cycle: every sidebar panel in order, then the grid, then
+  round again — `shift+tab` walks it backwards,
 - `1`–`5` select a panel **and** move focus to the sidebar, because pressing a panel number and
   landing somewhere else is a surprise,
 - inside the sidebar, `↑`/`k` and `↓`/`j` move the panel selection; inside the grid the same keys
@@ -229,13 +238,17 @@ keeps focus at its new index, and only when it is gone does the focus clamp to t
 that exists. A list that shifts under the cursor must never silently move the user onto a
 different machine.
 
-While the `?` overlay is open it is the only thing listening: the key that closes it does not
-also act. A user reading the help is not also driving the panes.
+The `?` popup is **composited over** the frame with lipgloss layers rather than replacing it, so
+the fleet stays visible underneath — the way lazygit's menus behave. While it is open it is the
+only thing listening: the key that closes it does not also act. A user reading the help is not
+also driving the panes.
 
 ## Panels
 
-The sidebar lists the five panels; only the **selected** one opens. Five open panels on an
-80-column terminal would show none of them usefully.
+The sidebar stacks the five panels as titled boxes; every title is always on screen and only the
+**selected** panel shows its body. Five open panels on an 80-column terminal would show none of
+them usefully; five visible titles cost three rows each and keep the map of the interface on
+screen.
 
 ### [1] Status
 

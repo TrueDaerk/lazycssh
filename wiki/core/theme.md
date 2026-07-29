@@ -4,7 +4,7 @@ title: Theme and styles
 description: The one place styles live, the palette they are built from, and why colour is never the only carrier of meaning.
 resource: internal/ui/theme.go
 tags: [ui, lipgloss, styles, accessibility]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-07-29T12:00:00Z
 ---
 
 # Theme and styles
@@ -51,12 +51,19 @@ cannot tell which panel has focus or that host key checking is off — is silent
 `Theme` exposes the small mappings the views would otherwise each reinvent:
 
 ```go
-th.State(ssh.StateFailed)   // style for a connection state
-th.PanelFrame(focused)      // panel border, focused or not
-th.PaneFrame(focused)       // host pane border
-th.PanelTitle(focused)      // panel heading
-th.ExitStatus(code)         // zero is quiet, non-zero never is
+th.State(ssh.StateFailed)     // style for a connection state
+th.PanelFrame(focused)        // panel border, focused or not
+th.PaneFrame(focused)         // host pane border
+th.PanelTitle(focused)        // panel heading
+th.PanelBodyFrame(focused)    // titled box: the frame minus its top edge
+th.PanelBorderChars(focused)  // titled box: the border character set for the hand-drawn top line
+th.PanelBorderText(focused)   // titled box: the style those characters are drawn in
+th.ExitStatus(code)           // zero is quiet, non-zero never is
 ```
+
+The three `PanelBody*`/`PanelBorder*` helpers exist for `titledBox`, which draws the lazygit-style
+top border line with the title inside it by hand — lipgloss has no border-title support. The
+border characters stay a `lipgloss.Border` from the theme, so no view invents its own frame.
 
 `State` falls back to the muted style for a state it does not know, rather than panicking: a new
 state added to the transport must not be able to take the interface down.

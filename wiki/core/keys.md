@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-07-29T00:00:00Z
+timestamp: 2026-07-29T12:00:00Z
 ---
 
 # Keymap and help
@@ -33,7 +33,7 @@ are tests, not conventions.
 |-----|------|--------|
 | `?` | global | help overlay |
 | `ctrl+q` | global | quit |
-| `tab` / `shift+tab` | global | next / previous area |
+| `tab` / `shift+tab` | global | next / previous stop in the cycle: each sidebar panel, then the grid |
 | `1`–`5` | global | status, hosts, groups, sessions, command log |
 | `b` / `B` / `s` | global | broadcast to the working set / the selection / one pane |
 | `ctrl+alt+b` | global | broadcast to **every** host |
@@ -56,7 +56,7 @@ are tests, not conventions.
 | `r` | panes | reconnect this host |
 | `x` | panes | close this session |
 | `pgup`/`p`, `pgdn`/`n` | panes | page through the panes |
-| `ctrl+u` / `ctrl+d` | panes | scroll this pane back / forward |
+| `ctrl+u` / `ctrl+d` | panes | scroll the focused pane back / forward |
 | `g` / `G` | panes | oldest retained output / back to the tail |
 | `/` | panes | search the scrollback |
 | `[` / `]` | panes | older / newer match |
@@ -71,8 +71,10 @@ says `EVERY`.
 
 `KeyMap.For(area)` returns a `help.KeyMap` describing what is live right now: the area's own
 bindings plus the global ones. The short line along the bottom lists the handful a user needs
-where they are; `?` opens the full overlay, which leads with the focused area and then lists the
-others, with column titles from `Titles()`.
+where they are, right-aligned on the status bar; `?` opens the keybindings popup, composited over
+the frame, which leads with the focused area's column and then lists the others. On a terminal too
+narrow for every column the help bubble drops whole columns behind an ellipsis rather than
+wrapping them.
 
 Styles come from the [theme](./theme.md) rather than the help bubble's defaults, so the overlay
 matches the rest of the interface.

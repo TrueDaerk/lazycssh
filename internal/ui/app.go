@@ -313,12 +313,10 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case key.Matches(msg, a.keys.NextTab):
-		a.focus = nextArea(a.focus)
-		return a, nil
+		return a.cycleFocus(+1), nil
 
 	case key.Matches(msg, a.keys.PrevTab):
-		a.focus = prevArea(a.focus)
-		return a, nil
+		return a.cycleFocus(-1), nil
 
 	case key.Matches(msg, a.keys.CommandLine):
 		return a.openCommandLine(), nil
@@ -634,18 +632,27 @@ func (a App) panelForKey(msg tea.KeyPressMsg) (Panel, bool) {
 	return 0, false
 }
 
-// nextArea cycles focus between the two areas the user moves between. The
-// global area is not a focus target: it is what is live everywhere.
-func nextArea(a Area) Area {
-	if a == AreaSidebar {
-		return AreaGrid
-	}
-	return AreaSidebar
-}
+// cycleFocus advances the tab order the way lazygit does: through the sidebar
+// panels one by one, then the pane grid, then round again. The global area is
+// not a stop: it is what is live everywhere.
+func (a App) cycleFocus(step int) App {
+	panels := len(Panels())
+	stops := panels + 1 // every panel, then the grid
 
-// prevArea cycles the other way. With two focus targets it is the same move,
-// and it exists so the binding keeps working when a third area is added.
-func prevArea(a Area) Area { return nextArea(a) }
+	pos := panels // the grid's slot
+	if a.focus == AreaSidebar {
+		pos = int(a.panel)
+	}
+	pos = ((pos+step)%stops + stops) % stops
+
+	if pos == panels {
+		a.focus = AreaGrid
+		return a
+	}
+	a.focus = AreaSidebar
+	a.panel = Panel(pos)
+	return a
+}
 
 // View renders the whole frame.
 func (a App) View() tea.View {
@@ -678,42 +685,49 @@ func (a App) View() tea.View {
 
 	view := lipgloss.JoinVertical(lipgloss.Left, body, bottom)
 	if a.showHelp {
-		view = a.renderHelpOverlay()
+		// The help is a popup over the frame, not a replacement for it: the
+		// fleet stays visible underneath, the way lazygit's menus behave.
+		if overlay := a.renderHelpOverlay(); overlay != "" {
+			x := max(0, (a.layout.Width-lipgloss.Width(overlay))/2)
+			y := max(0, (a.layout.Height-lipgloss.Height(overlay))/2)
+			view = lipgloss.NewCompositor(
+				lipgloss.NewLayer(view),
+				lipgloss.NewLayer(overlay).X(x).Y(y).Z(1),
+			).Render()
+		}
 	}
 	return tea.NewView(view)
 }
 
-// renderSidebar draws the numbered panel list.
+// renderSidebar draws the panel column the way lazygit does: every panel is
+// its own titled box, the selected one holds its body and everything that is
+// left of the height, the others collapse to their titles.
 func (a App) renderSidebar() string {
 	r := a.layout.Sidebar
 	focused := a.focus == AreaSidebar
 
-	var b strings.Builder
-	for i, panel := range Panels() {
-		if i > 0 {
-			b.WriteString("\n")
-		}
-		label := fmt.Sprintf("[%d] %s", panel.Number(), panel.Title())
-		switch {
-		case panel == a.panel && focused:
-			b.WriteString(a.theme.Cursor.Render(label))
-		case panel == a.panel:
-			b.WriteString(a.theme.Selected.Render(label))
-		default:
-			b.WriteString(a.theme.Muted.Render(label))
-		}
+	panels := Panels()
+	heights := SidebarHeights(r.Height, len(panels), int(a.panel))
 
-		// Only the selected panel opens. Five open panels on an 80-column
-		// terminal would show none of them usefully.
-		if panel == a.panel {
-			if body := a.panelBody(panel, r.Width-2, panelBodyHeight(r, len(Panels()))); body != "" {
-				b.WriteString("\n")
-				b.WriteString(indent(body))
-			}
+	boxes := make([]string, 0, len(panels))
+	for i, panel := range panels {
+		h := heights[i]
+		if h <= 0 {
+			continue
 		}
+		title := fmt.Sprintf("%s [%d]", panel.Title(), panel.Number())
+		if panel != a.panel {
+			boxes = append(boxes, titledBox(a.theme, false, r.Width, h, title, ""))
+			continue
+		}
+		// The selected panel is "focused"-styled only while the sidebar has
+		// focus; its expansion alone says "selected" when the grid does.
+		// The body's width budget is the box minus its border and padding.
+		body := a.panelBody(panel, max(1, r.Width-4), max(1, h-2))
+		boxes = append(boxes, titledBox(a.theme, focused, r.Width, h, title, body))
 	}
 
-	return a.frame(a.theme.PanelFrame(focused), r, b.String())
+	return lipgloss.JoinVertical(lipgloss.Left, boxes...)
 }
 
 // renderMain draws the pane grid area. The grid itself arrives with its own
@@ -838,9 +852,15 @@ func (a App) renderStatusBar() string {
 	}
 
 	line := strings.Join(parts, " ")
-	short := a.help.ShortHelpView(a.keys.For(a.focus).ShortHelp())
-	if short != "" {
-		line += "  " + short
+	if short := a.help.ShortHelpView(a.keys.For(a.focus).ShortHelp()); short != "" {
+		// Key hints sit flush right, lazygit style, when there is room; when
+		// there is not they trail the info and the bar clips as before.
+		gap := a.layout.Width - 2 - lipgloss.Width(line) - lipgloss.Width(short)
+		if gap > 1 {
+			line += strings.Repeat(" ", gap) + short
+		} else {
+			line += "  " + short
+		}
 	}
 	return a.theme.StatusBar.
 		Width(a.layout.Width).
@@ -848,31 +868,37 @@ func (a App) renderStatusBar() string {
 		Render(line)
 }
 
-// renderHelpOverlay draws the full help, generated from the keymap.
+// renderHelpOverlay draws the keybindings popup, generated from the keymap.
+// Every column is one area, headed by its name, the focused area first -
+// lazygit's keybindings menu, built from the same source the keys are.
 func (a App) renderHelpOverlay() string {
 	ctx, ok := a.keys.For(a.focus).(contextHelp)
 	if !ok {
 		return ""
 	}
 
-	var b strings.Builder
-	b.WriteString(a.theme.Title.Render("Keys — " + a.focus.String() + " has focus"))
-	b.WriteString("\n\n")
-	b.WriteString(a.help.FullHelpView(ctx.FullHelp()))
+	// A narrower copy of the help model, so the popup's content plus its
+	// border and padding always fits inside the frame without wrapping; the
+	// help bubble drops whole columns rather than garbling them.
+	h := a.help
+	h.SetWidth(max(0, a.layout.Width-6))
 
-	return a.theme.HelpOverlay.
-		MaxWidth(a.layout.Width).
-		MaxHeight(a.layout.Height).
-		Render(b.String())
+	content := h.FullHelpView(ctx.FullHelp())
+	content += "\n\n" + a.theme.Muted.Render("any key closes this")
+
+	w := min(a.layout.Width-2, lipgloss.Width(content)+4)
+	hgt := min(a.layout.Height-1, lipgloss.Height(content)+2)
+	return titledBox(a.theme, true, w, hgt, "Keybindings — "+a.focus.String(), content)
 }
 
-// frame draws content inside a bordered box sized to a rect. The border eats
-// two columns and two rows, and the inner size is clamped at zero so a tiny
-// terminal cannot ask lipgloss for a negative width.
+// frame draws content inside a bordered box sized to a rect. lipgloss v2
+// counts the border into Width and Height, so the rect's size is the block's
+// size; it is clamped at zero so a tiny terminal cannot ask lipgloss for a
+// negative width.
 func (a App) frame(style lipgloss.Style, r Rect, content string) string {
 	return style.
-		Width(max(0, r.Width-2)).
-		Height(max(0, r.Height-2)).
+		Width(max(0, r.Width)).
+		Height(max(0, r.Height)).
 		MaxWidth(max(0, r.Width)).
 		MaxHeight(max(0, r.Height)).
 		Render(content)
@@ -884,22 +910,6 @@ func plural(n int) string {
 		return ""
 	}
 	return "s"
-}
-
-// indent shifts a panel body one column in, so it reads as belonging to the
-// panel above it rather than as another entry in the list.
-func indent(s string) string {
-	lines := strings.Split(s, "\n")
-	for i, line := range lines {
-		lines[i] = " " + line
-	}
-	return strings.Join(lines, "\n")
-}
-
-// panelBodyHeight is how many rows the open panel's body may use: the sidebar
-// minus its border and minus the one line each panel title costs.
-func panelBodyHeight(sidebar Rect, panels int) int {
-	return max(1, sidebar.Height-2-panels)
 }
 
 // setBroadcastMode switches the broadcast scope. A run with no router yet has
