@@ -249,6 +249,33 @@ func (m *Manager) Reconnect(ctx context.Context, id string) error {
 	return nil
 }
 
+// Remove takes one session out of the fleet entirely: it is closed and no
+// longer listed, so its pane disappears. Close leaves a dead pane on screen to
+// be read; Remove is the user saying they are done with it.
+func (m *Manager) Remove(id string) error {
+	m.mu.Lock()
+	s, ok := m.byID[id]
+	if !ok {
+		m.mu.Unlock()
+		return fmt.Errorf("remove %s: no such session", id)
+	}
+	delete(m.byID, id)
+	for i, session := range m.sessions {
+		if session.ID() == id {
+			m.sessions = append(m.sessions[:i], m.sessions[i+1:]...)
+			break
+		}
+	}
+	m.mu.Unlock()
+
+	// Closing outside the lock: it waits for reader goroutines, and holding
+	// the lock through that would stall the UI.
+	if err := s.Close(); err != nil {
+		return fmt.Errorf("remove %s: %w", id, err)
+	}
+	return nil
+}
+
 // Close ends one session. The others keep running: one dead host is one dead
 // pane.
 func (m *Manager) Close(id string) error {

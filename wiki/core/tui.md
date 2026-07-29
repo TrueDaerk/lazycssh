@@ -403,7 +403,8 @@ one garbled line.
 | `HostConnectMsg` | emitted, not handled: the program resolves and connects the asked-for patterns |
 | `ConnectErrorMsg` | a connect request's resolve error, shown in the Hosts panel |
 | `ReconnectHostMsg` | emitted, not handled: `r` in the grid asks the program to reconnect the focused host |
-| `CloseHostMsg` | emitted, not handled: `x` in the grid asks the program to close the focused host's session |
+| `CloseHostMsg` | emitted, not handled: `x` on a live host asks the program to close its session |
+| `RemoveHostMsg` | emitted, not handled: `x` on a dead host asks the program to drop its pane from the run |
 | `CommandResendMsg` | resend a logged command to the current broadcast set |
 | `CommandSentMsg` | emitted after a send, carrying the delivery report |
 

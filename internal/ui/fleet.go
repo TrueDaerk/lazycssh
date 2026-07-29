@@ -72,6 +72,14 @@ type CloseHostMsg struct {
 	ID string
 }
 
+// RemoveHostMsg asks the program to take one host out of the run entirely:
+// close its session and drop its pane. Emitted for the same reason as
+// [ReconnectHostMsg].
+type RemoveHostMsg struct {
+	// ID is the session to remove.
+	ID string
+}
+
 // HostConnectMsg asks the program to connect to hosts. The UI cannot dial, so
 // it is emitted, not handled: it carries the patterns as the user gave them -
 // an ssh-config alias picked from the Hosts panel, or free text that may hold

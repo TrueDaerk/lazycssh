@@ -4,7 +4,7 @@ title: Session manager
 description: Owning a fleet of sessions — bounded fan-out dialling, a single event channel, per-host reconnect and close.
 resource: internal/ssh/manager.go
 tags: [ssh, transport, concurrency, fleet]
-timestamp: 2026-07-29T00:00:00Z
+timestamp: 2026-07-29T13:00:00Z
 ---
 
 # Session manager
@@ -66,6 +66,12 @@ of asking again. Three reconnects, one prompt — asserted against the real tran
 fake never touches the credential cache.
 
 `Close(id)` ends one session and leaves the rest running: one dead host is one dead pane.
+
+`Remove(id)` takes a session out of the fleet entirely — closed and no longer listed, so its
+pane disappears. Close leaves a dead pane on screen to be read; Remove is the user saying they
+are done with it. The session is closed outside the lock, like Reconnect, so waiting for its
+reader goroutines cannot stall the UI. Whoever removes must also tell the working set
+(`SetHosts`) and the broadcast router (`Forget`) — the program does.
 
 ## Fleet summary
 

@@ -29,6 +29,19 @@ func (a App) withHosts(hosts []string) App {
 	focused := a.FocusedHost()
 	a.cfg.Hosts = hosts
 
+	// Scroll offsets belong to hosts; a host that left the run takes its
+	// offset with it, so a later host reusing the name starts at the tail.
+	present := make(map[string]bool, len(hosts))
+	for _, id := range hosts {
+		present[id] = true
+	}
+	for id := range a.scroll {
+		if !present[id] {
+			delete(a.scroll, id)
+		}
+	}
+	a.hostCursor = clamp(a.hostCursor, 0, max(0, len(a.hostRows())-1))
+
 	if focused != "" {
 		for i, id := range hosts {
 			if id == focused {

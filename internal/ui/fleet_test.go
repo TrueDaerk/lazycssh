@@ -55,3 +55,64 @@ func TestReconnectKeyWithoutHostsEmitsNothing(t *testing.T) {
 		t.Fatalf("pressing r with no hosts produced %T, want nothing", got)
 	}
 }
+
+// x is state-dependent: a live host's session is closed, a dead host's pane
+// is removed.
+func TestCloseKeyOnADeadHostEmitsRemove(t *testing.T) {
+	a, fleet := hostsApp(t, "web-01")
+	fleet.fail(t, "web-01")
+	a = focusGrid(t, a)
+
+	got := keyMsgResult(t, a, "x")
+	msg, ok := got.(RemoveHostMsg)
+	if !ok {
+		t.Fatalf("pressing x on a failed host produced %T, want RemoveHostMsg", got)
+	}
+	if msg.ID != "web-01" {
+		t.Errorf("RemoveHostMsg.ID = %q", msg.ID)
+	}
+}
+
+func TestCloseKeyOnALiveHostEmitsClose(t *testing.T) {
+	a, fleet := hostsApp(t, "web-01")
+	fleet.connect(t, "web-01")
+	a = focusGrid(t, a)
+
+	if _, ok := keyMsgResult(t, a, "x").(CloseHostMsg); !ok {
+		t.Fatal("pressing x on a connected host did not emit CloseHostMsg")
+	}
+}
+
+// The Hosts panel closes and reconnects the host under the cursor with the
+// same keys the grid uses, so pane management does not require the grid.
+func TestHostsPanelCloseAndReconnectKeys(t *testing.T) {
+	a, fleet := hostsApp(t, "web-01", "web-02")
+	fleet.connect(t, "web-01")
+
+	if _, ok := keyMsgResult(t, a, "x").(CloseHostMsg); !ok {
+		t.Fatal("x in the Hosts panel did not emit CloseHostMsg")
+	}
+	if _, ok := keyMsgResult(t, a, "r").(ReconnectHostMsg); !ok {
+		t.Fatal("r in the Hosts panel did not emit ReconnectHostMsg")
+	}
+
+	fleet.fail(t, "web-01")
+	if _, ok := keyMsgResult(t, a, "x").(RemoveHostMsg); !ok {
+		t.Fatal("x on a failed host in the Hosts panel did not emit RemoveHostMsg")
+	}
+}
+
+// A host that left the run takes its scroll offset with it.
+func TestRemovedHostScrollOffsetIsPruned(t *testing.T) {
+	a, _ := scrollApp(t, 50)
+	a = pressKey(t, a, "g") // scroll to the top, recording an offset
+	if len(a.scroll) == 0 {
+		t.Fatal("setup: no scroll offset recorded")
+	}
+
+	model, _ := a.Update(HostsChangedMsg{Hosts: nil})
+	next := model.(App)
+	if len(next.scroll) != 0 {
+		t.Fatalf("scroll offsets survived the host leaving: %v", next.scroll)
+	}
+}

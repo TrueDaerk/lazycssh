@@ -291,6 +291,18 @@ func (r *Router) Excluded() []string {
 // SetFocus records the focused pane, the target of [ModeSingle].
 func (r *Router) SetFocus(id string) { r.focus = id }
 
+// Forget drops every trace of hosts that left the run: their selection, and
+// the focus if it pointed at one of them. Selection state that outlives its
+// host over-reports counts and prints a dead host in the single-mode label.
+func (r *Router) Forget(ids ...string) {
+	for _, id := range ids {
+		delete(r.selected, id)
+		if r.focus == id {
+			r.focus = ""
+		}
+	}
+}
+
 // Focus is the focused host identifier.
 func (r *Router) Focus() string { return r.focus }
 

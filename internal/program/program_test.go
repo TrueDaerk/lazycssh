@@ -291,3 +291,18 @@ func TestHostConnectRequestReportsResolveErrors(t *testing.T) {
 		t.Fatal("the resolve error did not reach the UI")
 	}
 }
+
+func TestRemoveHostRequestDropsThePane(t *testing.T) {
+	m, _ := testModel(t, "web-01", "web-02")
+	m.Init()
+	m.Manager().Wait()
+
+	drive(t, m, ui.RemoveHostMsg{ID: "web-01"})
+	got := m.Manager().IDs()
+	if len(got) != 1 || got[0] != "web-02" {
+		t.Fatalf("IDs() = %v after removing web-01", got)
+	}
+	if m.ws.Count() != 1 {
+		t.Fatalf("working set Count() = %d after the removal", m.ws.Count())
+	}
+}
