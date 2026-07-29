@@ -4,7 +4,7 @@ title: Scrollback buffer
 description: The bounded per-session ring buffer that keeps a chatty host from stalling the UI.
 resource: internal/scrollback/scrollback.go
 tags: [backpressure, concurrency, output]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-07-29T00:00:00Z
 ---
 
 # Scrollback buffer
@@ -41,10 +41,18 @@ all output.
   completes.
 - A single line is capped at 64 KiB and committed as if a newline had arrived. A binary catted
   by accident would otherwise grow one string without limit.
-- ANSI escape sequences are stored verbatim. Interpreting them is the renderer's job.
+- A minimal **line discipline** applies inside the line being assembled, with the cursor always
+  assumed at its end — exactly enough for a remote readline to redraw its line (recalling a
+  command with arrow-up must replace the visible line, not append to it), and no more:
+  - **backspace** removes the last rune; at an empty line it is a no-op, and it never reaches a
+    committed line,
+  - **`ESC[K`** / `ESC[0K` (erase right of the cursor) is consumed silently — nothing sits right
+    of the cursor in this model — while `ESC[1K` / `ESC[2K` discard the line.
+- Every other ANSI escape sequence is stored verbatim, including sequences split across writes.
+  Interpreting them is the renderer's job; full emulation is a separate idea (issue #44).
 
-Chunk boundaries are handled: a line split across writes, a CRLF split between two writes, and a
-UTF-8 rune split mid-sequence all reassemble correctly.
+Chunk boundaries are handled: a line split across writes, a CRLF split between two writes, an
+escape sequence split anywhere, and a UTF-8 rune split mid-sequence all reassemble correctly.
 
 ## Guarantees under test
 

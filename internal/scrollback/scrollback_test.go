@@ -103,6 +103,133 @@ func TestWriteSplitsLines(t *testing.T) {
 	}
 }
 
+// The minimal line discipline: exactly enough for a remote readline to redraw
+// its line — backspace and erase-line — with the cursor assumed at the end.
+// Anything else passes through for the render-time sanitizer.
+func TestLineDiscipline(t *testing.T) {
+	tests := []struct {
+		name   string
+		writes []string
+		want   []string
+	}{
+		{
+			name:   "backspace removes the last rune",
+			writes: []string{"abc\b\bX\n"},
+			want:   []string{"aX"},
+		},
+		{
+			name:   "backspace on an empty line does nothing",
+			writes: []string{"\bhi\n"},
+			want:   []string{"hi"},
+		},
+		{
+			name:   "backspace never reaches a committed line",
+			writes: []string{"a\n\b\bb\n"},
+			want:   []string{"a", "b"},
+		},
+		{
+			name:   "backspace removes a multi-byte rune whole",
+			writes: []string{"ä\bx\n"},
+			want:   []string{"x"},
+		},
+		{
+			name:   "erase right of the cursor is a silent no-op",
+			writes: []string{"hi\x1b[K!\n"},
+			want:   []string{"hi!"},
+		},
+		{
+			name:   "erase right with an explicit zero parameter",
+			writes: []string{"hi\x1b[0K!\n"},
+			want:   []string{"hi!"},
+		},
+		{
+			name:   "erase the whole line discards it",
+			writes: []string{"secret\x1b[2Knew\n"},
+			want:   []string{"new"},
+		},
+		{
+			name:   "erase left of the cursor discards the line",
+			writes: []string{"old\x1b[1Knew\n"},
+			want:   []string{"new"},
+		},
+		{
+			name:   "a readline history recall replaces the line",
+			writes: []string{"$ ls -la", "\b\b\b\b\b\b\x1b[Kecho hi\n"},
+			want:   []string{"$ echo hi"},
+		},
+		{
+			name:   "an escape sequence split across writes",
+			writes: []string{"gone\x1b", "[2Kkept\n"},
+			want:   []string{"kept"},
+		},
+		{
+			name:   "an escape sequence split inside its parameters",
+			writes: []string{"gone\x1b[2", "Kkept\n"},
+			want:   []string{"kept"},
+		},
+		{
+			name:   "sgr split across writes is preserved verbatim",
+			writes: []string{"\x1b[3", "1mred\n"},
+			want:   []string{"\x1b[31mred"},
+		},
+		{
+			name:   "other csi sequences pass through verbatim",
+			writes: []string{"a\x1b[Ab\n"},
+			want:   []string{"a\x1b[Ab"},
+		},
+		{
+			name:   "non-csi escapes pass through verbatim",
+			writes: []string{"\x1bMx\n"},
+			want:   []string{"\x1bMx"},
+		},
+		{
+			name:   "a line break aborts an unfinished sequence",
+			writes: []string{"a\x1b[\nb\n"},
+			want:   []string{"a\x1b[", "b"},
+		},
+		{
+			name:   "a carriage return aborts an unfinished sequence and redraws",
+			writes: []string{"a\x1b[\rb\n"},
+			want:   []string{"b"},
+		},
+		{
+			name:   "erase interacts with the bare carriage return reset",
+			writes: []string{"10%\r\x1b[K100%\n"},
+			want:   []string{"100%"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := New(100)
+			for _, w := range tt.writes {
+				n, err := b.Write([]byte(w))
+				if err != nil {
+					t.Fatalf("Write(%q) returned error: %v", w, err)
+				}
+				if n != len(w) {
+					t.Errorf("Write(%q) = %d, want %d", w, n, len(w))
+				}
+			}
+			assertLines(t, b.Lines(), tt.want)
+		})
+	}
+}
+
+// An escape sequence longer than the interpreter's bound is handed to the line
+// verbatim instead of being buffered forever.
+func TestOverlongEscapeSequenceIsFlushed(t *testing.T) {
+	b := New(10)
+	seq := "\x1b[" + strings.Repeat("1;", 40)
+	if _, err := b.Write([]byte(seq)); err != nil {
+		t.Fatalf("Write returned error: %v", err)
+	}
+	lines := b.Lines()
+	if len(lines) != 1 || !strings.Contains(lines[0], "1;1;") {
+		t.Fatalf("the overlong sequence was not flushed into the line: %q", lines)
+	}
+}
+
 func TestEviction(t *testing.T) {
 	const capacity = 5
 	b := New(capacity)

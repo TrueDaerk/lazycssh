@@ -2,6 +2,13 @@
 
 ## 2026-07-29
 
+- Minimal line discipline in the scrollback buffer: backspace removes the last rune of the line
+  being assembled and `ESC[K` erase-line sequences are interpreted (right-of-cursor silently
+  consumed, `1K`/`2K` discard the line), with escape sequences reassembled across write
+  boundaries. Recalling a command with arrow-up in a remote shell now replaces the visible line
+  in the pane instead of appending to it. Cursor stays modelled at end of line; full emulation
+  remains issue #44. `core/scrollback.md` updated. Version 0.7.4.
+
 - Focus borders match lazygit: the focused panel and pane keep the same border weight and only
   change colour, and `Focus` is now green (`#9ece6a` dark, `#2e7d32` light) instead of blue.
   The thick border survives only as the `NoColor` fallback, where colour cannot carry focus.
