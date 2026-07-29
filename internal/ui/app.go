@@ -202,11 +202,9 @@ func NewApp(cfg Config) App {
 		focus:       AreaSidebar,
 		panel:       PanelStatus,
 	}
-	if len(a.hostIDs()) == 0 {
-		// An argumentless start has nothing to show yet; the host prompt is
-		// the thing the user came for, so it is already open.
-		a.hostInput.Focus()
-	}
+	// An argumentless start opens with nothing focused: the empty grid says
+	// what the options are, and which of them comes first - connect, launch a
+	// session, read the help - is the user's call, not the program's.
 	return a.loadSessions()
 }
 

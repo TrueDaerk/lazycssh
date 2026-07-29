@@ -397,7 +397,6 @@ func TestSavingAnEmptyRunKeepsThePrompt(t *testing.T) {
 	}
 	a := resize(t, NewApp(Config{Sessions: store, Theme: Options{Dark: true}}), 120, 40)
 
-	a = pressKey(t, a, "esc") // close the auto-opened host prompt
 	a = pressKey(t, a, "S")
 	for _, r := range "prod" {
 		a = pressKey(t, a, string(r))

@@ -94,11 +94,12 @@ func TestHostPromptEscCloses(t *testing.T) {
 	}
 }
 
-// ctrl+q must not be trappable by the prompt an empty start opens into.
+// ctrl+q works from inside the prompt: a text input must not trap the user.
 func TestCtrlQQuitsFromTheHostPrompt(t *testing.T) {
 	a := resize(t, NewApp(Config{Theme: Options{Dark: true}}), 120, 40)
+	a = pressKey(t, a, "n")
 	if !a.ConnectPromptOpen() {
-		t.Fatal("setup: the prompt is not open on an empty start")
+		t.Fatal("setup: n did not open the prompt")
 	}
 	_, cmd := a.Update(tea.KeyPressMsg{Code: 'q', Mod: tea.ModCtrl})
 	if cmd == nil || cmd() != tea.Quit() {
