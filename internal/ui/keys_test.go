@@ -151,7 +151,7 @@ func TestRenderedHelpContainsTheAreaBindings(t *testing.T) {
 	}
 
 	short := model.ShortHelpView(k.For(AreaGrid).ShortHelp())
-	if !strings.Contains(short, "reconnect this host") {
+	if !strings.Contains(short, "stop typing to the host") {
 		t.Fatalf("the short help line is missing a binding it declares:\n%s", short)
 	}
 }
@@ -200,5 +200,22 @@ func TestHelpStylesComeFromTheTheme(t *testing.T) {
 	}
 	if styles.FullDesc.Render("x") != th.Desc.Render("x") {
 		t.Fatal("the help description style does not come from the theme")
+	}
+}
+
+// The machine-checkable form of "typing never collides with a command": every
+// grid binding is an alt or shift chord, or the one reserved escape, so a
+// plain keystroke always belongs to the host.
+func TestGridBindingsAreAllModified(t *testing.T) {
+	k := DefaultKeyMap()
+	for _, b := range k.grid() {
+		for _, pressed := range b.Keys() {
+			if pressed == "ctrl+]" {
+				continue
+			}
+			if !strings.HasPrefix(pressed, "alt+") && !strings.HasPrefix(pressed, "shift+") {
+				t.Errorf("grid binding %q would be typed into the host", pressed)
+			}
+		}
 	}
 }

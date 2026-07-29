@@ -4,7 +4,7 @@ title: Command log
 description: The in-memory audit trail of what this run sent, to how many hosts, in which mode — and what it deliberately never records.
 resource: internal/commandlog
 tags: [audit, broadcast, security, ui]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-07-29T14:00:00Z
 ---
 
 # Command log
@@ -27,10 +27,13 @@ is about what the user did, not about what the wire carried.
 
 ## What is never recorded
 
+Keystrokes typed into a focused pane. Typing is where a sudo password is entered, and a log that
+captured it would be a plaintext password file nobody asked for; the typing path never calls
+`Record` at all.
+
 Input sent in `single` mode. Single is the mode used to answer a sudo prompt — see
-[Broadcast scope](./broadcast-scope.md) — and a log that captured it would be a plaintext
-password file nobody asked for. `Record` returns `false` for it, so a caller cannot quietly
-assume the entry was made.
+[Broadcast scope](./broadcast-scope.md) — and the same reasoning applies. `Record` returns
+`false` for it, so a caller cannot quietly assume the entry was made.
 
 Empty commands are dropped too, and a trailing newline is stripped so the same command sent twice
 reads the same twice.

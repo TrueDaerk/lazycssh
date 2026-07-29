@@ -45,6 +45,7 @@ func cmdApp(t *testing.T, names ...string) (App, *fakeSender, *broadcast.Router,
 		WorkingSet: ws,
 		Sender:     sender,
 		Recorder:   log,
+		Panes:      fleet,
 		CommandLog: log,
 		Theme:      Options{Dark: true},
 	}), 120, 40)

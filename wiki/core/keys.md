@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-07-29T12:00:00Z
+timestamp: 2026-07-29T14:00:00Z
 ---
 
 # Keymap and help
@@ -21,7 +21,7 @@ A key press is dispatched by focus. Each binding belongs to one area:
 |------|----------------|
 | `AreaGlobal` | works wherever focus is: help, quit, panel numbers, broadcast mode, the command line |
 | `AreaSidebar` | the numbered panels down the left |
-| `AreaGrid` | the host panes on the right |
+| `AreaGrid` | the host panes on the right — a focused pane is a terminal, so its bindings are all `alt`/`shift` chords plus the reserved `ctrl+]`; every plain key is forwarded to the host (a test enforces the chord rule) |
 
 The sidebar and the grid may reuse a key — they are never focused at the same time — but a
 global binding may not collide with either, because the two are always live together. Both rules
@@ -33,12 +33,11 @@ are tests, not conventions.
 |-----|------|--------|
 | `?` | global | help overlay |
 | `ctrl+q` | global | quit |
-| `tab` / `shift+tab` | global | next / previous stop in the cycle: each sidebar panel, then the grid |
+| `tab` / `shift+tab` | global (app level) | next / previous stop in the cycle: each sidebar panel, then the grid; forwarded while typing |
 | `1`–`5` | global | status, hosts, groups, sessions, command log |
 | `b` / `B` / `s` | global | broadcast to the working set / the selection / one pane |
 | `ctrl+alt+b` | global | broadcast to **every** host |
 | `:` | global | send a command |
-| `ctrl+]` | global | raw keystrokes to the hosts, and back again |
 | `!` | global | jump to the next host whose last command failed |
 | `↑`/`k`, `↓`/`j` | sidebar | move |
 | `enter` | sidebar | focus that host's pane |
@@ -54,16 +53,18 @@ are tests, not conventions.
 | `n` | sidebar | connect a new host: opens the free-text pattern prompt |
 | `x` | sidebar | close the host under the cursor; on a dead host, remove its pane |
 | `r` | sidebar | reconnect the host under the cursor |
-| `←`/`h`, `→`/`l`, `↑`/`k`, `↓`/`j` | panes | move between panes |
-| `f` | panes | full-screen this pane |
-| `r` | panes | reconnect this host |
-| `x` | panes | close this session; on a dead host, remove its pane |
-| `pgup`/`p`, `pgdn`/`n` | panes | page through the panes |
-| `ctrl+u` / `ctrl+d` | panes | scroll the focused pane back / forward |
-| `g` / `G` | panes | oldest retained output / back to the tail |
-| `/` | panes | search the scrollback |
-| `[` / `]` | panes | older / newer match |
-| `esc` | panes | clear the search |
+| any plain key | panes | **forwarded to the focused host** — letters, enter, tab, esc, ctrl+c, arrows, all of it |
+| `ctrl+]` | panes | stop typing: back to the app level, cursor on the host just typed to |
+| `alt+←`/`alt+→`/`alt+↑`/`alt+↓` | panes (and app level) | move between panes |
+| `alt+z` | panes (and app level) | full-screen this pane |
+| `alt+r` | panes (and app level) | reconnect this host |
+| `alt+x` | panes (and app level) | close this host; on a dead host, remove its pane |
+| `alt+p` / `alt+n` | panes (and app level) | page through the panes |
+| `shift+pgup` / `shift+pgdn` | panes (and app level) | scroll the focused pane back / forward |
+| `shift+home` / `shift+end` | panes (and app level) | oldest retained output / back to the tail |
+| `alt+/` | panes (and app level) | search the scrollback |
+| `alt+[` / `alt+]` | panes (and app level) | older / newer match |
+| `alt+c` | panes (and app level) | clear the search |
 
 The fleet broadcast mode is `ctrl+alt+b` on purpose. It is the one mode that ignores the working
 set, so it is not a single letter and not reachable by cycling through the others — see

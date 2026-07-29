@@ -1,7 +1,8 @@
 // Package ui holds the bubbletea models, the layout and everything that draws.
 //
-// Nothing in this package dials, reads or writes a host. It renders state and
-// turns key presses into intent; the transport lives in internal/ssh.
+// Nothing in this package dials a host. It renders state and turns key presses
+// into intent; the transport lives in internal/ssh, and the only bytes the UI
+// writes travel through the narrow writer interfaces the program hands in.
 package ui
 
 import (
@@ -132,6 +133,10 @@ type Theme struct {
 	// StatusInsecure marks host key verification being off. It is reverse
 	// video on purpose: it must be visible on a terminal with no colour.
 	StatusInsecure lipgloss.Style
+	// StatusTyping marks that keystrokes are going to a host. Bold as well as
+	// coloured: where the keyboard goes must survive a terminal without
+	// colour, though the literal word TYPING carries most of that weight.
+	StatusTyping lipgloss.Style
 
 	// Selected marks a host in the selection.
 	Selected lipgloss.Style
@@ -214,6 +219,7 @@ func NewTheme(opts Options) Theme {
 	if !opts.NoColor {
 		t.StatusInsecure = t.StatusInsecure.Foreground(palette.Danger)
 	}
+	t.StatusTyping = fg(palette.Focus).Bold(true).Padding(0, 1)
 
 	t.Selected = fg(palette.Accent).Bold(true)
 	t.Cursor = lipgloss.NewStyle().Bold(true)

@@ -110,6 +110,11 @@ func TestJumpToNextFailure(t *testing.T) {
 	}
 
 	for _, want := range []int{4, 11, 16, 4} {
+		// The jump lands in the pane's terminal; ! is an app-level command,
+		// so each jump starts from the app level.
+		if a.Focus() == AreaGrid {
+			a = pressKey(t, a, "ctrl+]")
+		}
 		a = pressKey(t, a, "!")
 		if a.paneIndex != want {
 			t.Fatalf("the jump landed on pane %d, want %d", a.paneIndex, want)

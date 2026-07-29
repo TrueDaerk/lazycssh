@@ -33,7 +33,7 @@ func TestPagingMovesTheWindowAndTheFocus(t *testing.T) {
 	a := pagedApp(t, 12, 60, 14)
 	perPage := a.Grid().PerPage
 
-	a = pressKey(t, a, "n")
+	a = pressKey(t, a, "alt+n")
 	if a.Page() != 1 {
 		t.Fatalf("Page() = %d after paging forward", a.Page())
 	}
@@ -45,7 +45,7 @@ func TestPagingMovesTheWindowAndTheFocus(t *testing.T) {
 		t.Fatalf("FocusedHost() = %q after paging", a.FocusedHost())
 	}
 
-	a = pressKey(t, a, "p")
+	a = pressKey(t, a, "alt+p")
 	if a.Page() != 0 {
 		t.Fatalf("Page() = %d after paging back", a.Page())
 	}
@@ -57,13 +57,13 @@ func TestPagingMovesTheWindowAndTheFocus(t *testing.T) {
 func TestPagingStopsAtBothEnds(t *testing.T) {
 	a := pagedApp(t, 12, 60, 14)
 
-	a = pressKey(t, a, "p")
+	a = pressKey(t, a, "alt+p")
 	if a.Page() != 0 {
 		t.Fatalf("Page() = %d after paging back from the first page", a.Page())
 	}
 
 	for range 20 {
-		a = pressKey(t, a, "n")
+		a = pressKey(t, a, "alt+n")
 	}
 	if got, want := a.Page(), a.Pages()-1; got != want {
 		t.Fatalf("Page() = %d after running off the end, want %d", got, want)
@@ -77,7 +77,7 @@ func TestMovingFocusTurnsThePage(t *testing.T) {
 	perPage := a.Grid().PerPage
 
 	for range perPage {
-		a = pressKey(t, a, "l")
+		a = pressKey(t, a, "alt+right")
 	}
 	if a.Page() != 1 {
 		t.Fatalf("Page() = %d after moving the focus past the page", a.Page())
@@ -93,7 +93,7 @@ func TestPagingDoesNotChangeTheHostList(t *testing.T) {
 	a := pagedApp(t, 12, 60, 14)
 	before := strings.Join(a.hostIDs(), ",")
 
-	a = pressKey(t, a, "n")
+	a = pressKey(t, a, "alt+n")
 	if got := strings.Join(a.hostIDs(), ","); got != before {
 		t.Fatalf("paging changed the run's hosts:\n%s\n%s", before, got)
 	}
@@ -108,7 +108,7 @@ func TestPageIndicatorOnlyWhenItPages(t *testing.T) {
 		t.Fatalf("a single page rendered a page indicator:\n%s", plain(one.View().Content))
 	}
 
-	many := pagedApp(t, 12, 60, 14)
+	many := pressKey(t, pagedApp(t, 12, 60, 14), "ctrl+]")
 	view := plain(many.View().Content)
 	if !strings.Contains(view, "page 1/") {
 		t.Fatalf("no page indicator while paging:\n%s", view)
@@ -120,7 +120,7 @@ func TestPageIndicatorOnlyWhenItPages(t *testing.T) {
 func TestPageClampsWhenTheTerminalChanges(t *testing.T) {
 	a := pagedApp(t, 12, 60, 14)
 	for range 20 {
-		a = pressKey(t, a, "n")
+		a = pressKey(t, a, "alt+n")
 	}
 	last := a.Page()
 
@@ -162,7 +162,7 @@ func TestPagingWithASinglePageDoesNothing(t *testing.T) {
 	a := resize(t, fleetApp(t, 4), 120, 40)
 	before := a.View().Content
 
-	a = pressKey(t, a, "n")
+	a = pressKey(t, a, "alt+n")
 	if a.Page() != 0 || a.View().Content != before {
 		t.Fatal("paging moved a window that has only one page")
 	}
