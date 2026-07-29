@@ -4,7 +4,7 @@ title: Command line interface
 description: Flags, arguments and exit codes of the lazycssh binary.
 resource: cmd/lazycssh/main.go
 tags: [cli, flags, exit-codes]
-timestamp: 2026-07-29T12:00:00Z
+timestamp: 2026-07-29T18:00:00Z
 ---
 
 # Command line interface
@@ -16,7 +16,8 @@ lazycssh [flags] [<host|@session>...]
 Without arguments the TUI opens on an empty run: the Hosts panel is focused and offers the
 concrete aliases of `~/.ssh/config` as connect candidates, `n` opens a prompt for any host
 pattern, and the Sessions panel launches a saved session — the lazygit model, applied to cssh.
-The empty grid says all of that.
+Once connected, clicking or entering a pane types straight into that host and `6` broadcasts to
+all of them; the empty grid says all of that.
 
 Host arguments may use brace expansion, for example `srv1-{01..40}.example.com`. Expansion is
 performed by lazycssh itself, so a quoted argument behaves the same as an unquoted one and no

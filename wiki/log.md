@@ -2,6 +2,11 @@
 
 ## 2026-07-29
 
+- Simplification sweep for the three-destination model: the Status panel opens with a literal
+  `keys go to:` line naming the focused host, the broadcast targets, or lazycssh; the empty-run
+  hint explains typing and the `6` bar; tab's help text says "next panel". `core/tui.md` and
+  `core/cli.md` updated. Version 0.7.2.
+
 - Quick save and truthful patterns: global `S` opens the prefilled save prompt from anywhere at
   the app level (forwarded to the hosts while typing, by design). The program now tracks the
   run's live pattern list — CLI arguments plus runtime connects and session launches, deduped;

@@ -821,7 +821,9 @@ func (a App) renderMain() string {
 		// frame: this is the argumentless start.
 		hint := "no hosts\n\n" +
 			"pick a host from ~/.ssh/config in [2] Hosts and press enter,\n" +
-			"press n to type one, pick a session in [4] Sessions,\n" +
+			"press n to type one, or pick a session in [4] Sessions.\n\n" +
+			"once connected: click or enter a pane and just type —\n" +
+			"every key goes to that host; 6 broadcasts to all of them.\n\n" +
 			"or start with hosts: lazycssh <host...>"
 		return a.frame(a.theme.PaneFrame(focused, false), r, a.theme.Muted.Render(hint))
 	}

@@ -401,3 +401,24 @@ func (f *fakeFleet) Writer(id string) (io.Writer, bool) {
 	}
 	return s, true
 }
+
+// The Status panel's first line answers its question directly: where do my
+// keys go right now.
+func TestStatusPanelSaysWhereKeysGo(t *testing.T) {
+	a, _, _, _ := statusApp(t, "web-01")
+
+	if got := plain(a.View().Content); !strings.Contains(got, "keys go to: lazycssh") {
+		t.Fatalf("app level:\n%s", got)
+	}
+
+	a = focusGrid(t, a)
+	if got := plain(a.statusPanel(60)); !strings.Contains(got, "keys go to: web-01") {
+		t.Fatalf("while typing:\n%s", got)
+	}
+
+	a = pressKey(t, a, "ctrl+]")
+	a = pressKey(t, a, "6")
+	if got := plain(a.statusPanel(60)); !strings.Contains(got, "keys go to: the broadcast targets") {
+		t.Fatalf("while broadcasting:\n%s", got)
+	}
+}

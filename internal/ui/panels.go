@@ -35,6 +35,17 @@ func (a App) panelBody(panel Panel, width, height int) string {
 func (a App) statusPanel(width int) string {
 	var lines []string
 
+	// The first line answers the panel's question directly: where do my
+	// keys go right now.
+	switch a.focus {
+	case AreaGrid:
+		lines = append(lines, a.field("keys go to", a.FocusedHost()))
+	case AreaBroadcast:
+		lines = append(lines, a.field("keys go to", "the broadcast targets"))
+	default:
+		lines = append(lines, a.field("keys go to", "lazycssh (commands)"))
+	}
+
 	if a.cfg.SessionName != "" {
 		lines = append(lines, a.field("session", a.cfg.SessionName))
 	} else {
