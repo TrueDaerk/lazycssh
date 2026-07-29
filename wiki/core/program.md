@@ -4,7 +4,7 @@ title: Program assembly
 description: The one place every layer meets - building the fleet, wiring the router and the UI together, and the wrapper model that acts on what the UI may only ask for.
 resource: internal/program/program.go
 tags: [program, wiring, bubbletea, transport]
-timestamp: 2026-07-29T13:00:00Z
+timestamp: 2026-07-29T17:00:00Z
 ---
 
 # Program assembly
@@ -32,6 +32,10 @@ acted on:
 | `ui.ReconnectHostMsg` | `Manager.Reconnect` in a `tea.Cmd`, then a redraw |
 | `ui.CloseHostMsg` | `Manager.Close` in a `tea.Cmd`, then a redraw |
 | `ui.RemoveHostMsg` | `Manager.Remove` + `Router.Forget` + `SetHosts` + PTY resize, then `HostsChangedMsg` |
+
+The program owns the run's live pattern list: seeded from the CLI, extended by every runtime
+connect and session launch, pruned when a removal names a pattern exactly, and handed to the UI
+with every `HostsChangedMsg` so a save writes how the run was actually assembled.
 | `ui.SessionLaunchMsg` | load the saved session, resolve its patterns, `Manager.Add` each host |
 | `tea.WindowSizeMsg` | forwarded to the UI, then every remote PTY is resized to the pane content size |
 

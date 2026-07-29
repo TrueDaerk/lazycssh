@@ -8,6 +8,10 @@ package ui
 // machine - that is the pane they are about to type into.
 type HostsChangedMsg struct {
 	Hosts []string
+	// Patterns are the run's host patterns as the user gave them, kept in
+	// step by the program so saving the run writes the truth. Nil means
+	// "unchanged".
+	Patterns []string
 }
 
 // FocusedHost is the host whose pane has focus, or the empty string when the

@@ -4,7 +4,7 @@ title: Session files
 description: The on-disk format for a saved run — schema, location, strictness, and why no credential ever appears in one.
 resource: internal/sessions
 tags: [config, yaml, xdg, sessions, security]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-07-29T17:00:00Z
 ---
 
 # Session files
@@ -115,3 +115,15 @@ decision rather than a side effect.
 `defaults` block that is entirely empty is left out rather than written as an empty map. Saving
 is atomic — a temporary file in the same directory, then a rename — so an interrupted save
 cannot leave half a session behind.
+
+## Quick save
+
+`S` at the app level opens the save prompt from anywhere — prefilled with the run's session
+name, enter confirms, an existing name still asks `overwrite? y/n`. While typing or in the
+broadcast bar, `S` is a keystroke for the hosts like any other letter.
+
+The saved patterns track the run: the CLI arguments, then everything connected or launched at
+runtime, deduplicated in order — a run started with `web-*` and extended with `db-01` saves
+both, which it previously did not. Removing a host drops a pattern that names it exactly; a
+glob or brace pattern stays, because it cannot be narrowed by one host. Saving an empty run
+reports `nothing to save` and keeps the prompt and the typed name.

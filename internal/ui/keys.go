@@ -67,6 +67,7 @@ type KeyMap struct {
 	BroadcastFleet    key.Binding
 	CommandLine       key.Binding
 	NextFailure       key.Binding
+	QuickSave         key.Binding
 
 	// Sidebar.
 	Up        key.Binding
@@ -134,6 +135,8 @@ func DefaultKeyMap() KeyMap {
 		CommandLine:       key.NewBinding(key.WithKeys(":"), key.WithHelp(":", "send a command")),
 		NextFailure: key.NewBinding(key.WithKeys("!"),
 			key.WithHelp("!", "jump to the next failed host")),
+		QuickSave: key.NewBinding(key.WithKeys("S"),
+			key.WithHelp("S", "save the run as a session")),
 
 		Up:        key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
 		Down:      key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
@@ -181,7 +184,7 @@ func (k KeyMap) global() []key.Binding {
 		k.Help, k.Quit, k.NextTab, k.PrevTab,
 		k.Panel1, k.Panel2, k.Panel3, k.Panel4, k.Panel5, k.Panel6,
 		k.BroadcastAll, k.BroadcastSelected, k.BroadcastSingle, k.BroadcastFleet,
-		k.CommandLine, k.NextFailure,
+		k.CommandLine, k.NextFailure, k.QuickSave,
 	}
 }
 
