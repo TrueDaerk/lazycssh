@@ -2,6 +2,17 @@
 
 ## 2026-07-29
 
+- Terminal-input focus model: a focused pane is a terminal. Every plain keystroke — letters,
+  enter, tab, esc, ctrl+c — is encoded (`internal/ui/keystroke.go`) and written directly to that
+  one host through the new `PaneWriter` interface, bypassing the broadcast scope. lazycssh keeps
+  only `ctrl+]` (back to the app level, cursor on the host just typed to) and the `alt`/`shift`
+  pane-management chords: `alt+arrows` switch panes, `alt+z` full screen, `alt+n/p` pages,
+  `alt+x` close/remove, `alt+r` reconnect, `shift+pgup/pgdn/home/end` scrollback, `alt+/ [ ] c`
+  search — all of which also work from the app level. The status bar always says
+  `TYPING <host>`. The old passthrough mode is gone, superseded; typed keys are still never
+  recorded. `core/tui.md`, `core/keys.md`, `core/broadcast-scope.md` and `core/command-log.md`
+  updated. Version 0.5.0.
+
 - Close and remove single hosts: `x` is state-dependent — on a connected host it closes the
   session (the pane stays and says so), on a failed or closed host it removes the pane from the
   run. Works in the grid and, new, on the row under the cursor in the Hosts panel (`r` there

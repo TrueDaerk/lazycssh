@@ -30,7 +30,7 @@ func TestScrollBackAndReturn(t *testing.T) {
 	}
 
 	for i := 0; i < 3; i++ {
-		a = press(t, a, ctrl('u'))
+		a = pressKey(t, a, "shift+pgup")
 	}
 	view := plain(a.View().Content)
 	if strings.Contains(view, "line-200") {
@@ -40,7 +40,7 @@ func TestScrollBackAndReturn(t *testing.T) {
 		t.Fatalf("a scrolled pane does not say so in the status bar:\n%s", view)
 	}
 
-	a = pressKey(t, a, "G")
+	a = pressKey(t, a, "shift+end")
 	if view := plain(a.View().Content); !strings.Contains(view, "line-200") {
 		t.Fatalf("G did not return to the tail:\n%s", view)
 	}
@@ -52,7 +52,7 @@ func TestScrollBackAndReturn(t *testing.T) {
 // g jumps to the oldest retained output, which is where the dropped marker is.
 func TestScrollToTop(t *testing.T) {
 	a, _ := scrollApp(t, 200)
-	a = pressKey(t, a, "g")
+	a = pressKey(t, a, "shift+home")
 	if view := plain(a.View().Content); !strings.Contains(view, "line-001") {
 		t.Fatalf("g did not reach the oldest line:\n%s", view)
 	}
@@ -62,7 +62,7 @@ func TestScrollToTop(t *testing.T) {
 // buffered.
 func TestScrolledPaneKeepsBuffering(t *testing.T) {
 	a, fleet := scrollApp(t, 200)
-	a = pressKey(t, a, "g")
+	a = pressKey(t, a, "shift+home")
 
 	before := fleet.sessions["web-01"].Scrollback().Len()
 	fleet.sessions["web-01"].Emit("fresh output after scrolling\n")
@@ -74,7 +74,7 @@ func TestScrolledPaneKeepsBuffering(t *testing.T) {
 	}
 
 	// The new line is there the moment the user returns.
-	a = pressKey(t, a, "G")
+	a = pressKey(t, a, "shift+end")
 	if view := plain(a.View().Content); !strings.Contains(view, "fresh output after scrolling") {
 		t.Fatalf("the buffered line is missing at the tail:\n%s", view)
 	}
@@ -83,7 +83,7 @@ func TestScrolledPaneKeepsBuffering(t *testing.T) {
 // typeSearch opens the search and types a term.
 func typeSearch(t *testing.T, a App, term string) App {
 	t.Helper()
-	a = pressKey(t, a, "/")
+	a = pressKey(t, a, "alt+/")
 	if !a.Searching() {
 		t.Fatal("/ did not open the search")
 	}
@@ -112,8 +112,8 @@ func TestSearchWithinAPane(t *testing.T) {
 	if !strings.Contains(view, "ERROR: broken pipe") {
 		t.Fatalf("the search did not scroll to the match:\n%s", view)
 	}
-	if !strings.Contains(view, `search "error"`) {
-		t.Fatalf("the active search is not named in the status bar:\n%s", view)
+	if bar := plain(pressKey(t, a, "ctrl+]").View().Content); !strings.Contains(bar, `search "error"`) {
+		t.Fatalf("the active search is not named in the status bar:\n%s", bar)
 	}
 
 	// The match line carries the match style.
@@ -122,10 +122,11 @@ func TestSearchWithinAPane(t *testing.T) {
 		t.Fatal("the matching line is not highlighted")
 	}
 
-	// esc clears the term and the highlight.
-	a = press(t, a, tea.KeyPressMsg{Code: tea.KeyEscape})
+	// alt+c clears the term and the highlight; a bare esc belongs to the
+	// remote shell while typing.
+	a = pressKey(t, a, "alt+c")
 	if a.SearchTerm() != "" {
-		t.Fatalf("esc left the term %q", a.SearchTerm())
+		t.Fatalf("alt+c left the term %q", a.SearchTerm())
 	}
 }
 
@@ -145,21 +146,21 @@ func TestSearchMatchNavigation(t *testing.T) {
 		t.Fatalf("the newest match is not on screen:\n%s", view)
 	}
 
-	a = pressKey(t, a, "[")
+	a = pressKey(t, a, "alt+[")
 	if view := plain(a.View().Content); !strings.Contains(view, "ERROR at 150") {
 		t.Fatalf("[ did not reach the older match:\n%s", view)
 	}
-	a = pressKey(t, a, "[")
+	a = pressKey(t, a, "alt+[")
 	if view := plain(a.View().Content); !strings.Contains(view, "ERROR at 050") {
 		t.Fatalf("[ did not reach the oldest match:\n%s", view)
 	}
 	// Running out of matches stays put rather than wrapping.
-	a = pressKey(t, a, "[")
+	a = pressKey(t, a, "alt+[")
 	if view := plain(a.View().Content); !strings.Contains(view, "ERROR at 050") {
 		t.Fatalf("[ wrapped past the oldest match:\n%s", view)
 	}
 
-	a = pressKey(t, a, "]")
+	a = pressKey(t, a, "alt+]")
 	if view := plain(a.View().Content); !strings.Contains(view, "ERROR at 150") {
 		t.Fatalf("] did not step back to the newer match:\n%s", view)
 	}

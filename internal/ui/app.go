@@ -88,6 +88,10 @@ type Config struct {
 	// has no transport yet and the command line says so rather than pretending
 	// to send.
 	Sender CommandLine
+	// Panes is where a focused pane's keystrokes go: one host, directly,
+	// bypassing the broadcast scope. Nil means the run has no transport yet
+	// and typing says so rather than pretending.
+	Panes PaneWriter
 	// Recorder receives the commands that were sent, for the audit trail.
 	Recorder Recorder
 	// CommandLog is the audit trail of what was sent this run. Nil means the
@@ -155,7 +159,6 @@ type App struct {
 	panel         Panel
 	paneIndex     int
 	page          int
-	passthrough   bool
 	hostCursor    int
 	groupCursor   int
 	sessionCursor int
@@ -291,12 +294,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKey dispatches a key press. Bindings are matched by area, so a key
 // means one thing at a time; see [KeyMap].
 func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	// Passthrough owns the keyboard entirely, except for the one key that gets
-	// it back. A shell that cannot see tab or ctrl+c is not a shell.
-	if a.passthrough {
-		return a.handlePassthroughKey(msg)
-	}
-
 	// The command line has the keyboard while it is open: a command containing
 	// a "b" must not switch the broadcast mode, and ctrl+c while editing must
 	// not reach forty machines.
@@ -337,6 +334,13 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
+	// A focused pane is a terminal: everything below this line is app-level
+	// command handling, and the user decided commands only exist while no
+	// input pane is selected.
+	if a.focus == AreaGrid {
+		return a.handleTypingKey(msg)
+	}
+
 	switch {
 	case key.Matches(msg, a.keys.Quit):
 		return a, tea.Quit
@@ -353,9 +357,6 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, a.keys.CommandLine):
 		return a.openCommandLine(), nil
-
-	case key.Matches(msg, a.keys.Passthrough):
-		return a.togglePassthrough(), nil
 
 	case key.Matches(msg, a.keys.BroadcastAll):
 		return a.setBroadcastMode(broadcast.ModeAll), nil
@@ -381,17 +382,20 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
+	// Pane management works from the app level too: the chords are alt/shift
+	// combinations no sidebar panel uses, so managing panes never requires
+	// entering a pane's terminal.
+	if next, cmd, handled := a.handlePaneKey(msg); handled {
+		return next, cmd
+	}
+
 	// Everything below here is dispatched by focus, so the same key press means
 	// one thing at a time. The bindings of the area that does not have focus
 	// are not consulted at all.
-	switch a.focus {
-	case AreaSidebar:
+	if a.focus == AreaSidebar {
 		return a.handleSidebarKey(msg)
-	case AreaGrid:
-		return a.handleGridKey(msg)
-	default:
-		return a, nil
 	}
+	return a, nil
 }
 
 // handleFilterKey feeds the filter input, which owns the keyboard while it is
@@ -633,60 +637,6 @@ func (a App) handleHostsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
-// handleGridKey moves between panes.
-//
-// Left and right step through the panes in host order; up and down do the same
-// until the grid geometry exists, at which point they move by a row. Neither
-// wraps: stepping off the last pane onto the first is how a user types into the
-// machine at the other end of the fleet.
-func (a App) handleGridKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case key.Matches(msg, a.keys.PaneLeft):
-		return a.movePane(-1).followFocus(), nil
-	case key.Matches(msg, a.keys.PaneRight):
-		return a.movePane(+1).followFocus(), nil
-	case key.Matches(msg, a.keys.PaneUp):
-		return a.movePane(-a.grid().Columns).followFocus(), nil
-	case key.Matches(msg, a.keys.PaneDown):
-		return a.movePane(+a.grid().Columns).followFocus(), nil
-	case key.Matches(msg, a.keys.NextPage):
-		return a.pageBy(+1), nil
-	case key.Matches(msg, a.keys.PrevPage):
-		return a.pageBy(-1), nil
-	case key.Matches(msg, a.keys.FullScreen):
-		a.fullScreen = !a.fullScreen
-		return a, nil
-	case key.Matches(msg, a.keys.Reconnect):
-		if id := a.FocusedHost(); id != "" {
-			return a, func() tea.Msg { return ReconnectHostMsg{ID: id} }
-		}
-		return a, nil
-	case key.Matches(msg, a.keys.ClosePane):
-		if id := a.FocusedHost(); id != "" {
-			return a, a.closeOrRemove(id)
-		}
-		return a, nil
-
-	case key.Matches(msg, a.keys.ScrollUp):
-		return a.scrollBy(+a.scrollPage()), nil
-	case key.Matches(msg, a.keys.ScrollDown):
-		return a.scrollBy(-a.scrollPage()), nil
-	case key.Matches(msg, a.keys.ScrollTop):
-		return a.scrollToTop(), nil
-	case key.Matches(msg, a.keys.ScrollBottom):
-		return a.scrollToBottom(), nil
-	case key.Matches(msg, a.keys.SearchPane):
-		return a.openSearch(), nil
-	case key.Matches(msg, a.keys.NextMatch):
-		return a.stepMatch(-1), nil
-	case key.Matches(msg, a.keys.PrevMatch):
-		return a.stepMatch(+1), nil
-	case key.Matches(msg, a.keys.ClearSearch):
-		return a.clearSearch(), nil
-	}
-	return a, nil
-}
-
 // closeOrRemove is what x means on a host: a live session is closed - the
 // pane stays, saying so - and a dead one is removed, so the second x takes the
 // pane off the screen. Both are emitted, not handled: the UI cannot touch the
@@ -894,7 +844,19 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 // renderStatusBar draws the bottom line: what is selected, how many hosts are in
 // the run, and every flag that weakens a default.
 func (a App) renderStatusBar() string {
-	parts := []string{a.theme.Base.Render("lazycssh")}
+	var parts []string
+	if a.focus == AreaGrid {
+		// Where keystrokes go is the one thing the user must never have to
+		// guess. The literal word carries the meaning, so it survives NoColor.
+		target := a.FocusedHost()
+		if target == "" {
+			target = "no host"
+		}
+		parts = append(parts, a.theme.StatusTyping.Render(
+			"TYPING "+target+" — "+escapeKeystroke+" leaves · alt=app"))
+	}
+
+	parts = append(parts, a.theme.Base.Render("lazycssh"))
 	if a.cfg.SessionName != "" {
 		parts = append(parts, a.theme.Base.Render("@"+a.cfg.SessionName))
 	}
@@ -929,15 +891,6 @@ func (a App) renderStatusBar() string {
 	// Status panel, because the bar is the one thing that is on screen whatever
 	// the user has scrolled to.
 	parts = append(parts, a.activeFlags()...)
-
-	if a.passthrough {
-		// Everything else is suspended, so the status bar is the only thing
-		// that can say how to get the keyboard back.
-		return a.theme.StatusInsecure.
-			Width(a.layout.Width).
-			MaxHeight(StatusBarHeight).
-			Render(a.passthroughLabel())
-	}
 
 	line := strings.Join(parts, " ")
 	if short := a.help.ShortHelpView(a.keys.For(a.focus).ShortHelp()); short != "" {

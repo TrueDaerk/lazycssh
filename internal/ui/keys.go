@@ -61,7 +61,6 @@ type KeyMap struct {
 	BroadcastSingle   key.Binding
 	BroadcastFleet    key.Binding
 	CommandLine       key.Binding
-	Passthrough       key.Binding
 	NextFailure       key.Binding
 
 	// Sidebar.
@@ -82,16 +81,19 @@ type KeyMap struct {
 	CloseHost key.Binding
 	Reconn    key.Binding
 
-	// Grid.
-	PaneLeft   key.Binding
-	PaneRight  key.Binding
-	PaneUp     key.Binding
-	PaneDown   key.Binding
-	FullScreen key.Binding
-	Reconnect  key.Binding
-	ClosePane  key.Binding
-	NextPage   key.Binding
-	PrevPage   key.Binding
+	// Grid. A focused pane is a terminal: plain keys are forwarded to the
+	// host, so everything lazycssh keeps for itself here is an alt or shift
+	// chord that keystrokeBytes never encoded, plus the one reserved escape.
+	LeaveTyping key.Binding
+	PaneLeft    key.Binding
+	PaneRight   key.Binding
+	PaneUp      key.Binding
+	PaneDown    key.Binding
+	FullScreen  key.Binding
+	Reconnect   key.Binding
+	ClosePane   key.Binding
+	NextPage    key.Binding
+	PrevPage    key.Binding
 
 	ScrollUp     key.Binding
 	ScrollDown   key.Binding
@@ -124,8 +126,6 @@ func DefaultKeyMap() KeyMap {
 		BroadcastSingle:   key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "broadcast to one pane")),
 		BroadcastFleet:    key.NewBinding(key.WithKeys("ctrl+alt+b"), key.WithHelp("ctrl+alt+b", "broadcast to EVERY host")),
 		CommandLine:       key.NewBinding(key.WithKeys(":"), key.WithHelp(":", "send a command")),
-		Passthrough: key.NewBinding(key.WithKeys("ctrl+]"),
-			key.WithHelp("ctrl+]", "raw keystrokes to the hosts")),
 		NextFailure: key.NewBinding(key.WithKeys("!"),
 			key.WithHelp("!", "jump to the next failed host")),
 
@@ -146,24 +146,26 @@ func DefaultKeyMap() KeyMap {
 		CloseHost: key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "close this host, again to remove")),
 		Reconn:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "reconnect this host")),
 
-		PaneLeft:   key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "pane left")),
-		PaneRight:  key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "pane right")),
-		PaneUp:     key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "pane up")),
-		PaneDown:   key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "pane down")),
-		FullScreen: key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "full screen this pane")),
-		Reconnect:  key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "reconnect this host")),
-		ClosePane:  key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "close this session")),
-		NextPage:   key.NewBinding(key.WithKeys("pgdown", "n"), key.WithHelp("pgdn/n", "next page of panes")),
-		PrevPage:   key.NewBinding(key.WithKeys("pgup", "p"), key.WithHelp("pgup/p", "previous page of panes")),
+		LeaveTyping: key.NewBinding(key.WithKeys("ctrl+]"),
+			key.WithHelp("ctrl+]", "stop typing to the host")),
+		PaneLeft:   key.NewBinding(key.WithKeys("alt+left"), key.WithHelp("alt+←", "pane left")),
+		PaneRight:  key.NewBinding(key.WithKeys("alt+right"), key.WithHelp("alt+→", "pane right")),
+		PaneUp:     key.NewBinding(key.WithKeys("alt+up"), key.WithHelp("alt+↑", "pane up")),
+		PaneDown:   key.NewBinding(key.WithKeys("alt+down"), key.WithHelp("alt+↓", "pane down")),
+		FullScreen: key.NewBinding(key.WithKeys("alt+z"), key.WithHelp("alt+z", "full screen this pane")),
+		Reconnect:  key.NewBinding(key.WithKeys("alt+r"), key.WithHelp("alt+r", "reconnect this host")),
+		ClosePane:  key.NewBinding(key.WithKeys("alt+x"), key.WithHelp("alt+x", "close this host, again to remove")),
+		NextPage:   key.NewBinding(key.WithKeys("alt+n"), key.WithHelp("alt+n", "next page of panes")),
+		PrevPage:   key.NewBinding(key.WithKeys("alt+p"), key.WithHelp("alt+p", "previous page of panes")),
 
-		ScrollUp:     key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "scroll back")),
-		ScrollDown:   key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "scroll forward")),
-		ScrollTop:    key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "oldest retained output")),
-		ScrollBottom: key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "back to the tail")),
-		SearchPane:   key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search the scrollback")),
-		NextMatch:    key.NewBinding(key.WithKeys("["), key.WithHelp("[", "older match")),
-		PrevMatch:    key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "newer match")),
-		ClearSearch:  key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "clear the search")),
+		ScrollUp:     key.NewBinding(key.WithKeys("shift+pgup"), key.WithHelp("shift+pgup", "scroll back")),
+		ScrollDown:   key.NewBinding(key.WithKeys("shift+pgdown"), key.WithHelp("shift+pgdn", "scroll forward")),
+		ScrollTop:    key.NewBinding(key.WithKeys("shift+home"), key.WithHelp("shift+home", "oldest retained output")),
+		ScrollBottom: key.NewBinding(key.WithKeys("shift+end"), key.WithHelp("shift+end", "back to the tail")),
+		SearchPane:   key.NewBinding(key.WithKeys("alt+/"), key.WithHelp("alt+/", "search the scrollback")),
+		NextMatch:    key.NewBinding(key.WithKeys("alt+["), key.WithHelp("alt+[", "older match")),
+		PrevMatch:    key.NewBinding(key.WithKeys("alt+]"), key.WithHelp("alt+]", "newer match")),
+		ClearSearch:  key.NewBinding(key.WithKeys("alt+c"), key.WithHelp("alt+c", "clear the search")),
 	}
 }
 
@@ -173,7 +175,7 @@ func (k KeyMap) global() []key.Binding {
 		k.Help, k.Quit, k.NextTab, k.PrevTab,
 		k.Panel1, k.Panel2, k.Panel3, k.Panel4, k.Panel5,
 		k.BroadcastAll, k.BroadcastSelected, k.BroadcastSingle, k.BroadcastFleet,
-		k.CommandLine, k.Passthrough, k.NextFailure,
+		k.CommandLine, k.NextFailure,
 	}
 }
 
@@ -189,6 +191,7 @@ func (k KeyMap) sidebar() []key.Binding {
 // grid returns the bindings that act on the host panes.
 func (k KeyMap) grid() []key.Binding {
 	return []key.Binding{
+		k.LeaveTyping,
 		k.PaneLeft, k.PaneRight, k.PaneUp, k.PaneDown,
 		k.FullScreen, k.Reconnect, k.ClosePane, k.NextPage, k.PrevPage,
 		k.ScrollUp, k.ScrollDown, k.ScrollTop, k.ScrollBottom,
@@ -243,9 +246,11 @@ func (c contextHelp) ShortHelp() []key.Binding {
 	case AreaSidebar:
 		return []key.Binding{k.Up, k.Down, k.Choose, k.Toggle, k.NextTab, k.Help}
 	case AreaGrid:
-		return []key.Binding{k.PaneLeft, k.PaneRight, k.FullScreen, k.Reconnect, k.NextTab, k.Help}
+		// While typing, every plain key goes to the host - the hints may only
+		// name chords lazycssh actually keeps.
+		return []key.Binding{k.LeaveTyping, k.PaneLeft, k.PaneRight, k.FullScreen, k.ClosePane}
 	default:
-		return []key.Binding{k.NextTab, k.CommandLine, k.Passthrough, k.Help, k.Quit}
+		return []key.Binding{k.NextTab, k.CommandLine, k.Help, k.Quit}
 	}
 }
 

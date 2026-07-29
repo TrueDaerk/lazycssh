@@ -124,6 +124,7 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 		WorkingSet:  ws,
 		RunPatterns: cfg.Patterns,
 		Sender:      router,
+		Panes:       mgr,
 		Recorder:    logbook,
 		CommandLog:  logbook,
 		Insecure:    cfg.Insecure,

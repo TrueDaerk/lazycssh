@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-29T12:00:00Z
+timestamp: 2026-07-29T14:00:00Z
 ---
 
 # TUI shell
@@ -14,8 +14,10 @@ draws the frame every other view renders into: a lazygit-style stack of titled p
 left, the pane grid on the right, a status bar along the bottom, and the `?` popup composited over
 the frame.
 
-Model mutation happens only in `Update`. Nothing in `internal/ui` dials, reads or writes a host;
-the transport reports through messages — see [Session manager](./manager.md).
+Model mutation happens only in `Update`. Nothing in `internal/ui` dials a host; the transport
+reports through messages — see [Session manager](./manager.md) — and the only bytes the UI
+writes travel through narrow interfaces the program hands in (`PaneWriter` for the focused pane,
+the sender for broadcast).
 
 ## Layout
 
@@ -88,7 +90,7 @@ The **window** is which hosts are on screen. It is not the [working set](./worki
 which is which hosts a command is about. Paging the window never changes who receives a
 keystroke — that is the entire reason the two are separate concepts.
 
-- `pgdn`/`n` and `pgup`/`p` move the window a whole page and put the pane focus on the first host
+- `alt+n` and `alt+p` move the window a whole page and put the pane focus on the first host
   of the new page, so the pane that receives a keystroke is one the user can see,
 - moving the pane focus off the edge of a page turns the page rather than focusing a pane that is
   not drawn,
@@ -102,15 +104,25 @@ Focus is one explicit piece of model state and it is always visible: the focused
 with the focused border from the [theme](./theme.md), which differs in thickness as well as
 colour so it survives a terminal without colour.
 
-- `tab` / `shift+tab` walk the lazygit cycle: every sidebar panel in order, then the grid, then
-  round again — `shift+tab` walks it backwards,
-- `1`–`5` select a panel **and** move focus to the sidebar, because pressing a panel number and
-  landing somewhere else is a surprise,
-- inside the sidebar, `↑`/`k` and `↓`/`j` move the panel selection; inside the grid the same keys
-  move the pane focus, and `enter` from the sidebar hands focus to the grid,
+**A focused pane is a terminal.** Focusing the grid — `enter` on a host row, tab-cycling into
+it — means typing: every keystroke is encoded and written to that one host, per key, enter not
+required. `ctrl+c`, `tab` and `esc` belong to the remote shell. lazycssh keeps exactly two kinds
+of keys for itself while typing: the reserved escape `ctrl+]`, which returns to the app level
+(the Hosts panel, cursor on the host just typed to), and the `alt`/`shift` pane-management
+chords, combinations the encoder never produced, so intercepting them forwards nothing a user
+could previously send. Where keystrokes go is always in the status bar: `TYPING web-01 — ctrl+]
+leaves · alt=app`. Typing into a host that cannot take input says so rather than dropping keys.
+
+The write path is `PaneWriter`, the narrowest slice of the manager — one host's `io.Writer` —
+bypassing the broadcast scope entirely: typing into a pane can never fan out.
+
+- `tab` / `shift+tab` at the app level walk the lazygit cycle: every sidebar panel in order,
+  then the grid; once in the grid they are keystrokes for the host and `ctrl+]` is the way back,
+- `1`–`5` at the app level select a panel **and** move focus to the sidebar,
+- `alt+arrows` switch panes (they work while typing and from the app level alike), `alt+z`
+  full-screens, `alt+n`/`alt+p` page, `alt+x` closes/removes, `alt+r` reconnects,
 - key presses are dispatched by area, so a key means one thing at a time — see
-  [Keymap and help](./keys.md). The bindings of the area that does not have focus are not
-  consulted at all,
+  [Keymap and help](./keys.md). Commands exist only while no input pane is focused,
 - nothing wraps. Stepping off the last pane onto the first is how a user ends up typing into the
   machine at the other end of the fleet.
 
@@ -148,7 +160,7 @@ The **window** is which hosts are on screen. It is not the [working set](./worki
 which is which hosts a command is about. Paging the window never changes who receives a
 keystroke — that is the entire reason the two are separate concepts.
 
-- `pgdn`/`n` and `pgup`/`p` move the window a whole page and put the pane focus on the first host
+- `alt+n` and `alt+p` move the window a whole page and put the pane focus on the first host
   of the new page, so the pane that receives a keystroke is one the user can see,
 - moving the pane focus off the edge of a page turns the page rather than focusing a pane that is
   not drawn,
@@ -205,9 +217,10 @@ scrollback is visible rather than silent.
 
 ### Scrollback navigation
 
-A focused pane scrolls back through its buffer: `ctrl+u` / `ctrl+d` move half a pane at a time,
-`g` jumps to the oldest retained output — where the dropped marker is — and `G` returns to the
-tail and resumes following it.
+A focused pane scrolls back through its buffer: `shift+pgup` / `shift+pgdn` move half a pane at
+a time — the terminal-emulator convention, chosen because plain keys belong to the remote shell —
+`shift+home` jumps to the oldest retained output — where the dropped marker is — and `shift+end`
+returns to the tail and resumes following it.
 
 The offset is anchored at the **bottom** and counted in wrapped lines, so new output slides the
 window rather than the reader's position in it; a top-anchored offset would drift every time the
@@ -218,11 +231,11 @@ landing behind a frozen window must not look like a quiet host.
 
 ### Search
 
-`/` in the grid opens a search prompt that owns the keyboard while it is open. `enter` commits
-the term and scrolls the focused pane to the **newest** match — the reader is almost always
-hunting the error that just happened; `[` and `]` walk to older and newer matches without
-wrapping. Matching lines are drawn in the match style, their own colours dropped: a highlight
-fighting the remote's colours would lose. `esc` in the grid clears the term.
+`alt+/` opens a search prompt that owns the keyboard while it is open. `enter` commits the term
+and scrolls the focused pane to the **newest** match — the reader is almost always hunting the
+error that just happened; `alt+[` and `alt+]` walk to older and newer matches without wrapping.
+Matching lines are drawn in the match style, their own colours dropped: a highlight fighting the
+remote's colours would lose. `alt+c` clears the term; a bare `esc` belongs to the remote shell.
 
 One term is shared by every pane, because "which of my hosts printed this" is a question about
 the run. The cross-pane form is the command line's `/find <text>`: it sets the shared term and
@@ -320,7 +333,7 @@ ad hoc set the user is actually in, so the panel can never hide where they are.
 - `enter` makes that row the working set: the one keystroke from "which twenty am I working on"
   to "these twenty",
 - `[` and `]` page the **working set** by its own chunk size. That is a different thing from
-  `pgup`/`pgdn`, which page the pane window; the panel shows both lines for exactly that reason.
+  `alt+p`/`alt+n`, which page the pane window; the panel shows both lines for exactly that reason.
 
 ### [4] Sessions
 
@@ -361,32 +374,19 @@ Every command sent this run, newest last, each with its target count and mode �
 Typing a command and resending one from the [Command log](./command-log.md) take the same path,
 so a resend goes to the set that is active *now* and leaves the same audit entry.
 
-## Passthrough
+## Key encoding
 
-`ctrl+]` hands the keyboard to the remote shells. Whole commands are what `:` is for; passthrough
-is for everything a shell needs that a command line cannot express: `tab` completion, `ctrl+c`,
-`ctrl+d`, `ctrl+r`, the arrow keys and history.
+What reaches a remote shell is the one thing in this program a user cannot inspect, so the
+encoding (`keystrokeBytes` in `internal/ui/keystroke.go`) is explicit and table-tested:
+`enter` → `\r`, `tab` → `\t`, `backspace` → `0x7f`, arrows → `ESC [ A`–`D`,
+`ctrl+<letter>` → `0x01`–`0x1a`. `ctrl+]` is kept from the old passthrough mode — the telnet
+escape, because a user who is stuck needs one sequence that always means "give me my keyboard
+back". The passthrough mode itself is gone: typing into a focused pane replaces
+passthrough-to-one-host; the `:` command line covers whole-fleet sends until the live
+broadcast bar lands.
 
-- while it is on, lazycssh has **one** binding left — `ctrl+]`, the telnet escape, because a user
-  who is stuck needs one sequence that always means "give me my keyboard back",
-- the status bar is drawn in the warning style and always names that key. Every other binding,
-  including the generated help, is suspended, so nothing else on screen could say it,
-- `ctrl+c` reaches the hosts and does **not** quit lazycssh; `tab` reaches the remote shell rather
-  than cycling focus,
-- raw keystrokes are never written to the [command log](./command-log.md). This is the mode a
-  password is typed in, and the audit trail is for commands.
-
-Key encoding is explicit and table-tested (`enter` → `\r`, `tab` → `\t`, `backspace` → `0x7f`,
-arrows → `ESC [ A`–`D`, `ctrl+<letter>` → `0x01`–`0x1a`), because what reaches a remote shell is
-the one thing in this program a user cannot inspect.
-
-### Several hosts answering at once
-
-Sending raw keys to more than one host means the replies are answers to different questions — two
-machines complete `up<tab>` differently. Nothing is interleaved: each pane renders its own
-session's output and nothing else. The status bar says how many hosts are answering and offers
-`s` for single mode, so a divergent completion is visible as N panes disagreeing rather than as
-one garbled line.
+Typed keys are never written to the [command log](./command-log.md). This is where a password is
+typed, and the audit trail is for commands.
 
 ## Messages
 

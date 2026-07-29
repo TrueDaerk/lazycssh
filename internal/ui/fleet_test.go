@@ -16,7 +16,7 @@ func gridApp(t *testing.T) App {
 // produces, or nil when there is no command.
 func keyMsgResult(t *testing.T, a App, keystroke string) tea.Msg {
 	t.Helper()
-	model, cmd := a.Update(tea.KeyPressMsg{Code: []rune(keystroke)[0], Text: keystroke})
+	model, cmd := a.Update(keyMsgFor(t, keystroke))
 	if _, ok := model.(App); !ok {
 		t.Fatalf("Update returned a %T, want App", model)
 	}
@@ -27,7 +27,7 @@ func keyMsgResult(t *testing.T, a App, keystroke string) tea.Msg {
 }
 
 func TestReconnectKeyEmitsReconnectHostMsg(t *testing.T) {
-	got := keyMsgResult(t, gridApp(t), "r")
+	got := keyMsgResult(t, gridApp(t), "alt+r")
 	msg, ok := got.(ReconnectHostMsg)
 	if !ok {
 		t.Fatalf("pressing r produced %T, want ReconnectHostMsg", got)
@@ -38,7 +38,7 @@ func TestReconnectKeyEmitsReconnectHostMsg(t *testing.T) {
 }
 
 func TestCloseKeyEmitsCloseHostMsg(t *testing.T) {
-	got := keyMsgResult(t, gridApp(t), "x")
+	got := keyMsgResult(t, gridApp(t), "alt+x")
 	msg, ok := got.(CloseHostMsg)
 	if !ok {
 		t.Fatalf("pressing x produced %T, want CloseHostMsg", got)
@@ -63,7 +63,7 @@ func TestCloseKeyOnADeadHostEmitsRemove(t *testing.T) {
 	fleet.fail(t, "web-01")
 	a = focusGrid(t, a)
 
-	got := keyMsgResult(t, a, "x")
+	got := keyMsgResult(t, a, "alt+x")
 	msg, ok := got.(RemoveHostMsg)
 	if !ok {
 		t.Fatalf("pressing x on a failed host produced %T, want RemoveHostMsg", got)
@@ -78,8 +78,8 @@ func TestCloseKeyOnALiveHostEmitsClose(t *testing.T) {
 	fleet.connect(t, "web-01")
 	a = focusGrid(t, a)
 
-	if _, ok := keyMsgResult(t, a, "x").(CloseHostMsg); !ok {
-		t.Fatal("pressing x on a connected host did not emit CloseHostMsg")
+	if _, ok := keyMsgResult(t, a, "alt+x").(CloseHostMsg); !ok {
+		t.Fatal("pressing alt+x on a connected host did not emit CloseHostMsg")
 	}
 }
 
@@ -97,7 +97,7 @@ func TestHostsPanelCloseAndReconnectKeys(t *testing.T) {
 	}
 
 	fleet.fail(t, "web-01")
-	if _, ok := keyMsgResult(t, a, "x").(RemoveHostMsg); !ok {
+	if _, ok := keyMsgResult(t, a, "alt+x").(RemoveHostMsg); !ok {
 		t.Fatal("x on a failed host in the Hosts panel did not emit RemoveHostMsg")
 	}
 }
@@ -105,7 +105,7 @@ func TestHostsPanelCloseAndReconnectKeys(t *testing.T) {
 // A host that left the run takes its scroll offset with it.
 func TestRemovedHostScrollOffsetIsPruned(t *testing.T) {
 	a, _ := scrollApp(t, 50)
-	a = pressKey(t, a, "g") // scroll to the top, recording an offset
+	a = pressKey(t, a, "shift+home") // scroll to the top, recording an offset
 	if len(a.scroll) == 0 {
 		t.Fatal("setup: no scroll offset recorded")
 	}

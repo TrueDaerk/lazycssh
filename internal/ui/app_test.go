@@ -20,28 +20,57 @@ func plain(s string) string { return ansiPattern.ReplaceAllString(s, "") }
 func pressKey(t *testing.T, a App, keystroke string) App {
 	t.Helper()
 
-	msg := tea.KeyPressMsg{Code: 0, Text: keystroke}
-	switch keystroke {
-	case "tab":
-		msg = tea.KeyPressMsg{Code: tea.KeyTab}
-	case "shift+tab":
-		msg = tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
-	case "ctrl+q":
-		msg = tea.KeyPressMsg{Code: 'q', Mod: tea.ModCtrl}
-	default:
-		r := []rune(keystroke)
-		if len(r) != 1 {
-			t.Fatalf("pressKey cannot synthesise %q", keystroke)
-		}
-		msg = tea.KeyPressMsg{Code: r[0], Text: keystroke}
-	}
-
-	model, _ := a.Update(msg)
+	model, _ := a.Update(keyMsgFor(t, keystroke))
 	next, ok := model.(App)
 	if !ok {
 		t.Fatalf("Update returned a %T, want App", model)
 	}
 	return next
+}
+
+// keyMsgFor synthesises a key press from a human-readable keystroke, chords
+// like "alt+left" and "ctrl+]" included.
+func keyMsgFor(t *testing.T, keystroke string) tea.KeyPressMsg {
+	t.Helper()
+
+	var mod tea.KeyMod
+	rest := keystroke
+	for {
+		switch {
+		case strings.HasPrefix(rest, "alt+"):
+			mod |= tea.ModAlt
+			rest = rest[len("alt+"):]
+		case strings.HasPrefix(rest, "ctrl+") && len(rest) > len("ctrl+"):
+			mod |= tea.ModCtrl
+			rest = rest[len("ctrl+"):]
+		case strings.HasPrefix(rest, "shift+") && rest != "shift+tab":
+			mod |= tea.ModShift
+			rest = rest[len("shift+"):]
+		default:
+			goto base
+		}
+	}
+base:
+	special := map[string]rune{
+		"tab": tea.KeyTab, "shift+tab": tea.KeyTab, "enter": tea.KeyEnter,
+		"esc": tea.KeyEscape, "left": tea.KeyLeft, "right": tea.KeyRight,
+		"up": tea.KeyUp, "down": tea.KeyDown, "pgup": tea.KeyPgUp,
+		"pgdown": tea.KeyPgDown, "home": tea.KeyHome, "end": tea.KeyEnd,
+	}
+	if rest == "shift+tab" {
+		return tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
+	}
+	if code, ok := special[rest]; ok {
+		return tea.KeyPressMsg{Code: code, Mod: mod}
+	}
+	r := []rune(rest)
+	if len(r) != 1 {
+		t.Fatalf("keyMsgFor cannot synthesise %q", keystroke)
+	}
+	if mod == 0 {
+		return tea.KeyPressMsg{Code: r[0], Text: rest}
+	}
+	return tea.KeyPressMsg{Code: r[0], Mod: mod}
 }
 
 // focusGrid presses tab until the grid has focus. Tab cycles through every
@@ -177,22 +206,27 @@ func TestTabCyclesFocus(t *testing.T) {
 	if a.Focus() != AreaGrid {
 		t.Fatalf("Focus() = %v after the last panel, want the grid", a.Focus())
 	}
+
+	// The grid is a terminal: tab is a keystroke for the host there, and
+	// ctrl+] is the way back to the app level.
 	a = pressKey(t, a, "tab")
-	if a.Focus() != AreaSidebar || a.Panel() != PanelStatus {
-		t.Fatalf("Focus() = %v, Panel() = %v after the grid, want the first panel", a.Focus(), a.Panel())
-	}
-	a = pressKey(t, a, "shift+tab")
 	if a.Focus() != AreaGrid {
-		t.Fatalf("Focus() = %v after shift+tab, want the grid", a.Focus())
+		t.Fatalf("Focus() = %v; tab must not cycle while typing", a.Focus())
 	}
+	a = pressKey(t, a, "ctrl+]")
+	if a.Focus() != AreaSidebar || a.Panel() != PanelHosts {
+		t.Fatalf("Focus() = %v, Panel() = %v after ctrl+]", a.Focus(), a.Panel())
+	}
+
 	a = pressKey(t, a, "shift+tab")
-	if a.Focus() != AreaSidebar || a.Panel() != PanelCommandLog {
-		t.Fatalf("Focus() = %v, Panel() = %v after a second shift+tab", a.Focus(), a.Panel())
+	if a.Focus() != AreaSidebar || a.Panel() != PanelStatus {
+		t.Fatalf("Focus() = %v, Panel() = %v after shift+tab", a.Focus(), a.Panel())
 	}
 }
 
 func TestNumberKeysSelectPanelsAndFocusTheSidebar(t *testing.T) {
-	a := focusGrid(t, resize(t, testApp(), 120, 40))
+	a := resize(t, testApp(), 120, 40)
+	a = pressKey(t, a, "5") // start away from the first panel
 
 	for i, panel := range Panels() {
 		a = pressKey(t, a, string(rune('1'+i)))

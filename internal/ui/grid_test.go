@@ -239,7 +239,7 @@ func TestFullScreenTogglesAndShowsOnePane(t *testing.T) {
 		t.Fatalf("the grid does not show every host:\n%s", tiled)
 	}
 
-	a = pressKey(t, a, "f")
+	a = pressKey(t, a, "alt+z")
 	if !a.FullScreen() {
 		t.Fatal("f did not switch to full screen")
 	}
@@ -251,7 +251,7 @@ func TestFullScreenTogglesAndShowsOnePane(t *testing.T) {
 		t.Fatalf("full screen still shows the other panes:\n%s", full)
 	}
 
-	a = pressKey(t, a, "f")
+	a = pressKey(t, a, "alt+z")
 	if a.FullScreen() {
 		t.Fatal("f did not switch back")
 	}
