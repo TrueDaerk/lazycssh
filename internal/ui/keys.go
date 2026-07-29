@@ -89,6 +89,15 @@ type KeyMap struct {
 	ClosePane  key.Binding
 	NextPage   key.Binding
 	PrevPage   key.Binding
+
+	ScrollUp     key.Binding
+	ScrollDown   key.Binding
+	ScrollTop    key.Binding
+	ScrollBottom key.Binding
+	SearchPane   key.Binding
+	NextMatch    key.Binding
+	PrevMatch    key.Binding
+	ClearSearch  key.Binding
 }
 
 // DefaultKeyMap is the shipped set of bindings.
@@ -140,6 +149,15 @@ func DefaultKeyMap() KeyMap {
 		ClosePane:  key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "close this session")),
 		NextPage:   key.NewBinding(key.WithKeys("pgdown", "n"), key.WithHelp("pgdn/n", "next page of panes")),
 		PrevPage:   key.NewBinding(key.WithKeys("pgup", "p"), key.WithHelp("pgup/p", "previous page of panes")),
+
+		ScrollUp:     key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "scroll this pane back")),
+		ScrollDown:   key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "scroll this pane forward")),
+		ScrollTop:    key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "oldest retained output")),
+		ScrollBottom: key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "back to the tail")),
+		SearchPane:   key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search the scrollback")),
+		NextMatch:    key.NewBinding(key.WithKeys("["), key.WithHelp("[", "older match")),
+		PrevMatch:    key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "newer match")),
+		ClearSearch:  key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "clear the search")),
 	}
 }
 
@@ -167,6 +185,8 @@ func (k KeyMap) grid() []key.Binding {
 	return []key.Binding{
 		k.PaneLeft, k.PaneRight, k.PaneUp, k.PaneDown,
 		k.FullScreen, k.Reconnect, k.ClosePane, k.NextPage, k.PrevPage,
+		k.ScrollUp, k.ScrollDown, k.ScrollTop, k.ScrollBottom,
+		k.SearchPane, k.NextMatch, k.PrevMatch, k.ClearSearch,
 	}
 }
 

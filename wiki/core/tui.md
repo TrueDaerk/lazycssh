@@ -194,7 +194,32 @@ characters are counted by their display width. When the buffer has evicted lines
 its bound, a `~ N lines dropped ~` marker sits where the missing output was, so truncated
 scrollback is visible rather than silent.
 
-Scrolling back through the buffer and searching it is [#43](https://github.com/TrueDaerk/lazycssh/issues/43).
+### Scrollback navigation
+
+A focused pane scrolls back through its buffer: `ctrl+u` / `ctrl+d` move half a pane at a time,
+`g` jumps to the oldest retained output — where the dropped marker is — and `G` returns to the
+tail and resumes following it.
+
+The offset is anchored at the **bottom** and counted in wrapped lines, so new output slides the
+window rather than the reader's position in it; a top-anchored offset would drift every time the
+bounded buffer drops a line. Scrolling is a render-time window into a snapshot: the buffer keeps
+receiving at full speed, which is the issue's acceptance criterion. A pane that is not following
+its tail says `scrollback +N` in the status bar in the warning style, because fresh output
+landing behind a frozen window must not look like a quiet host.
+
+### Search
+
+`/` in the grid opens a search prompt that owns the keyboard while it is open. `enter` commits
+the term and scrolls the focused pane to the **newest** match — the reader is almost always
+hunting the error that just happened; `[` and `]` walk to older and newer matches without
+wrapping. Matching lines are drawn in the match style, their own colours dropped: a highlight
+fighting the remote's colours would lose. `esc` in the grid clears the term.
+
+One term is shared by every pane, because "which of my hosts printed this" is a question about
+the run. The cross-pane form is the command line's `/find <text>`: it sets the shared term and
+reports directly — `"disk full" found on 2/8 hosts: web-03, web-07` — searching each host's raw
+scrollback, so the answer does not depend on pane widths or pages. Like `/select`, it is a meta
+command: nothing reaches a remote shell. Matching is case-insensitive substring.
 
 ## Focus survives the host list changing
 

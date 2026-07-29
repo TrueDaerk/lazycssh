@@ -143,6 +143,9 @@ type Theme struct {
 	StateFailed         lipgloss.Style
 	StateClosed         lipgloss.Style
 
+	// Match highlights a scrollback line the active search matches.
+	Match lipgloss.Style
+
 	// Failure highlights a pane or row whose host failed, or whose last
 	// command exited non-zero.
 	Failure lipgloss.Style
@@ -215,6 +218,10 @@ func NewTheme(opts Options) Theme {
 	t.StateConnected = fg(palette.Success)
 	t.StateFailed = fg(palette.Danger).Bold(true)
 	t.StateClosed = fg(palette.Muted)
+
+	// Bold and underlined as well as coloured, so a match survives a terminal
+	// without colour.
+	t.Match = fg(palette.Warning).Bold(true).Underline(true)
 
 	t.Failure = fg(palette.Danger).Bold(true)
 	t.ExitOK = fg(palette.Success)

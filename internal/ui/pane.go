@@ -78,23 +78,23 @@ func truncateLeft(s string, width int) string {
 	return "…" + string(r[len(r)-width+1:])
 }
 
-// paneBody renders one host's scrollback into an area of width columns and
-// height rows: sanitized, hard-wrapped, following the tail. It is a pure
-// function of the buffer's current content, so two renders of the same state
-// cannot disagree and the tests need no terminal.
-func (a App) paneBody(id string, width, height int) string {
-	if width <= 0 || height <= 0 || a.cfg.Fleet == nil {
-		return ""
+// wrappedLines is one host's scrollback as the pane draws it: sanitized,
+// dropped-marker first, hard-wrapped at the width. It is a pure function of
+// the buffer's current content, so two renders of the same state cannot
+// disagree and the tests need no terminal.
+func (a App) wrappedLines(id string, width int) []string {
+	if width <= 0 || a.cfg.Fleet == nil {
+		return nil
 	}
 	session, ok := a.cfg.Fleet.Session(id)
 	if !ok {
-		return ""
+		return nil
 	}
 
 	buf := session.Scrollback()
 	raw := buf.Lines()
 	if len(raw) == 0 && buf.Dropped() == 0 {
-		return ""
+		return nil
 	}
 
 	lines := make([]string, 0, len(raw)+1)
@@ -110,12 +110,39 @@ func (a App) paneBody(id string, width, height int) string {
 
 	// Hardwrap keeps ANSI colours intact across the break and counts wide
 	// characters correctly, which a naive byte slice would not.
-	wrapped := strings.Split(ansi.Hardwrap(strings.Join(lines, "\n"), width, true), "\n")
+	return strings.Split(ansi.Hardwrap(strings.Join(lines, "\n"), width, true), "\n")
+}
 
-	// Follow the tail: the newest output is what the user is watching for.
-	// Scrolling back through the buffer is the navigation issue, not this one.
-	if len(wrapped) > height {
-		wrapped = wrapped[len(wrapped)-height:]
+// paneBody renders one host's scrollback into an area of width columns and
+// height rows, following the tail unless the pane is scrolled back, and
+// highlighting the lines the active search matches.
+func (a App) paneBody(id string, width, height int) string {
+	if height <= 0 {
+		return ""
 	}
-	return strings.Join(wrapped, "\n")
+	wrapped := a.wrappedLines(id, width)
+	if len(wrapped) == 0 {
+		return ""
+	}
+
+	offset := clamp(a.scrollOffset(id), 0, max(0, len(wrapped)-height))
+	end := len(wrapped) - offset
+	start := max(0, end-height)
+	window := wrapped[start:end]
+
+	if a.searchTerm == "" {
+		return strings.Join(window, "\n")
+	}
+
+	out := make([]string, len(window))
+	for i, line := range window {
+		if text := ansi.Strip(line); containsFold(text, a.searchTerm) {
+			// The whole line takes the match style, its own colours dropped:
+			// a highlight fighting the remote's colours would lose.
+			out[i] = a.theme.Match.Render(text)
+			continue
+		}
+		out[i] = line
+	}
+	return strings.Join(out, "\n")
 }
