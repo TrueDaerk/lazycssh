@@ -715,20 +715,12 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 	}
 
 	focused := gridFocused && host == a.paneIndex
-	name := a.hostIDs()[host]
-
-	header := a.theme.Muted.Render(name)
-	if focused {
-		header = a.theme.Cursor.Render(name)
-	} else if host == a.paneIndex {
-		header = a.theme.Selected.Render(name)
-	}
 
 	// The border eats two columns and rows, the header the top line of what
 	// remains.
-	content := header
-	if body := a.paneBody(name, cell.Width-2, cell.Height-3); body != "" {
-		content = header + "\n" + body
+	content := a.paneHeader(host, cell.Width-2, focused)
+	if body := a.paneBody(a.hostIDs()[host], cell.Width-2, cell.Height-3); body != "" {
+		content = content + "\n" + body
 	}
 
 	return a.frame(a.theme.PaneFrame(focused), cell, content)
