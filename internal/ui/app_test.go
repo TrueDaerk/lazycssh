@@ -332,6 +332,43 @@ func TestQuitBinding(t *testing.T) {
 	}
 }
 
+// Plain q quits wherever no input has the keyboard, lazygit style.
+func TestPlainQQuits(t *testing.T) {
+	a := resize(t, testApp(), 120, 40)
+
+	_, cmd := a.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	if cmd == nil {
+		t.Fatal("q returned no command")
+	}
+	if msg := cmd(); msg != tea.Quit() {
+		t.Fatalf("q produced %v, want tea.Quit", msg)
+	}
+
+	// From the help overlay too.
+	a = pressKey(t, a, "?")
+	_, cmd = a.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	if cmd == nil {
+		t.Fatal("q inside the help overlay returned no command")
+	}
+}
+
+// A q typed into an open text input is a letter, not the quit key.
+func TestQIsTypeableInInputs(t *testing.T) {
+	a := resize(t, testApp(), 120, 40)
+
+	a = pressKey(t, a, ":")
+	model, cmd := a.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	// The text input may return its own command (cursor blink); it only must
+	// not be the quit.
+	if cmd != nil && cmd() == tea.Quit() {
+		t.Fatal("q inside the command line quit the program")
+	}
+	a = model.(App)
+	if got := a.CommandLineValue(); got != "q" {
+		t.Fatalf("CommandLineValue() = %q, want the typed letter", got)
+	}
+}
+
 func TestUnknownKeyChangesNothing(t *testing.T) {
 	a := resize(t, testApp(), 120, 40)
 	before := a.View().Content

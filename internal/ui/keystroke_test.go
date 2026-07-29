@@ -87,6 +87,7 @@ func TestAppBindingsAreForwardedWhileTyping(t *testing.T) {
 		{Code: '2', Text: "2"},
 		{Code: ':', Text: ":"},
 		{Code: '?', Text: "?"},
+		{Code: 'q', Text: "q"},
 		{Code: 'q', Mod: tea.ModCtrl},
 	} {
 		a = press(t, a, msg)
@@ -101,7 +102,7 @@ func TestAppBindingsAreForwardedWhileTyping(t *testing.T) {
 	if a.CommandLineOpen() || a.HelpVisible() {
 		t.Fatal("a forwarded binding opened a prompt or the help")
 	}
-	if got := len(fleet.sessions["web-01"].Written()); got != 5 {
+	if got := len(fleet.sessions["web-01"].Written()); got != 6 {
 		t.Fatalf("host received %d bytes, want every key forwarded", got)
 	}
 }

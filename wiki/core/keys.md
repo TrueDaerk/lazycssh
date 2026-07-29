@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-07-29T17:00:00Z
+timestamp: 2026-07-29T18:00:00Z
 ---
 
 # Keymap and help
@@ -33,7 +33,7 @@ are tests, not conventions.
 | Key | Area | Action |
 |-----|------|--------|
 | `?` | global | help overlay |
-| `ctrl+q` | global | quit |
+| `q` / `ctrl+q` | global (app level) | quit — `q` only while no input has the keyboard; while typing to a host or in any text field it is a letter, forwarded like any other |
 | `tab` / `shift+tab` | global (app level) | next / previous stop in the cycle: each sidebar panel, then the grid; forwarded while typing |
 | `1`–`5` | global (app level) | status, hosts, groups, sessions, command log |
 | `6` | global (app level) | focus the broadcast bar |

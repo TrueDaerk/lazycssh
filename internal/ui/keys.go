@@ -118,7 +118,12 @@ type KeyMap struct {
 func DefaultKeyMap() KeyMap {
 	return KeyMap{
 		Help:    key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
-		Quit:    key.NewBinding(key.WithKeys("ctrl+q"), key.WithHelp("ctrl+q", "quit")),
+		// Plain q quits, lazygit style. Every context where q is typed rather
+		// than pressed — a pane, the broadcast bar, any text input — takes the
+		// keyboard before global bindings are consulted, so the letter still
+		// reaches hosts and inputs there. ctrl+q stays for existing muscle
+		// memory.
+		Quit:    key.NewBinding(key.WithKeys("q", "ctrl+q"), key.WithHelp("q", "quit")),
 		NextTab: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next panel")),
 		PrevTab: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "previous panel")),
 		Panel1:  key.NewBinding(key.WithKeys("1"), key.WithHelp("1", "status panel")),
