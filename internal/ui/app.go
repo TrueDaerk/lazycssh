@@ -84,6 +84,12 @@ type Config struct {
 	// RunDefaults are the connection options the run was started with, written
 	// into a saved session.
 	RunDefaults sessions.HostOptions
+	// Sender delivers commands to the active broadcast set. Nil means the run
+	// has no transport yet and the command line says so rather than pretending
+	// to send.
+	Sender CommandLine
+	// Recorder receives the commands that were sent, for the audit trail.
+	Recorder Recorder
 	// CommandLog is the audit trail of what was sent this run. Nil means the
 	// panel says so rather than pretending the run sent nothing.
 	CommandLog CommandLog
@@ -113,6 +119,11 @@ type App struct {
 
 	filter    textinput.Model
 	saveInput textinput.Model
+	cmdInput  textinput.Model
+
+	cmdHistory    []string
+	cmdHistoryPos int
+	lastDelivery  string
 
 	sessionRows      []sessionRow
 	sessionsErr      error
@@ -150,6 +161,10 @@ func NewApp(cfg Config) App {
 	save.Placeholder = "session name"
 	save.Prompt = ""
 
+	command := textinput.New()
+	command.Placeholder = "command"
+	command.Prompt = ""
+
 	a := App{
 		cfg:       cfg,
 		keys:      keys,
@@ -157,6 +172,7 @@ func NewApp(cfg Config) App {
 		help:      h,
 		filter:    filter,
 		saveInput: save,
+		cmdInput:  command,
 		focus:     AreaSidebar,
 		panel:     PanelStatus,
 	}
@@ -198,6 +214,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.help.Styles = HelpStyles(a.theme)
 		return a, nil
 
+	case CommandResendMsg:
+		// Resending goes through the same path as typing it: the current
+		// broadcast set, the same report, the same audit entry.
+		return a.sendCommand(msg.Command)
+
 	case SessionsChangedMsg:
 		return a.loadSessions(), nil
 
@@ -219,6 +240,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKey dispatches a key press. Bindings are matched by area, so a key
 // means one thing at a time; see [KeyMap].
 func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// The command line has the keyboard while it is open: a command containing
+	// a "b" must not switch the broadcast mode, and ctrl+c while editing must
+	// not reach forty machines.
+	if a.cmdInput.Focused() {
+		return a.handleCommandLineKey(msg)
+	}
+
 	// The save prompt has the keyboard while it is open, for the same reason
 	// the filter does: a session called "x" has to be nameable.
 	if a.Saving() {
@@ -256,6 +284,9 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, a.keys.PrevTab):
 		a.focus = prevArea(a.focus)
 		return a, nil
+
+	case key.Matches(msg, a.keys.CommandLine):
+		return a.openCommandLine(), nil
 
 	case key.Matches(msg, a.keys.BroadcastAll):
 		return a.setBroadcastMode(broadcast.ModeAll), nil
@@ -563,7 +594,12 @@ func (a App) View() tea.View {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, a.renderSidebar(), body)
 	}
 
-	view := lipgloss.JoinVertical(lipgloss.Left, body, a.renderStatusBar())
+	bottom := a.renderStatusBar()
+	if a.cmdInput.Focused() {
+		bottom = a.renderCommandLine()
+	}
+
+	view := lipgloss.JoinVertical(lipgloss.Left, body, bottom)
 	if a.showHelp {
 		view = a.renderHelpOverlay()
 	}
@@ -692,6 +728,10 @@ func (a App) renderStatusBar() string {
 	if label := a.windowLabel(); label != "" {
 		parts = append(parts, a.theme.Muted.Render(label))
 	}
+	if a.lastDelivery != "" {
+		parts = append(parts, a.theme.Muted.Render(a.lastDelivery))
+	}
+
 	// The flags that weaken a default live on the status bar as well as in the
 	// Status panel, because the bar is the one thing that is on screen whatever
 	// the user has scrolled to.

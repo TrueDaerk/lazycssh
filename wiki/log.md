@@ -2,6 +2,12 @@
 
 ## 2026-07-28
 
+- Added the broadcast command line: `:` opens a prompt that carries the target count while the
+  command is typed, `enter` sends it to the active broadcast set and reports how many hosts of the
+  scope received it, and the prompt owns the keyboard so editing keys cannot leak to the remote
+  shells. History with the arrow keys, and resending from the Command log takes the same path.
+  `core/tui.md` updated. Version 0.1.28.
+
 - Broadcast modes are switchable from anywhere (`b` / `B` / `s` / `ctrl+alt+b`) and the router now
   knows who is actually up: targets are the scope minus the sessions that cannot take input, the
   status bar reads `BROADCAST all (7/8 up)`, and `Router.Send` delivers to exactly those hosts and
