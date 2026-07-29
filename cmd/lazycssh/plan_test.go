@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
+	"github.com/TrueDaerk/lazycssh/internal/program"
 	"github.com/TrueDaerk/lazycssh/internal/sessions"
 	"github.com/TrueDaerk/lazycssh/internal/workingset"
 )
@@ -188,7 +189,7 @@ func TestListSessionsFlag(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	if code := run([]string{"--sessions-dir", store.Dir(), "--list-sessions"}, &stdout, &stderr); code != exitOK {
+	if code := run([]string{"--sessions-dir", store.Dir(), "--list-sessions"}, &stdout, &stderr, noLaunch(t)); code != exitOK {
 		t.Fatalf("run = %d (stderr %q)", code, stderr.String())
 	}
 	for _, want := range []string{"prod", "4 hosts", "the production web tier"} {
@@ -201,7 +202,7 @@ func TestListSessionsFlag(t *testing.T) {
 func TestListSessionsWithNoneSaved(t *testing.T) {
 	store := sessionStore(t)
 	var stdout, stderr bytes.Buffer
-	if code := run([]string{"--sessions-dir", store.Dir(), "--list-sessions"}, &stdout, &stderr); code != exitOK {
+	if code := run([]string{"--sessions-dir", store.Dir(), "--list-sessions"}, &stdout, &stderr, noLaunch(t)); code != exitOK {
 		t.Fatalf("run = %d", code)
 	}
 	if stdout.Len() != 0 {
@@ -216,16 +217,18 @@ func TestRunLaunchesASession(t *testing.T) {
 	store := sessionStore(t, session("prod", "srv1-{01..04}.example.com"))
 
 	var stdout, stderr bytes.Buffer
-	code := run([]string{"--sessions-dir", store.Dir(), "@prod", "extra.example.com"}, &stdout, &stderr)
+	var launched program.Config
+	code := run([]string{"--sessions-dir", store.Dir(), "@prod", "extra.example.com"},
+		&stdout, &stderr, captureLaunch(&launched))
 
-	// Connecting is still unimplemented, but the session resolved.
-	if code != exitError {
-		t.Fatalf("run = %d, want %d", code, exitError)
+	if code != exitOK {
+		t.Fatalf("run = %d, want %d (stderr %q)", code, exitOK, stderr.String())
 	}
-	for _, want := range []string{"loaded session prod", "2 host arguments"} {
-		if !strings.Contains(stderr.String(), want) {
-			t.Fatalf("stderr %q does not contain %q", stderr.String(), want)
-		}
+	if got := len(launched.Patterns); got != 2 {
+		t.Fatalf("the TUI was launched with %d patterns, want the session's plus the extra one", got)
+	}
+	if launched.SessionName != "prod" {
+		t.Fatalf("SessionName = %q, want prod", launched.SessionName)
 	}
 	if stdout.Len() != 0 {
 		t.Fatalf("stdout = %q, want nothing", stdout.String())
@@ -236,7 +239,7 @@ func TestRunReportsAnUnknownSession(t *testing.T) {
 	store := sessionStore(t, session("prod", "h1"))
 
 	var stdout, stderr bytes.Buffer
-	code := run([]string{"--sessions-dir", store.Dir(), "@nope"}, &stdout, &stderr)
+	code := run([]string{"--sessions-dir", store.Dir(), "@nope"}, &stdout, &stderr, noLaunch(t))
 
 	if code != exitError {
 		t.Fatalf("run = %d, want %d", code, exitError)

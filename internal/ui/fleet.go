@@ -58,6 +58,20 @@ type SessionOutputMsg struct {
 	ID string
 }
 
+// ReconnectHostMsg asks the program to reconnect one host. The UI cannot dial,
+// so it is emitted, not handled: the layer that owns the transport acts on it.
+type ReconnectHostMsg struct {
+	// ID is the session to replace.
+	ID string
+}
+
+// CloseHostMsg asks the program to close one host's session. Emitted for the
+// same reason as [ReconnectHostMsg].
+type CloseHostMsg struct {
+	// ID is the session to close.
+	ID string
+}
+
 // hostIDs returns the run's hosts: the fleet's when there is one, the
 // configured list otherwise, so views can be tested without a transport.
 func (a App) hostIDs() []string {

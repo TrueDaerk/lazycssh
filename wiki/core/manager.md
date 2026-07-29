@@ -4,7 +4,7 @@ title: Session manager
 description: Owning a fleet of sessions — bounded fan-out dialling, a single event channel, per-host reconnect and close.
 resource: internal/ssh/manager.go
 tags: [ssh, transport, concurrency, fleet]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-07-29T00:00:00Z
 ---
 
 # Session manager
@@ -28,6 +28,10 @@ asserts the other nineteen connect anyway.
 **One failing host fails only itself.** `Start` errors are not propagated to the fleet: the
 session has already recorded the error and reported it, and a fleet-wide error return would say
 nothing about which host failed. `Counts()` and `ByState(StateFailed)` are how failures surface.
+
+**A running fleet can grow.** `Add` appends a session for one more host and dials it, without
+touching the existing sessions. Merging a saved session into a run lands here; its identifier
+goes through the same disambiguation as everyone else's.
 
 ## Identity
 

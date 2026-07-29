@@ -3,12 +3,15 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/TrueDaerk/lazycssh/internal/program"
 	"github.com/TrueDaerk/lazycssh/internal/sessions"
 	"github.com/TrueDaerk/lazycssh/internal/version"
 )
@@ -34,13 +37,39 @@ Flags:
 `
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, launchTUI))
+}
+
+// launchTUI builds the program and runs the bubbletea event loop until the
+// user quits. It is passed into run rather than called there, so the flag and
+// plan handling is testable without a terminal.
+func launchTUI(cfg program.Config) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	m, err := program.Build(ctx, cfg)
+	if err != nil {
+		return err
+	}
+
+	_, runErr := tea.NewProgram(m).Run()
+
+	// Stop dialling before closing: a session that connects after CloseAll
+	// would leak its goroutines.
+	cancel()
+	closeErr := m.Manager().CloseAll()
+	m.Manager().Wait()
+
+	if runErr != nil {
+		return runErr
+	}
+	return closeErr
 }
 
 // run is the testable entry point: it takes the arguments without the program
 // name, writes everything to the given writers, and returns the process exit
 // code instead of calling os.Exit.
-func run(args []string, stdout, stderr io.Writer) int {
+func run(args []string, stdout, stderr io.Writer, launch func(program.Config) error) int {
 	fs := flag.NewFlagSet("lazycssh", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() {
@@ -95,15 +124,25 @@ func run(args []string, stdout, stderr io.Writer) int {
 				"a machine-in-the-middle cannot be detected.")
 	}
 
-	// The transport and the TUI do not exist yet; see the SSH transport and TUI
-	// shell epics. Report honestly rather than pretending to connect.
+	// The status bar carries the name of the last session named, which is the
+	// one whose settings won during plan resolution.
+	sessionName := ""
 	if names := resolved.SessionNames(); len(names) > 0 {
-		fmt.Fprintf(stderr, "lazycssh %s: loaded session %s\n",
-			version.String(), strings.Join(names, ", "))
+		sessionName = names[len(names)-1]
 	}
-	fmt.Fprintf(stderr, "lazycssh %s: connecting is not implemented yet (%d host arguments given)\n",
-		version.String(), len(resolved.Patterns))
-	return exitError
+
+	if err := launch(program.Config{
+		Patterns:    resolved.Patterns,
+		SessionName: sessionName,
+		Broadcast:   resolved.Broadcast,
+		WorkingSet:  resolved.WorkingSet,
+		Store:       store,
+		Insecure:    *insecure,
+	}); err != nil {
+		fmt.Fprintln(stderr, err)
+		return exitError
+	}
+	return exitOK
 }
 
 // openStore builds the session store, from an explicit directory or the default
