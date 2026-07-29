@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-07-29T15:00:00Z
+timestamp: 2026-07-29T16:00:00Z
 ---
 
 # Keymap and help
@@ -84,3 +84,14 @@ wrapping them.
 
 Styles come from the [theme](./theme.md) rather than the help bubble's defaults, so the overlay
 matches the rest of the interface.
+
+## Mouse
+
+| Action | Where | Effect |
+|--------|-------|--------|
+| left click | pane body | focus the pane and start typing into its host |
+| left click | `[x]` in a pane header | close a live host; remove a dead one |
+| left click | sidebar box / row | select the panel, move its cursor to the row |
+| left click | broadcast bar | give the bar the keyboard |
+| wheel | over a pane | scroll that pane's scrollback, without changing focus |
+| wheel | over a sidebar list | move that panel's cursor |

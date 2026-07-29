@@ -9,10 +9,10 @@ import (
 func TestPaneHeaderShowsNumberNameAndState(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01", "web-02")
 
-	if got := plain(a.paneHeader(0, 40, false)); got != "1 web-01 pending" {
+	if got := plain(a.paneHeader(0, 40, false)); !strings.HasPrefix(got, "1 web-01 pending") || !strings.HasSuffix(got, paneCloseButton) {
 		t.Fatalf("paneHeader = %q", got)
 	}
-	if got := plain(a.paneHeader(1, 40, false)); got != "2 web-02 pending" {
+	if got := plain(a.paneHeader(1, 40, false)); !strings.HasPrefix(got, "2 web-02 pending") {
 		t.Fatalf("paneHeader = %q", got)
 	}
 
@@ -20,11 +20,11 @@ func TestPaneHeaderShowsNumberNameAndState(t *testing.T) {
 	// message is processed between connect and render; the header reads live
 	// state.
 	fleet.connect(t, "web-01")
-	if got := plain(a.paneHeader(0, 40, false)); got != "1 web-01 connected" {
+	if got := plain(a.paneHeader(0, 40, false)); !strings.HasPrefix(got, "1 web-01 connected") {
 		t.Fatalf("after connecting: %q", got)
 	}
 	fleet.fail(t, "web-02")
-	if got := plain(a.paneHeader(1, 40, false)); got != "2 web-02 failed" {
+	if got := plain(a.paneHeader(1, 40, false)); !strings.HasPrefix(got, "2 web-02 failed") {
 		t.Fatalf("after failing: %q", got)
 	}
 }
@@ -42,7 +42,7 @@ func TestPaneHeaderTruncatesTheNameFromTheLeft(t *testing.T) {
 	if !strings.Contains(got, "…") {
 		t.Fatalf("a too-long name is not marked as truncated: %q", got)
 	}
-	if !strings.Contains(got, "example.com") {
+	if !strings.Contains(got, "ple.com") {
 		t.Fatalf("the distinguishing suffix did not survive: %q", got)
 	}
 	if !strings.HasPrefix(got, "1 ") {
@@ -59,7 +59,7 @@ func TestPaneHeaderDropsTheStateBeforeTheName(t *testing.T) {
 	if strings.Contains(got, "pending") {
 		t.Fatalf("the state crowded out the name: %q", got)
 	}
-	if !strings.Contains(got, "…") || !strings.HasSuffix(got, "01") {
+	if !strings.Contains(got, "…") || !strings.Contains(got, "01") {
 		t.Fatalf("the name suffix did not survive: %q", got)
 	}
 }

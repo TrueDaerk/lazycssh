@@ -74,12 +74,15 @@ func (a App) scrollPage() int {
 
 // paneExtent is the inner text area of the focused pane: width, then height
 // below the header.
-func (a App) paneExtent() (width, height int) {
+func (a App) paneExtent() (width, height int) { return a.paneExtentAt(a.paneIndex) }
+
+// paneExtentAt is the inner text area of the pane at index.
+func (a App) paneExtentAt(index int) (width, height int) {
 	if a.fullScreen {
 		r := a.layout.Main
 		return max(0, r.Width-2), max(0, r.Height-3)
 	}
-	cell, ok := a.grid().Cell(a.paneIndex)
+	cell, ok := a.grid().Cell(index)
 	if !ok {
 		return 0, 0
 	}
@@ -90,6 +93,27 @@ func (a App) paneExtent() (width, height int) {
 func (a App) maxScroll(id string) int {
 	w, h := a.paneExtent()
 	return max(0, len(a.wrappedLines(id, w))-h)
+}
+
+// scrollHostBy moves the pane at index by delta wrapped lines, whichever pane
+// has focus - the wheel scrolls what is under the pointer.
+func (a App) scrollHostBy(index, delta int) App {
+	id := a.hostIDAt(index)
+	if id == "" {
+		return a
+	}
+	if a.scroll == nil {
+		a.scroll = make(map[string]int)
+	}
+	w, h := a.paneExtentAt(index)
+	limit := max(0, len(a.wrappedLines(id, w))-h)
+	next := clamp(a.scroll[id]+delta, 0, limit)
+	if next == 0 {
+		delete(a.scroll, id)
+		return a
+	}
+	a.scroll[id] = next
+	return a
 }
 
 // Search. One term is shared by every pane: "which of my hosts printed this"

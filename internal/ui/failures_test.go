@@ -16,12 +16,12 @@ func TestPaneHeaderShowsTheExitCode(t *testing.T) {
 	}
 
 	fleet.sessions["web-01"].ReportExit(0)
-	if got := plain(a.paneHeader(0, 40, false)); !strings.HasSuffix(got, " ok") {
+	if got := plain(a.paneHeader(0, 40, false)); !strings.Contains(got, " ok") {
 		t.Fatalf("a success is not shown: %q", got)
 	}
 
 	fleet.sessions["web-01"].ReportExit(2)
-	if got := plain(a.paneHeader(0, 40, false)); !strings.HasSuffix(got, " exit 2") {
+	if got := plain(a.paneHeader(0, 40, false)); !strings.Contains(got, " exit 2") {
 		t.Fatalf("a failure is not shown: %q", got)
 	}
 }
