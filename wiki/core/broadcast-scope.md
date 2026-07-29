@@ -4,7 +4,7 @@ title: Broadcast scope
 description: What `BROADCAST all` means when a working set is active, and how the target count is made unmissable.
 resource: internal/broadcast
 tags: [broadcast, working-set, safety]
-timestamp: 2026-07-29T14:00:00Z
+timestamp: 2026-07-29T15:00:00Z
 ---
 
 # Broadcast scope
@@ -85,9 +85,9 @@ Rules the tests enforce:
 ## What the scope does not cover
 
 Typing into a focused pane goes through `PaneWriter` — one host's writer, directly — and never
-through the router. The scope governs broadcast sends (`:` and the broadcast channel), not the
-terminal behaviour of a single pane; a keystroke typed into `web-01` cannot fan out, whatever
-mode is active.
+through the router. The scope governs broadcast sends — the `:` command line and the live
+broadcast bar (`6`) — not the terminal behaviour of a single pane; a keystroke typed into
+`web-01` cannot fan out, whatever mode is active.
 
 ## Forgetting hosts
 

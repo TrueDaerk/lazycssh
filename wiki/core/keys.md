@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-07-29T14:00:00Z
+timestamp: 2026-07-29T15:00:00Z
 ---
 
 # Keymap and help
@@ -21,6 +21,7 @@ A key press is dispatched by focus. Each binding belongs to one area:
 |------|----------------|
 | `AreaGlobal` | works wherever focus is: help, quit, panel numbers, broadcast mode, the command line |
 | `AreaSidebar` | the numbered panels down the left |
+| `AreaBroadcast` | the broadcast bar under the grid — a terminal for the whole target set; only `ctrl+]` and the pane chords are kept |
 | `AreaGrid` | the host panes on the right — a focused pane is a terminal, so its bindings are all `alt`/`shift` chords plus the reserved `ctrl+]`; every plain key is forwarded to the host (a test enforces the chord rule) |
 
 The sidebar and the grid may reuse a key — they are never focused at the same time — but a
@@ -34,7 +35,8 @@ are tests, not conventions.
 | `?` | global | help overlay |
 | `ctrl+q` | global | quit |
 | `tab` / `shift+tab` | global (app level) | next / previous stop in the cycle: each sidebar panel, then the grid; forwarded while typing |
-| `1`–`5` | global | status, hosts, groups, sessions, command log |
+| `1`–`5` | global (app level) | status, hosts, groups, sessions, command log |
+| `6` | global (app level) | focus the broadcast bar |
 | `b` / `B` / `s` | global | broadcast to the working set / the selection / one pane |
 | `ctrl+alt+b` | global | broadcast to **every** host |
 | `:` | global | send a command |

@@ -84,14 +84,16 @@ func (a App) leaveTyping() App {
 // the app level, so managing panes never requires leaving either.
 func (a App) handlePaneKey(msg tea.KeyPressMsg) (App, tea.Cmd, bool) {
 	switch {
+	// Moving the pane focus is entering it: an alt+arrow from anywhere lands
+	// in that pane's terminal, which is the fastest route into typing.
 	case key.Matches(msg, a.keys.PaneLeft):
-		return a.movePane(-1).followFocus(), nil, true
+		return a.enterPane().movePane(-1).followFocus(), nil, true
 	case key.Matches(msg, a.keys.PaneRight):
-		return a.movePane(+1).followFocus(), nil, true
+		return a.enterPane().movePane(+1).followFocus(), nil, true
 	case key.Matches(msg, a.keys.PaneUp):
-		return a.movePane(-a.grid().Columns).followFocus(), nil, true
+		return a.enterPane().movePane(-a.grid().Columns).followFocus(), nil, true
 	case key.Matches(msg, a.keys.PaneDown):
-		return a.movePane(+a.grid().Columns).followFocus(), nil, true
+		return a.enterPane().movePane(+a.grid().Columns).followFocus(), nil, true
 	case key.Matches(msg, a.keys.NextPage):
 		return a.pageBy(+1), nil, true
 	case key.Matches(msg, a.keys.PrevPage):
@@ -128,4 +130,12 @@ func (a App) handlePaneKey(msg tea.KeyPressMsg) (App, tea.Cmd, bool) {
 		return a.clearSearch(), nil, true
 	}
 	return a, nil, false
+}
+
+// enterPane puts the keyboard into the focused pane's terminal.
+func (a App) enterPane() App {
+	if len(a.hostIDs()) > 0 {
+		a.focus = AreaGrid
+	}
+	return a
 }

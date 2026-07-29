@@ -132,6 +132,10 @@ type App struct {
 	searchInput textinput.Model
 	hostInput   textinput.Model
 
+	// broadcastLine is the broadcast bar's local echo of what was typed
+	// since the last enter. The truth is on the hosts; this is the reminder.
+	broadcastLine []rune
+
 	// candidateMarks are the connect candidates space has marked. Candidates
 	// are not sessions yet, so the marks live here rather than in the
 	// broadcast router; they clear when a connect is asked for.
@@ -341,6 +345,11 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.handleTypingKey(msg)
 	}
 
+	// So is the broadcast bar - for every target at once.
+	if a.focus == AreaBroadcast {
+		return a.handleBroadcastKey(msg)
+	}
+
 	switch {
 	case key.Matches(msg, a.keys.Quit):
 		return a, tea.Quit
@@ -379,6 +388,10 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if panel, ok := a.panelForKey(msg); ok {
 		a.panel = panel
 		a.focus = AreaSidebar
+		return a, nil
+	}
+	if key.Matches(msg, a.keys.Panel6) {
+		a.focus = AreaBroadcast
 		return a, nil
 	}
 
@@ -670,20 +683,22 @@ func (a App) panelForKey(msg tea.KeyPressMsg) (Panel, bool) {
 }
 
 // cycleFocus advances the tab order the way lazygit does: through the sidebar
-// panels one by one, then the pane grid, then round again. The global area is
-// not a stop: it is what is live everywhere.
+// panels one by one, then the broadcast bar, then round again. The grid is not
+// a tab stop - inside it tab belongs to the host - so panes are entered with
+// enter on a host row, an alt+arrow, or their number-free click; ctrl+] leads
+// back out. The global area is not a stop: it is what is live everywhere.
 func (a App) cycleFocus(step int) App {
 	panels := len(Panels())
-	stops := panels + 1 // every panel, then the grid
+	stops := panels + 1 // every panel, then the broadcast bar
 
-	pos := panels // the grid's slot
+	pos := panels
 	if a.focus == AreaSidebar {
 		pos = int(a.panel)
 	}
 	pos = ((pos+step)%stops + stops) % stops
 
 	if pos == panels {
-		a.focus = AreaGrid
+		a.focus = AreaBroadcast
 		return a
 	}
 	a.focus = AreaSidebar
@@ -720,7 +735,12 @@ func (a App) View() tea.View {
 		bottom = a.renderSearchLine()
 	}
 
-	view := lipgloss.JoinVertical(lipgloss.Left, body, bottom)
+	rows := []string{body}
+	if a.layout.BroadcastVisible() {
+		rows = append(rows, a.renderBroadcastBar())
+	}
+	rows = append(rows, bottom)
+	view := lipgloss.JoinVertical(lipgloss.Left, rows...)
 	if a.showHelp {
 		// The help is a popup over the frame, not a replacement for it: the
 		// fleet stays visible underneath, the way lazygit's menus behave.
@@ -845,6 +865,14 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 // the run, and every flag that weakens a default.
 func (a App) renderStatusBar() string {
 	var parts []string
+	if a.focus == AreaBroadcast {
+		count := 0
+		if a.cfg.Targets != nil {
+			count = a.cfg.Targets.Count()
+		}
+		parts = append(parts, a.theme.StatusWarning.Render(
+			fmt.Sprintf("BROADCASTING → %d host%s — %s leaves", count, plural(count), escapeKeystroke)))
+	}
 	if a.focus == AreaGrid {
 		// Where keystrokes go is the one thing the user must never have to
 		// guess. The literal word carries the meaning, so it survives NoColor.

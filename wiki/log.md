@@ -2,6 +2,16 @@
 
 ## 2026-07-29
 
+- Live broadcast bar: an always-visible input line under the grid (`Layout.Broadcast`, degrades
+  to a bare line and then disappears on short terminals). `6` focuses it, tab reaches it after
+  the last panel, `ctrl+]` leaves. Every keystroke fans out live through the broadcast scope —
+  ctrl+c to every target, tab completion on every target — with a local echo line; enter sends
+  a carriage return and records the assembled line in the command log once. The title carries
+  the live target count, the status bar says BROADCASTING while the bar has the keyboard, and
+  the grid is no longer a tab stop (alt+arrows or enter lead into a pane's terminal).
+  `core/tui.md`, `core/keys.md`, `core/broadcast-scope.md` and `core/command-log.md` updated.
+  Version 0.6.0.
+
 - Terminal-input focus model: a focused pane is a terminal. Every plain keystroke — letters,
   enter, tab, esc, ctrl+c — is encoded (`internal/ui/keystroke.go`) and written directly to that
   one host through the new `PaneWriter` interface, bypassing the broadcast scope. lazycssh keeps

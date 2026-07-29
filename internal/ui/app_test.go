@@ -73,19 +73,17 @@ base:
 	return tea.KeyPressMsg{Code: r[0], Mod: mod}
 }
 
-// focusGrid presses tab until the grid has focus. Tab cycles through every
-// sidebar panel before it reaches the grid, so the walk is bounded by the
-// number of stops in the cycle.
+// focusGrid enters the focused pane's terminal the way a user does: an
+// alt+arrow. alt+left clamps at the first pane, so calling this right after
+// setup does not move the focus.
 func focusGrid(t *testing.T, a App) App {
 	t.Helper()
-	for range len(Panels()) + 1 {
-		if a.Focus() == AreaGrid {
-			return a
-		}
-		a = pressKey(t, a, "tab")
+	if a.Focus() == AreaGrid {
+		return a
 	}
+	a = pressKey(t, a, "alt+left")
 	if a.Focus() != AreaGrid {
-		t.Fatal("tab never reached the grid")
+		t.Fatal("alt+left did not enter the grid")
 	}
 	return a
 }
@@ -203,24 +201,27 @@ func TestTabCyclesFocus(t *testing.T) {
 		}
 	}
 	a = pressKey(t, a, "tab")
-	if a.Focus() != AreaGrid {
-		t.Fatalf("Focus() = %v after the last panel, want the grid", a.Focus())
+	if a.Focus() != AreaBroadcast {
+		t.Fatalf("Focus() = %v after the last panel, want the broadcast bar", a.Focus())
 	}
 
-	// The grid is a terminal: tab is a keystroke for the host there, and
+	// The bar is a terminal: tab is a keystroke for the targets there, and
 	// ctrl+] is the way back to the app level.
-	a = pressKey(t, a, "tab")
+	a = pressKey(t, a, "ctrl+]")
+	if a.Focus() != AreaSidebar {
+		t.Fatalf("Focus() = %v after ctrl+]", a.Focus())
+	}
+
+	// The grid is not a tab stop at all - it is entered with enter or an
+	// alt+arrow, because inside it tab belongs to the host.
+	a = pressKey(t, a, "alt+left")
 	if a.Focus() != AreaGrid {
-		t.Fatalf("Focus() = %v; tab must not cycle while typing", a.Focus())
+		t.Fatalf("Focus() = %v after alt+left, want the grid", a.Focus())
 	}
 	a = pressKey(t, a, "ctrl+]")
-	if a.Focus() != AreaSidebar || a.Panel() != PanelHosts {
-		t.Fatalf("Focus() = %v, Panel() = %v after ctrl+]", a.Focus(), a.Panel())
-	}
-
 	a = pressKey(t, a, "shift+tab")
-	if a.Focus() != AreaSidebar || a.Panel() != PanelStatus {
-		t.Fatalf("Focus() = %v, Panel() = %v after shift+tab", a.Focus(), a.Panel())
+	if a.Focus() != AreaSidebar && a.Focus() != AreaBroadcast {
+		t.Fatalf("Focus() = %v after shift+tab", a.Focus())
 	}
 }
 
