@@ -257,6 +257,33 @@ Every command sent this run, newest last, each with its target count and mode �
 Typing a command and resending one from the [Command log](./command-log.md) take the same path,
 so a resend goes to the set that is active *now* and leaves the same audit entry.
 
+## Passthrough
+
+`ctrl+]` hands the keyboard to the remote shells. Whole commands are what `:` is for; passthrough
+is for everything a shell needs that a command line cannot express: `tab` completion, `ctrl+c`,
+`ctrl+d`, `ctrl+r`, the arrow keys and history.
+
+- while it is on, lazycssh has **one** binding left — `ctrl+]`, the telnet escape, because a user
+  who is stuck needs one sequence that always means "give me my keyboard back",
+- the status bar is drawn in the warning style and always names that key. Every other binding,
+  including the generated help, is suspended, so nothing else on screen could say it,
+- `ctrl+c` reaches the hosts and does **not** quit lazycssh; `tab` reaches the remote shell rather
+  than cycling focus,
+- raw keystrokes are never written to the [command log](./command-log.md). This is the mode a
+  password is typed in, and the audit trail is for commands.
+
+Key encoding is explicit and table-tested (`enter` → `\r`, `tab` → `\t`, `backspace` → `0x7f`,
+arrows → `ESC [ A`–`D`, `ctrl+<letter>` → `0x01`–`0x1a`), because what reaches a remote shell is
+the one thing in this program a user cannot inspect.
+
+### Several hosts answering at once
+
+Sending raw keys to more than one host means the replies are answers to different questions — two
+machines complete `up<tab>` differently. Nothing is interleaved: each pane renders its own
+session's output and nothing else. The status bar says how many hosts are answering and offers
+`s` for single mode, so a divergent completion is visible as N panes disagreeing rather than as
+one garbled line.
+
 ## Messages
 
 | Message | Effect |

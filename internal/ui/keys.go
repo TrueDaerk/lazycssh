@@ -61,6 +61,7 @@ type KeyMap struct {
 	BroadcastSingle   key.Binding
 	BroadcastFleet    key.Binding
 	CommandLine       key.Binding
+	Passthrough       key.Binding
 
 	// Sidebar.
 	Up        key.Binding
@@ -110,6 +111,8 @@ func DefaultKeyMap() KeyMap {
 		BroadcastSingle:   key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "broadcast to one pane")),
 		BroadcastFleet:    key.NewBinding(key.WithKeys("ctrl+alt+b"), key.WithHelp("ctrl+alt+b", "broadcast to EVERY host")),
 		CommandLine:       key.NewBinding(key.WithKeys(":"), key.WithHelp(":", "send a command")),
+		Passthrough: key.NewBinding(key.WithKeys("ctrl+]"),
+			key.WithHelp("ctrl+]", "raw keystrokes to the hosts")),
 
 		Up:        key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
 		Down:      key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
@@ -143,7 +146,7 @@ func (k KeyMap) global() []key.Binding {
 		k.Help, k.Quit, k.NextTab, k.PrevTab,
 		k.Panel1, k.Panel2, k.Panel3, k.Panel4, k.Panel5,
 		k.BroadcastAll, k.BroadcastSelected, k.BroadcastSingle, k.BroadcastFleet,
-		k.CommandLine,
+		k.CommandLine, k.Passthrough,
 	}
 }
 
@@ -213,7 +216,7 @@ func (c contextHelp) ShortHelp() []key.Binding {
 	case AreaGrid:
 		return []key.Binding{k.PaneLeft, k.PaneRight, k.FullScreen, k.Reconnect, k.NextTab, k.Help}
 	default:
-		return []key.Binding{k.NextTab, k.CommandLine, k.Help, k.Quit}
+		return []key.Binding{k.NextTab, k.CommandLine, k.Passthrough, k.Help, k.Quit}
 	}
 }
 

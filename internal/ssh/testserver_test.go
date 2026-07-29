@@ -224,10 +224,26 @@ func (s *testServer) runShell(channel ssh.Channel) {
 	for {
 		n, err := channel.Read(buf)
 		if n > 0 {
-			line = append(line, buf[:n]...)
 			// Echo the way a PTY does, translating the carriage return the
-			// terminal sends into the CRLF the terminal displays.
-			channel.Write(crlf(buf[:n]))
+			// terminal sends into the CRLF the terminal displays. A tab is
+			// not echoed, because a shell answers it with a completion
+			// rather than with the tab itself.
+			tabbed := indexByte(buf[:n], '\t') >= 0
+			echo := buf[:n]
+			if tabbed {
+				echo = withoutTabs(echo)
+			}
+			line = append(line, echo...)
+			channel.Write(crlf(echo))
+
+			// The completion is decided by the remote side, so it only
+			// happens if the tab byte actually arrived.
+			if tabbed {
+				if suffix, ok := completions[string(line)]; ok {
+					line = append(line, suffix...)
+					channel.Write([]byte(suffix))
+				}
+			}
 		}
 		if err != nil {
 			return
@@ -263,6 +279,24 @@ func (s *testServer) runShell(channel ssh.Channel) {
 			}
 		}
 	}
+}
+
+// completions is what the tiny shell knows how to complete. A test asserts that
+// a tab typed in lazycssh reaches this map through the PTY.
+var completions = map[string]string{
+	"up": "time",
+	"ex": "it",
+}
+
+// withoutTabs drops the tab bytes from what is echoed back.
+func withoutTabs(b []byte) []byte {
+	out := make([]byte, 0, len(b))
+	for _, c := range b {
+		if c != '\t' {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // crlf expands a bare carriage return into CRLF, which is what the ONLCR

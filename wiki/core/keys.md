@@ -38,6 +38,7 @@ are tests, not conventions.
 | `b` / `B` / `s` | global | broadcast to the working set / the selection / one pane |
 | `ctrl+alt+b` | global | broadcast to **every** host |
 | `:` | global | send a command |
+| `ctrl+]` | global | raw keystrokes to the hosts, and back again |
 | `↑`/`k`, `↓`/`j` | sidebar | move |
 | `enter` | sidebar | focus that host's pane |
 | `space` | sidebar | toggle selection |
