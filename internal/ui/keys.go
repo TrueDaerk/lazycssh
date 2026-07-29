@@ -57,7 +57,6 @@ type KeyMap struct {
 	Panel3  key.Binding
 	Panel4  key.Binding
 	Panel5  key.Binding
-	Panel6  key.Binding
 
 	// Broadcast scope. Fleet is deliberately awkward - it is the one mode that
 	// ignores the working set, and it should not be reachable by cycling.
@@ -68,38 +67,39 @@ type KeyMap struct {
 	CommandLine       key.Binding
 	NextFailure       key.Binding
 	QuickSave         key.Binding
+	NewHost           key.Binding
+
+	// Selection. App-level: a selection is about the run, not about a panel,
+	// and it must be editable from wherever the user is reading.
+	SelectAll key.Binding
+	Invert    key.Binding
+	ClearSel  key.Binding
+	SelectUp  key.Binding
+	SelectDwn key.Binding
 
 	// Sidebar.
 	Up        key.Binding
 	Down      key.Binding
 	Choose    key.Binding
 	Toggle    key.Binding
-	Filter    key.Binding
-	SelectAll key.Binding
-	Invert    key.Binding
-	ClearSel  key.Binding
-	SelectUp  key.Binding
-	SelectDwn key.Binding
 	SaveSet   key.Binding
 	NextChunk key.Binding
 	PrevChunk key.Binding
-	NewHost   key.Binding
-	CloseHost key.Binding
-	Reconn    key.Binding
 
 	// Grid. A focused pane is a terminal: plain keys are forwarded to the
 	// host, so everything lazycssh keeps for itself here is an alt or shift
 	// chord that keystrokeBytes never encoded, plus the one reserved escape.
-	LeaveTyping key.Binding
-	PaneLeft    key.Binding
-	PaneRight   key.Binding
-	PaneUp      key.Binding
-	PaneDown    key.Binding
-	FullScreen  key.Binding
-	Reconnect   key.Binding
-	ClosePane   key.Binding
-	NextPage    key.Binding
-	PrevPage    key.Binding
+	LeaveTyping  key.Binding
+	ToggleSelect key.Binding
+	PaneLeft     key.Binding
+	PaneRight    key.Binding
+	PaneUp       key.Binding
+	PaneDown     key.Binding
+	FullScreen   key.Binding
+	Reconnect    key.Binding
+	ClosePane    key.Binding
+	NextPage     key.Binding
+	PrevPage     key.Binding
 
 	ScrollUp     key.Binding
 	ScrollDown   key.Binding
@@ -127,11 +127,10 @@ func DefaultKeyMap() KeyMap {
 		NextTab: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next panel")),
 		PrevTab: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "previous panel")),
 		Panel1:  key.NewBinding(key.WithKeys("1"), key.WithHelp("1", "status panel")),
-		Panel2:  key.NewBinding(key.WithKeys("2"), key.WithHelp("2", "hosts panel")),
-		Panel3:  key.NewBinding(key.WithKeys("3"), key.WithHelp("3", "groups panel")),
-		Panel4:  key.NewBinding(key.WithKeys("4"), key.WithHelp("4", "sessions panel")),
-		Panel5:  key.NewBinding(key.WithKeys("5"), key.WithHelp("5", "command log")),
-		Panel6:  key.NewBinding(key.WithKeys("6"), key.WithHelp("6", "broadcast bar")),
+		Panel2:  key.NewBinding(key.WithKeys("2"), key.WithHelp("2", "groups panel")),
+		Panel3:  key.NewBinding(key.WithKeys("3"), key.WithHelp("3", "sessions panel")),
+		Panel4:  key.NewBinding(key.WithKeys("4"), key.WithHelp("4", "command log")),
+		Panel5:  key.NewBinding(key.WithKeys("5"), key.WithHelp("5", "broadcast bar")),
 
 		BroadcastAll:      key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "broadcast to the working set")),
 		BroadcastSelected: key.NewBinding(key.WithKeys("B"), key.WithHelp("B", "broadcast to the selection")),
@@ -142,26 +141,26 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("!", "jump to the next failed host")),
 		QuickSave: key.NewBinding(key.WithKeys("S"),
 			key.WithHelp("S", "save the run as a session")),
+		NewHost: key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "connect a new host")),
 
-		Up:        key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
-		Down:      key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
-		Choose:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "focus this host's pane")),
-		Toggle:    key.NewBinding(key.WithKeys("space", " "), key.WithHelp("space", "toggle selection")),
-		Filter:    key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
 		SelectAll: key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "select every host")),
 		Invert:    key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "invert the selection")),
 		ClearSel:  key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "clear the selection")),
 		SelectUp:  key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "select the hosts that are up")),
 		SelectDwn: key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "select the hosts that are down")),
+
+		Up:        key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
+		Down:      key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
+		Choose:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "choose this row")),
+		Toggle:    key.NewBinding(key.WithKeys("space", " "), key.WithHelp("space", "merge this session in")),
 		SaveSet:   key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "save the working set or session")),
 		NextChunk: key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "next chunk of hosts")),
 		PrevChunk: key.NewBinding(key.WithKeys("["), key.WithHelp("[", "previous chunk of hosts")),
-		NewHost:   key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "connect a new host")),
-		CloseHost: key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "close this host, again to remove")),
-		Reconn:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "reconnect this host")),
 
 		LeaveTyping: key.NewBinding(key.WithKeys("ctrl+]"),
 			key.WithHelp("ctrl+]", "stop typing to the host")),
+		ToggleSelect: key.NewBinding(key.WithKeys("alt+ ", "alt+space"),
+			key.WithHelp("alt+space", "toggle this host's selection")),
 		PaneLeft:   key.NewBinding(key.WithKeys("alt+left"), key.WithHelp("alt+←", "pane left")),
 		PaneRight:  key.NewBinding(key.WithKeys("alt+right"), key.WithHelp("alt+→", "pane right")),
 		PaneUp:     key.NewBinding(key.WithKeys("alt+up"), key.WithHelp("alt+↑", "pane up")),
@@ -187,25 +186,25 @@ func DefaultKeyMap() KeyMap {
 func (k KeyMap) global() []key.Binding {
 	return []key.Binding{
 		k.Help, k.Quit, k.NextTab, k.PrevTab,
-		k.Panel1, k.Panel2, k.Panel3, k.Panel4, k.Panel5, k.Panel6,
+		k.Panel1, k.Panel2, k.Panel3, k.Panel4, k.Panel5,
 		k.BroadcastAll, k.BroadcastSelected, k.BroadcastSingle, k.BroadcastFleet,
-		k.CommandLine, k.NextFailure, k.QuickSave,
+		k.CommandLine, k.NextFailure, k.QuickSave, k.NewHost,
+		k.SelectAll, k.Invert, k.ClearSel, k.SelectUp, k.SelectDwn,
 	}
 }
 
 // sidebar returns the bindings that act on the panel list.
 func (k KeyMap) sidebar() []key.Binding {
 	return []key.Binding{
-		k.Up, k.Down, k.Choose, k.Toggle, k.Filter,
-		k.SelectAll, k.Invert, k.ClearSel, k.SelectUp, k.SelectDwn,
-		k.SaveSet, k.NextChunk, k.PrevChunk, k.NewHost, k.CloseHost, k.Reconn,
+		k.Up, k.Down, k.Choose, k.Toggle,
+		k.SaveSet, k.NextChunk, k.PrevChunk,
 	}
 }
 
 // grid returns the bindings that act on the host panes.
 func (k KeyMap) grid() []key.Binding {
 	return []key.Binding{
-		k.LeaveTyping,
+		k.LeaveTyping, k.ToggleSelect,
 		k.PaneLeft, k.PaneRight, k.PaneUp, k.PaneDown,
 		k.FullScreen, k.Reconnect, k.ClosePane, k.NextPage, k.PrevPage,
 		k.ScrollUp, k.ScrollDown, k.ScrollTop, k.ScrollBottom,

@@ -4,7 +4,7 @@ title: Broadcast scope
 description: What `BROADCAST all` means when a working set is active, and how the target count is made unmissable.
 resource: internal/broadcast
 tags: [broadcast, working-set, safety]
-timestamp: 2026-07-29T15:00:00Z
+timestamp: 2026-07-29T19:00:00Z
 ---
 
 # Broadcast scope
@@ -112,12 +112,13 @@ status bar names the single host it now sends to.
 
 ## Building the selection
 
-The `selected` scope is built either by hand in the Hosts panel or by pattern from the command
-line, and the two do the same things:
+The `selected` scope is built either by hand with the keys or by pattern from the command
+line, and the two do the same things. The single-letter keys work at the app level; `alt+space`
+works from the grid too, like the other pane chords:
 
 | Key | Command line | Effect |
 |-----|--------------|--------|
-| `space` | — | toggle the host under the cursor |
+| `alt+space` | — | toggle the focused pane's host |
 | `a` | `/select all` | every host in the run |
 | — | `/select set` | the active working set |
 | `u` | `/select up` | the hosts that can take input |

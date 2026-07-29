@@ -50,6 +50,7 @@ func TestCloseKeyEmitsCloseHostMsg(t *testing.T) {
 
 func TestReconnectKeyWithoutHostsEmitsNothing(t *testing.T) {
 	a := resize(t, NewApp(Config{Theme: Options{Dark: true}}), 120, 40)
+	a = pressKey(t, a, "esc") // close the auto-opened host prompt
 	a = pressKey(t, a, "tab")
 	if got := keyMsgResult(t, a, "r"); got != nil {
 		t.Fatalf("pressing r with no hosts produced %T, want nothing", got)
@@ -59,7 +60,7 @@ func TestReconnectKeyWithoutHostsEmitsNothing(t *testing.T) {
 // x is state-dependent: a live host's session is closed, a dead host's pane
 // is removed.
 func TestCloseKeyOnADeadHostEmitsRemove(t *testing.T) {
-	a, fleet := hostsApp(t, "web-01")
+	a, fleet, _, _ := statusApp(t, "web-01")
 	fleet.fail(t, "web-01")
 	a = focusGrid(t, a)
 
@@ -74,31 +75,12 @@ func TestCloseKeyOnADeadHostEmitsRemove(t *testing.T) {
 }
 
 func TestCloseKeyOnALiveHostEmitsClose(t *testing.T) {
-	a, fleet := hostsApp(t, "web-01")
+	a, fleet, _, _ := statusApp(t, "web-01")
 	fleet.connect(t, "web-01")
 	a = focusGrid(t, a)
 
 	if _, ok := keyMsgResult(t, a, "alt+x").(CloseHostMsg); !ok {
 		t.Fatal("pressing alt+x on a connected host did not emit CloseHostMsg")
-	}
-}
-
-// The Hosts panel closes and reconnects the host under the cursor with the
-// same keys the grid uses, so pane management does not require the grid.
-func TestHostsPanelCloseAndReconnectKeys(t *testing.T) {
-	a, fleet := hostsApp(t, "web-01", "web-02")
-	fleet.connect(t, "web-01")
-
-	if _, ok := keyMsgResult(t, a, "x").(CloseHostMsg); !ok {
-		t.Fatal("x in the Hosts panel did not emit CloseHostMsg")
-	}
-	if _, ok := keyMsgResult(t, a, "r").(ReconnectHostMsg); !ok {
-		t.Fatal("r in the Hosts panel did not emit ReconnectHostMsg")
-	}
-
-	fleet.fail(t, "web-01")
-	if _, ok := keyMsgResult(t, a, "alt+x").(RemoveHostMsg); !ok {
-		t.Fatal("x on a failed host in the Hosts panel did not emit RemoveHostMsg")
 	}
 }
 

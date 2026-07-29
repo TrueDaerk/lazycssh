@@ -86,7 +86,7 @@ func (a App) renderBroadcastBar() string {
 		count = a.cfg.Targets.Count()
 		warning = a.cfg.Targets.Warning()
 	}
-	title := fmt.Sprintf("Broadcast [6] → %d host%s", count, plural(count))
+	title := fmt.Sprintf("Broadcast [5] → %d host%s", count, plural(count))
 	if warning {
 		title += " ⚠"
 	}
@@ -96,7 +96,7 @@ func (a App) renderBroadcastBar() string {
 	case focused:
 		line += "▏"
 	case line == "":
-		line = a.theme.Muted.Render("press 6 and type — every key goes to the targets live")
+		line = a.theme.Muted.Render("press 5 and type — every key goes to the targets live")
 	}
 
 	if r.Height == 1 {

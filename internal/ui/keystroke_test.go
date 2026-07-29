@@ -107,18 +107,15 @@ func TestAppBindingsAreForwardedWhileTyping(t *testing.T) {
 	}
 }
 
-// ctrl+] leaves typing and lands on the Hosts panel with the cursor on the
-// host that was just typed to.
-func TestLeaveTypingReturnsToTheHostsPanel(t *testing.T) {
+// ctrl+] leaves typing and lands on the Status panel, which answers where the
+// keys go now.
+func TestLeaveTypingReturnsToTheStatusPanel(t *testing.T) {
 	a, _ := typingApp(t, "web-01", "web-02")
 	a = press(t, a, tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModAlt}) // onto web-02
 
 	a = press(t, a, tea.KeyPressMsg{Code: ']', Mod: tea.ModCtrl})
-	if a.Focus() != AreaSidebar || a.Panel() != PanelHosts {
+	if a.Focus() != AreaSidebar || a.Panel() != PanelStatus {
 		t.Fatalf("Focus() = %v, Panel() = %v after ctrl+]", a.Focus(), a.Panel())
-	}
-	if a.SelectedHost() != "web-02" {
-		t.Fatalf("SelectedHost() = %q, want the host just typed to", a.SelectedHost())
 	}
 
 	_, cmd := a.Update(tea.KeyPressMsg{Code: 'q', Mod: tea.ModCtrl})

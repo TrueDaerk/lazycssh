@@ -4,7 +4,7 @@ title: Authentication
 description: The order authentication methods are tried in, how secrets are cached across hosts, and the rules that keep them out of logs.
 resource: internal/ssh/auth.go
 tags: [ssh, auth, security, credentials]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-07-29T19:00:00Z
 ---
 
 # Authentication
@@ -59,7 +59,7 @@ else is a genuine question and is passed to the user, with the server's echo fla
 ## Which method worked
 
 `LastMethod(sessionID)` reports the method most recently attempted for a session; after a
-successful handshake that is the one that got in, and it is what the Hosts panel shows.
+successful handshake that is the one that got in, and it is what the UI reports for the session.
 
 This is an observation, not a protocol guarantee. `golang.org/x/crypto/ssh` offers no
 "this method succeeded" hook, and `ssh.AuthMethod` cannot be wrapped from outside the package —

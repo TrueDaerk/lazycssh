@@ -2,6 +2,19 @@
 
 ## 2026-07-29
 
+- The Hosts panel is gone; the pane grid is the host list. The sidebar is Status `1`, Groups
+  `2`, Sessions `3`, Command log `4`, and the broadcast bar moved to `5`. `n` now works from
+  anywhere: the free-text host prompt opens in the Status panel with the not-yet-connected
+  `~/.ssh/config` aliases listed beneath it, filtered as you type, `tab` completing the first
+  match. `alt+space` toggles the focused pane's host in the broadcast selection (grid and app
+  level); `a`/`i`/`c`/`u`/`d` are app-level selection keys; `/select` globs are unchanged.
+  `ctrl+]` lands on the Status panel, connect errors render there too, and `ctrl+q` now quits
+  from inside every text input — the auto-opened prompt of an argumentless start must not trap
+  the user. Sidebar-only `x`/`r`/`/`(filter) died with the panel; `alt+x`/`alt+r` and the mouse
+  `[x]` cover close and reconnect. `core/tui.md`, `core/keys.md`, `core/cli.md`,
+  `core/broadcast-scope.md`, `core/host-resolution.md`, `core/working-sets.md` and
+  `core/authentication.md` updated. Version 0.8.0.
+
 - Plain `q` quits, lazygit style, wherever no input has the keyboard — sidebar, app level, the
   help overlay. While typing to a host, in the broadcast bar or in any text input, `q` stays a
   letter and is forwarded as before; `ctrl+q` keeps working everywhere it did. `core/keys.md`

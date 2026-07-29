@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-07-29T18:00:00Z
+timestamp: 2026-07-29T19:00:00Z
 ---
 
 # Keymap and help
@@ -33,31 +33,29 @@ are tests, not conventions.
 | Key | Area | Action |
 |-----|------|--------|
 | `?` | global | help overlay |
-| `q` / `ctrl+q` | global (app level) | quit — `q` only while no input has the keyboard; while typing to a host or in any text field it is a letter, forwarded like any other |
+| `q` / `ctrl+q` | global (app level) | quit — `q` only while no input has the keyboard; in any text field it is a letter, and while typing to a host both are forwarded. `ctrl+q` also quits from inside every text input |
 | `tab` / `shift+tab` | global (app level) | next / previous stop in the cycle: each sidebar panel, then the grid; forwarded while typing |
-| `1`–`5` | global (app level) | status, hosts, groups, sessions, command log |
-| `6` | global (app level) | focus the broadcast bar |
+| `1`–`4` | global (app level) | status, groups, sessions, command log |
+| `5` | global (app level) | focus the broadcast bar |
 | `b` / `B` / `s` | global | broadcast to the working set / the selection / one pane |
 | `ctrl+alt+b` | global | broadcast to **every** host |
 | `:` | global | send a command |
 | `!` | global | jump to the next host whose last command failed |
 | `S` | global (app level) | save the run as a session, prompt prefilled |
+| `n` | global (app level) | connect a new host: opens the pattern prompt in the Status panel, ssh-config aliases complete with `tab` |
+| `a` | global (app level) | select every host |
+| `i` | global (app level) | invert the selection |
+| `c` | global (app level) | clear the selection |
+| `u` | global (app level) | select the hosts that are up |
+| `d` | global (app level) | select the hosts that are down |
 | `↑`/`k`, `↓`/`j` | sidebar | move |
-| `enter` | sidebar | focus that host's pane |
-| `space` | sidebar | toggle selection, or mark a connect candidate |
-| `/` | sidebar | filter |
-| `a` | sidebar | select every host |
-| `i` | sidebar | invert the selection |
-| `c` | sidebar | clear the selection |
-| `u` | sidebar | select the hosts that are up |
-| `d` | sidebar | select the hosts that are down |
+| `enter` | sidebar | choose the row: activate a group, launch a session, resend a log entry |
+| `space` | sidebar | merge the session under the cursor into the run |
 | `w` | sidebar | save the working set or session |
 | `[` / `]` | sidebar | previous / next chunk of hosts |
-| `n` | sidebar | connect a new host: opens the free-text pattern prompt |
-| `x` | sidebar | close the host under the cursor; on a dead host, remove its pane |
-| `r` | sidebar | reconnect the host under the cursor |
 | any plain key | panes | **forwarded to the focused host** — letters, enter, tab, esc, ctrl+c, arrows, all of it |
-| `ctrl+]` | panes | stop typing: back to the app level, cursor on the host just typed to |
+| `ctrl+]` | panes | stop typing: back to the app level, on the Status panel |
+| `alt+space` | panes (and app level) | toggle the focused pane's host in the selection |
 | `alt+←`/`alt+→`/`alt+↑`/`alt+↓` | panes (and app level) | move between panes |
 | `alt+z` | panes (and app level) | full-screen this pane |
 | `alt+r` | panes (and app level) | reconnect this host |

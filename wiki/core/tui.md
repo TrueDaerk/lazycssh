@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-29T18:00:00Z
+timestamp: 2026-07-29T19:00:00Z
 ---
 
 # TUI shell
@@ -29,9 +29,9 @@ a TUI panics on a resize.
 ╭ Status [1] ─╮┌────────────────────────────┐
 │ …           ││                            │
 ╰─────────────╯│        pane grid           │
-╭ Hosts [2] ──╮│                            │
+╭ Groups [2] ─╮│                            │
 ╰─────────────╯│                            │
-╭ Groups [3] ─╮│                            │
+╭ Sessions [3]╮│                            │
 ╰─────────────╯│                            │
  status bar                      key hints
 ```
@@ -108,7 +108,7 @@ colour so it survives a terminal without colour.
 it — means typing: every keystroke is encoded and written to that one host, per key, enter not
 required. `ctrl+c`, `tab` and `esc` belong to the remote shell. lazycssh keeps exactly two kinds
 of keys for itself while typing: the reserved escape `ctrl+]`, which returns to the app level
-(the Hosts panel, cursor on the host just typed to), and the `alt`/`shift` pane-management
+(the Status panel, which answers where the keys go now), and the `alt`/`shift` pane-management
 chords, combinations the encoder never produced, so intercepting them forwards nothing a user
 could previously send. Where keystrokes go is always in the status bar: `TYPING web-01 — ctrl+]
 leaves · alt=app`. Typing into a host that cannot take input says so rather than dropping keys.
@@ -184,7 +184,7 @@ The transport reports each command's exit status through a prompt hook — see
 
 - a pane whose last command exited non-zero gets a **danger-coloured border**, focused or not,
   and the header states `exit N` in text, because colour alone is not allowed to carry meaning;
-- the Hosts panel marks failing rows with `exit N` — and only those; `ok` on two hundred rows
+- the pane headers mark failing hosts with `exit N` — and only those; `ok` on two hundred panes
   would bury the three that matter;
 - the status bar counts them: `3 hosts failed`, in the failure style;
 - `!` jumps the pane focus to the next failing host, from anywhere, wrapping around — the wrap
@@ -284,45 +284,31 @@ inventing a count.
 Panel bodies wrap rather than truncate: a line that silently loses its tail is worse than one
 that takes a second row, because the tail is where the warnings are.
 
-### [2] Hosts
+### Connecting and selecting without a Hosts panel
 
-Every host of the run: pane number, selection marker, name, connection state. Below them, under
-a `─ ssh config ─` divider, the concrete aliases of `~/.ssh/config` that are not in the run yet
-— **connect candidates**. Nothing connects on its own: candidates are an offer the cursor can
-take, and the default view stays as it is until the user acts.
+The pane grid is the host list: names, states and `exit N` markers live in the pane headers,
+and `!` jumps to the next failure. What a dedicated Hosts panel used to add lives elsewhere:
 
-- `enter` on a candidate connects it; `space` marks several and `enter` connects all marked.
-  A mark is a `+` character as well as a style, and marks clear with the connect request,
-- `n` opens a free-text prompt accepting any host pattern — `host`, `user@host:port`, brace
-  expansion like `web-{01..04}`. It owns the keyboard while open: a pattern containing `b` must
-  not switch the broadcast mode. `enter` connects, `esc` abandons,
-- a candidate that connects leaves the candidate list — it is a host now, and offering the
-  duplicate connect is what the dedupe exists to avoid,
-- a connect that fails to resolve shows its error in the panel until the fleet next changes,
-- the panel cannot dial. It emits `HostConnectMsg`; the program resolves, skips hosts already
-  in the run (double-enter must not mint `host-2`), and adds the rest via `Manager.Add`.
+- **connect** — `n` works from anywhere: it selects the Status panel and opens a free-text
+  prompt accepting any host pattern — `host`, `user@host:port`, brace expansion like
+  `web-{01..04}`. While it is open, the concrete aliases of `~/.ssh/config` that are not in the
+  run yet are listed beneath it, filtered by what has been typed; `tab` completes the first
+  match, `enter` connects, `esc` abandons. The prompt owns the keyboard while open: a pattern
+  containing `b` must not switch the broadcast mode (`ctrl+q` still quits). A connect that
+  fails to resolve shows its error in the Status panel until the fleet next changes. The UI
+  cannot dial: it emits `HostConnectMsg`; the program resolves, skips hosts already in the run
+  (double-enter must not mint `host-2`), and adds the rest via `Manager.Add`,
+- **selection** — `alt+space` toggles the focused pane's host, from the grid and the app level,
+  like the other pane chords; `a`/`i`/`c`/`u`/`d` (select all / invert / clear / up hosts /
+  down hosts) work at the app level, and `/select` / `/deselect` cover the pattern cases.
+  Selection lives in the [broadcast router](./broadcast-scope.md) and is keyed by **host
+  identifier**, so it survives a reconnect and a page turn — the pane moves, the host keeps its
+  name.
 
-An argumentless start opens on this panel, so a fresh install with no saved sessions can reach
-a fleet with the keyboard alone.
+An argumentless start opens the Status panel with the host prompt already open, so a fresh
+install with no saved sessions can reach a fleet with the keyboard alone.
 
-- `↑`/`k` and `↓`/`j` move the host cursor; running off either end moves to the neighbouring
-  panel, so the panel list stays reachable with the same keys,
-- `space` toggles selection. Selection lives in the [broadcast router](./broadcast-scope.md) and
-  is keyed by **host identifier**, so it survives a reconnect, a filter and a page turn — the pane
-  moves, the host keeps its name,
-- `enter` focuses that host's pane and hands focus to the grid,
-- `/` opens the filter, which owns the keyboard while it is open: a host called `x` must be
-  typeable without closing a pane. `enter` keeps the filter, `esc` drops it.
-
-Filtering never renumbers panes: a row shows the host's position in the **full** list, so
-`3 web-02` stays pane 3 whatever the filter hides.
-
-Only the visible rows are rendered, with a `+N more` marker for the rest, so a redraw costs the
-size of the panel rather than the size of the fleet — two hundred hosts included.
-
-A host whose last command exited non-zero carries `exit N` on its row, in the failure style.
-
-### [3] Groups / Views
+### [2] Groups / Views
 
 The working sets defined for this run — see [Working sets](./working-sets.md) — plus where the
 window sits.
@@ -337,7 +323,7 @@ ad hoc set the user is actually in, so the panel can never hide where they are.
 - `[` and `]` page the **working set** by its own chunk size. That is a different thing from
   `alt+p`/`alt+n`, which page the pane window; the panel shows both lines for exactly that reason.
 
-### [4] Sessions
+### [3] Sessions
 
 The saved [session files](./session-files.md), each with its host count and description.
 
@@ -353,14 +339,14 @@ The saved [session files](./session-files.md), each with its host count and desc
 The panel does not dial. `enter` emits a `SessionLaunchMsg`; the layer that owns the transport
 acts on it, which keeps `internal/ui` unable to open a connection.
 
-### [5] Command log
+### [4] Command log
 
 Every command sent this run, newest last, each with its target count and mode — see
 [Command log](./command-log.md). `enter` sends an entry again, to the **current** target set.
 
 ## The broadcast bar
 
-An input line under the grid, always on screen, focused with `6`, tab-cycled after the last
+An input line under the grid, always on screen, focused with `5`, tab-cycled after the last
 panel, left with `ctrl+]`. While it has the keyboard it is a terminal for the whole target set:
 every keystroke is encoded and fanned out live through the broadcast scope — `ctrl+c`
 interrupts every target, `tab` completes on every target, and each pane shows its own host's
@@ -371,7 +357,7 @@ The bar keeps a local echo line — printable text appends, backspace trims — 
 what was typed; the truth is on the hosts. `enter` sends a carriage return and records the
 assembled non-empty line in the [command log](./command-log.md) once; the individual keystrokes
 are never recorded, because this is where a password may be typed. The title always carries the
-live target count (`Broadcast [6] → 7 hosts`), and the status bar says `BROADCASTING → 7 hosts`
+live target count (`Broadcast [5] → 7 hosts`), and the status bar says `BROADCASTING → 7 hosts`
 in the warning style while the bar has the keyboard. On short terminals the bar degrades to a
 bare line and then disappears before the grid gives up a row.
 
@@ -438,7 +424,7 @@ typed, and the audit trail is for commands.
 | `SessionsChangedMsg` | re-read the session directory |
 | `SessionLaunchMsg` | emitted, not handled: the program opens or merges a saved session |
 | `HostConnectMsg` | emitted, not handled: the program resolves and connects the asked-for patterns |
-| `ConnectErrorMsg` | a connect request's resolve error, shown in the Hosts panel |
+| `ConnectErrorMsg` | a connect request's resolve error, shown in the Status panel |
 | `ReconnectHostMsg` | emitted, not handled: `r` in the grid asks the program to reconnect the focused host |
 | `CloseHostMsg` | emitted, not handled: `x` on a live host asks the program to close its session |
 | `RemoveHostMsg` | emitted, not handled: `x` on a dead host asks the program to drop its pane from the run |

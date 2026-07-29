@@ -61,22 +61,6 @@ func TestFailingPaneIsVisuallyDistinct(t *testing.T) {
 	}
 }
 
-// The Hosts panel marks the failing rows, and only those: "ok" on two hundred
-// rows would bury the three that matter.
-func TestHostsPanelMarksFailures(t *testing.T) {
-	a, fleet, _, _ := statusApp(t, "web-01", "web-02")
-	fleet.sessions["web-01"].ReportExit(0)
-	fleet.sessions["web-02"].ReportExit(3)
-
-	panel := plain(a.hostsPanel(40, 10))
-	if !strings.Contains(panel, "web-02 pending exit 3") {
-		t.Fatalf("the failing host is not marked:\n%s", panel)
-	}
-	if strings.Contains(panel, "ok") {
-		t.Fatalf("a successful host is decorated:\n%s", panel)
-	}
-}
-
 // The status bar summary: the acceptance criterion's "3 hosts failed".
 func TestStatusBarCountsFailedHosts(t *testing.T) {
 	names := make([]string, 20)

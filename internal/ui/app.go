@@ -20,10 +20,9 @@ import (
 type Panel int
 
 const (
-	// PanelStatus answers "what happens if I type".
+	// PanelStatus answers "what happens if I type". It also hosts the new-host
+	// prompt: connecting is about the run, and the run's summary is here.
 	PanelStatus Panel = iota
-	// PanelHosts lists every host with its connection state.
-	PanelHosts
 	// PanelGroups lists the working sets.
 	PanelGroups
 	// PanelSessions lists the saved session configs.
@@ -34,7 +33,7 @@ const (
 
 // Panels returns the panels in sidebar order.
 func Panels() []Panel {
-	return []Panel{PanelStatus, PanelHosts, PanelGroups, PanelSessions, PanelCommandLog}
+	return []Panel{PanelStatus, PanelGroups, PanelSessions, PanelCommandLog}
 }
 
 // Title is the heading shown in the sidebar.
@@ -42,8 +41,6 @@ func (p Panel) Title() string {
 	switch p {
 	case PanelStatus:
 		return "Status"
-	case PanelHosts:
-		return "Hosts"
 	case PanelGroups:
 		return "Groups"
 	case PanelSessions:
@@ -126,7 +123,6 @@ type App struct {
 	help   help.Model
 	layout Layout
 
-	filter      textinput.Model
 	saveInput   textinput.Model
 	cmdInput    textinput.Model
 	searchInput textinput.Model
@@ -136,12 +132,8 @@ type App struct {
 	// since the last enter. The truth is on the hosts; this is the reminder.
 	broadcastLine []rune
 
-	// candidateMarks are the connect candidates space has marked. Candidates
-	// are not sessions yet, so the marks live here rather than in the
-	// broadcast router; they clear when a connect is asked for.
-	candidateMarks map[string]bool
 	// connectErr is the last connect request's resolve error, shown in the
-	// Hosts panel until the fleet changes.
+	// Status panel until the fleet changes.
 	connectErr string
 
 	// scroll is each pane's scrollback offset in wrapped lines from the
@@ -163,7 +155,6 @@ type App struct {
 	panel         Panel
 	paneIndex     int
 	page          int
-	hostCursor    int
 	groupCursor   int
 	sessionCursor int
 	logCursor     int
@@ -182,10 +173,6 @@ func NewApp(cfg Config) App {
 	h := help.New()
 	h.Styles = HelpStyles(theme)
 
-	filter := textinput.New()
-	filter.Placeholder = "filter hosts"
-	filter.Prompt = ""
-
 	save := textinput.New()
 	save.Placeholder = "session name"
 	save.Prompt = ""
@@ -203,24 +190,22 @@ func NewApp(cfg Config) App {
 	host.Prompt = ""
 
 	a := App{
-		cfg:            cfg,
-		keys:           keys,
-		theme:          theme,
-		help:           h,
-		filter:         filter,
-		saveInput:      save,
-		cmdInput:       command,
-		searchInput:    search,
-		hostInput:      host,
-		candidateMarks: make(map[string]bool),
-		scroll:         make(map[string]int),
-		focus:          AreaSidebar,
-		panel:          PanelStatus,
+		cfg:         cfg,
+		keys:        keys,
+		theme:       theme,
+		help:        h,
+		saveInput:   save,
+		cmdInput:    command,
+		searchInput: search,
+		hostInput:   host,
+		scroll:      make(map[string]int),
+		focus:       AreaSidebar,
+		panel:       PanelStatus,
 	}
 	if len(a.hostIDs()) == 0 {
-		// An argumentless start has nothing to show yet; the hosts to connect
-		// to are the thing the user came to pick.
-		a.panel = PanelHosts
+		// An argumentless start has nothing to show yet; the host prompt is
+		// the thing the user came for, so it is already open.
+		a.hostInput.Focus()
 	}
 	return a.loadSessions()
 }
@@ -312,6 +297,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKey dispatches a key press. Bindings are matched by area, so a key
 // means one thing at a time; see [KeyMap].
 func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// ctrl+q quits even while a text input has the keyboard: the chord is
+	// never a character there, and an empty start opens straight into the
+	// host prompt - which must not be able to trap the user. While typing to
+	// a host it stays a keystroke for the host (XON), like every other chord
+	// the pane forwards.
+	if msg.String() == "ctrl+q" &&
+		(a.cmdInput.Focused() || a.hostInput.Focused() ||
+			a.searchInput.Focused() || a.Saving()) {
+		return a, tea.Quit
+	}
+
 	// The command line has the keyboard while it is open: a command containing
 	// a "b" must not switch the broadcast mode, and ctrl+c while editing must
 	// not reach forty machines.
@@ -325,14 +321,8 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.handleSaveKey(msg)
 	}
 
-	// The filter input has the keyboard while it is open: a host called "x"
-	// must be typeable without closing a pane.
-	if a.filter.Focused() {
-		return a.handleFilterKey(msg)
-	}
-
-	// So does the new-host prompt: a pattern containing "b" must not switch
-	// the broadcast mode.
+	// The new-host prompt has the keyboard while it is open: a pattern
+	// containing "b" must not switch the broadcast mode.
 	if a.hostInput.Focused() {
 		return a.handleHostInputKey(msg)
 	}
@@ -405,6 +395,20 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Global, not a grid key: "which host went wrong" is the question
 		// whatever has focus.
 		return a.jumpToNextFailure().syncFocusTarget(), nil
+
+	case key.Matches(msg, a.keys.NewHost):
+		// Connecting is about the run, so it works from anywhere; the prompt
+		// renders in the Status panel, which the keypress selects.
+		a.panel = PanelStatus
+		a.focus = AreaSidebar
+		a.hostInput.Focus()
+		return a, nil
+	}
+
+	// The selection keys are app-level for the same reason the broadcast-mode
+	// keys are: the selection is about the run, not about a panel.
+	if next, handled := a.handleSelectionKey(msg.String()); handled {
+		return next, nil
 	}
 
 	if panel, ok := a.panelForKey(msg); ok {
@@ -412,7 +416,7 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		a.focus = AreaSidebar
 		return a, nil
 	}
-	if key.Matches(msg, a.keys.Panel6) {
+	if key.Matches(msg, a.keys.Panel5) {
 		a.focus = AreaBroadcast
 		return a, nil
 	}
@@ -433,33 +437,17 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
-// handleFilterKey feeds the filter input, which owns the keyboard while it is
-// open.
-func (a App) handleFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "enter":
-		// Keep the filter, give the keyboard back.
-		a.filter.Blur()
-		return a, nil
-	case "esc":
-		// Abandon it: esc undoes, enter confirms.
-		a.filter.SetValue("")
-		a.filter.Blur()
-		a.hostCursor = 0
-		return a, nil
-	}
-
-	var cmd tea.Cmd
-	a.filter, cmd = a.filter.Update(msg)
-	a.hostCursor = clamp(a.hostCursor, 0, max(0, len(a.hostRows())-1))
-	return a, cmd
-}
-
 // handleHostInputKey feeds the new-host prompt, which owns the keyboard while
-// it is open. enter asks the program to connect the typed pattern; esc
-// abandons it.
+// it is open. enter asks the program to connect the typed pattern, tab
+// completes the first matching ssh-config alias, esc abandons the prompt.
 func (a App) handleHostInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "tab":
+		if hints := a.aliasHints(); len(hints) > 0 {
+			a.hostInput.SetValue(hints[0])
+			a.hostInput.CursorEnd()
+		}
+		return a, nil
 	case "enter":
 		pattern := strings.TrimSpace(a.hostInput.Value())
 		a.hostInput.SetValue("")
@@ -484,8 +472,6 @@ func (a App) handleHostInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // when that panel owns a list of its own.
 func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch a.panel {
-	case PanelHosts:
-		return a.handleHostsKey(msg)
 	case PanelGroups:
 		return a.handleGroupsKey(msg)
 	case PanelSessions:
@@ -621,57 +607,6 @@ func (a App) handleGroupsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
-// handleHostsKey drives the Hosts panel: the arrows move the host cursor rather
-// than the panel selection, because the list is what the user came for.
-func (a App) handleHostsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	rows := len(a.hostRows())
-
-	switch {
-	case key.Matches(msg, a.keys.Up):
-		// Off the top of the list is the panel above it, so the panel list
-		// stays reachable with the same keys that drive the host list.
-		if a.hostCursor <= 0 {
-			return a.movePanel(-1), nil
-		}
-		return a.moveHostCursor(-1), nil
-	case key.Matches(msg, a.keys.Down):
-		if a.hostCursor >= rows-1 {
-			return a.movePanel(+1), nil
-		}
-		return a.moveHostCursor(+1), nil
-	case key.Matches(msg, a.keys.Toggle):
-		return a.toggleSelectedHost(), nil
-	case key.Matches(msg, a.keys.Choose):
-		// Enter means "go there" on a host of the run and "connect" on an
-		// ssh-config candidate; the row under the cursor says which.
-		if a.SelectedCandidate() != "" {
-			return a.connectSelected()
-		}
-		return a.focusSelectedHost(), nil
-	case key.Matches(msg, a.keys.Filter):
-		a.filter.Focus()
-		return a, nil
-	case key.Matches(msg, a.keys.NewHost):
-		a.hostInput.Focus()
-		return a, nil
-	case key.Matches(msg, a.keys.CloseHost):
-		if id := a.SelectedHost(); id != "" {
-			return a, a.closeOrRemove(id)
-		}
-		return a, nil
-	case key.Matches(msg, a.keys.Reconn):
-		if id := a.SelectedHost(); id != "" {
-			return a, func() tea.Msg { return ReconnectHostMsg{ID: id} }
-		}
-		return a, nil
-	}
-
-	if next, handled := a.handleSelectionKey(msg.String()); handled {
-		return next, nil
-	}
-	return a, nil
-}
-
 // closeOrRemove is what x means on a host: a live session is closed - the
 // pane stays, saying so - and a dead one is removed, so the second x takes the
 // pane off the screen. Both are emitted, not handled: the UI cannot touch the
@@ -695,7 +630,7 @@ func (a App) FullScreen() bool { return a.fullScreen }
 
 // panelForKey maps a number key to the panel it selects.
 func (a App) panelForKey(msg tea.KeyPressMsg) (Panel, bool) {
-	numbered := []key.Binding{a.keys.Panel1, a.keys.Panel2, a.keys.Panel3, a.keys.Panel4, a.keys.Panel5}
+	numbered := []key.Binding{a.keys.Panel1, a.keys.Panel2, a.keys.Panel3, a.keys.Panel4}
 	for i, binding := range numbered {
 		if key.Matches(msg, binding) {
 			return Panel(i), true
@@ -820,10 +755,10 @@ func (a App) renderMain() string {
 		// The empty state says what to do next rather than showing an empty
 		// frame: this is the argumentless start.
 		hint := "no hosts\n\n" +
-			"pick a host from ~/.ssh/config in [2] Hosts and press enter,\n" +
-			"press n to type one, or pick a session in [4] Sessions.\n\n" +
+			"press n and type a host — ~/.ssh/config aliases complete with tab —\n" +
+			"or pick a session in [3] Sessions.\n\n" +
 			"once connected: click or enter a pane and just type —\n" +
-			"every key goes to that host; 6 broadcasts to all of them.\n\n" +
+			"every key goes to that host; 5 broadcasts to all of them.\n\n" +
 			"or start with hosts: lazycssh <host...>"
 		return a.frame(a.theme.PaneFrame(focused, false), r, a.theme.Muted.Render(hint))
 	}

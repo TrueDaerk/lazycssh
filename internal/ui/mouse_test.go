@@ -156,18 +156,17 @@ func TestClickOnTheCloseButton(t *testing.T) {
 
 // Clicking a sidebar row selects the panel and moves its cursor there.
 func TestClickSelectsASidebarRow(t *testing.T) {
-	a, _, _, _ := statusApp(t, "web-01", "web-02", "web-03")
-	a = pressKey(t, a, "2") // Hosts panel selected and expanded
+	a, _ := groupsApp(t) // Groups panel selected and expanded
 
-	heights := SidebarHeights(a.Layout().Sidebar.Height, len(Panels()), int(PanelHosts))
+	heights := SidebarHeights(a.Layout().Sidebar.Height, len(Panels()), int(PanelGroups))
 	panelTop := heights[0]              // the Status box sits above
 	a, _ = click(t, a, 2, panelTop+1+2) // title line, then the third body row
 
-	if a.Panel() != PanelHosts || a.Focus() != AreaSidebar {
+	if a.Panel() != PanelGroups || a.Focus() != AreaSidebar {
 		t.Fatalf("Panel() = %v, Focus() = %v", a.Panel(), a.Focus())
 	}
-	if a.SelectedHost() != "web-03" {
-		t.Fatalf("SelectedHost() = %q after clicking the third row", a.SelectedHost())
+	if a.GroupCursor() != 2 {
+		t.Fatalf("GroupCursor() = %d after clicking the third row", a.GroupCursor())
 	}
 }
 
@@ -206,17 +205,16 @@ func TestWheelScrollsThePaneUnderThePointer(t *testing.T) {
 
 // The wheel over a sidebar list moves its cursor.
 func TestWheelMovesTheSidebarCursor(t *testing.T) {
-	a, _, _, _ := statusApp(t, "web-01", "web-02", "web-03")
-	a = pressKey(t, a, "2")
+	a, _ := groupsApp(t)
 
-	heights := SidebarHeights(a.Layout().Sidebar.Height, len(Panels()), int(PanelHosts))
-	y := heights[0] + 2 // inside the Hosts box
+	heights := SidebarHeights(a.Layout().Sidebar.Height, len(Panels()), int(PanelGroups))
+	y := heights[0] + 2 // inside the Groups box
 	a = wheel(t, a, 2, y, false)
-	if a.HostCursor() != 1 {
-		t.Fatalf("HostCursor() = %d after one wheel notch", a.HostCursor())
+	if a.GroupCursor() != 1 {
+		t.Fatalf("GroupCursor() = %d after one wheel notch", a.GroupCursor())
 	}
 	a = wheel(t, a, 2, y, true)
-	if a.HostCursor() != 0 {
-		t.Fatalf("HostCursor() = %d after scrolling back up", a.HostCursor())
+	if a.GroupCursor() != 0 {
+		t.Fatalf("GroupCursor() = %d after scrolling back up", a.GroupCursor())
 	}
 }

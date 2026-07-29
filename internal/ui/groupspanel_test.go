@@ -21,7 +21,7 @@ func groupsApp(t *testing.T) (App, *workingset.Manager) {
 	if err := ws.Define("databases", workingset.Pattern{Glob: "db-*"}); err != nil {
 		t.Fatalf("Define: %v", err)
 	}
-	return pressKey(t, a, "3"), ws
+	return pressKey(t, a, "2"), ws
 }
 
 func TestGroupsPanelListsTheSets(t *testing.T) {
@@ -172,14 +172,14 @@ func TestGroupCursorMovesAndLeavesThePanelAtTheEnds(t *testing.T) {
 	// Off the top is the panel above.
 	a = pressKey(t, a, "k")
 	a = pressKey(t, a, "k")
-	if a.Panel() != PanelHosts {
+	if a.Panel() != PanelStatus {
 		t.Fatalf("Panel() = %v after moving off the top", a.Panel())
 	}
 }
 
 func TestGroupsPanelWithoutAWorkingSet(t *testing.T) {
 	a := resize(t, NewApp(Config{Hosts: []string{"h1"}, Theme: Options{Dark: true}}), 120, 40)
-	a = pressKey(t, a, "3")
+	a = pressKey(t, a, "2")
 
 	if got := plain(a.groupsPanel(40, 20)); !strings.Contains(got, "no working sets yet") {
 		t.Fatalf("groupsPanel() = %q", got)

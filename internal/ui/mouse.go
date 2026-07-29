@@ -102,10 +102,6 @@ func (a App) hostIDAt(index int) string {
 // clicked, mapped through the same window arithmetic the panel renders with.
 func (a App) moveCursorToVisibleRow(panel Panel, bodyRow int) App {
 	switch panel {
-	case PanelHosts:
-		if row, ok := a.hostRowAt(bodyRow); ok {
-			a.hostCursor = row
-		}
 	case PanelGroups:
 		a.groupCursor = clamp(bodyRow, 0, max(0, len(a.groupRows())-1))
 	case PanelSessions:
@@ -120,8 +116,6 @@ func (a App) moveCursorToVisibleRow(panel Panel, bodyRow int) App {
 // the focus - the wheel browses, it does not commit.
 func (a App) movePanelCursor(panel Panel, delta int) App {
 	switch panel {
-	case PanelHosts:
-		a.hostCursor = clamp(a.hostCursor+delta, 0, max(0, len(a.hostRows())-1))
 	case PanelGroups:
 		a.groupCursor = clamp(a.groupCursor+delta, 0, max(0, len(a.groupRows())-1))
 	case PanelSessions:
@@ -130,44 +124,6 @@ func (a App) movePanelCursor(panel Panel, delta int) App {
 		a.logCursor = clamp(a.logCursor+delta, 0, max(0, len(a.logEntries())-1))
 	}
 	return a
-}
-
-// hostRowAt maps a clicked body row of the Hosts panel to an index into
-// hostRows, mirroring the extra lines the panel renders above and between its
-// rows: the prompts, a connect error, and the ssh-config divider.
-func (a App) hostRowAt(bodyRow int) (int, bool) {
-	if a.hostInput.Focused() {
-		bodyRow--
-	}
-	if a.filter.Focused() || a.filter.Value() != "" {
-		bodyRow--
-	}
-	if a.connectErr != "" {
-		bodyRow--
-	}
-	if bodyRow < 0 {
-		return 0, false
-	}
-
-	rows := a.hostRows()
-	if len(rows) == 0 {
-		return 0, false
-	}
-	height := a.sidebarBodyHeight()
-	cursor := clamp(a.hostCursor, 0, len(rows)-1)
-	first, last := visibleRange(cursor, len(rows), height)
-
-	line := 0
-	for i := first; i < last; i++ {
-		if rows[i].Candidate && (i == 0 || !rows[i-1].Candidate || i == first) {
-			line++ // the divider costs a display line
-		}
-		if line == bodyRow {
-			return i, true
-		}
-		line++
-	}
-	return 0, false
 }
 
 // sidebarBodyHeight is the body height of the selected panel's box, matching

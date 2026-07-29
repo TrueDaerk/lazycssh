@@ -417,7 +417,7 @@ func TestStatusPanelSaysWhereKeysGo(t *testing.T) {
 	}
 
 	a = pressKey(t, a, "ctrl+]")
-	a = pressKey(t, a, "6")
+	a = pressKey(t, a, "5")
 	if got := plain(a.statusPanel(60)); !strings.Contains(got, "keys go to: the broadcast targets") {
 		t.Fatalf("while broadcasting:\n%s", got)
 	}

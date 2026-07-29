@@ -25,7 +25,7 @@ func logApp(t *testing.T, capacity int) (App, *commandlog.Log) {
 		Theme:      Options{Dark: true},
 	}), 120, 40)
 
-	return pressKey(t, a, "5"), log
+	return pressKey(t, a, "4"), log
 }
 
 // The acceptance criterion: a command sent to 40 hosts appears once with its
@@ -147,7 +147,7 @@ func TestFleetCommandsAreMarked(t *testing.T) {
 
 func TestLogPanelWithoutALog(t *testing.T) {
 	a := resize(t, NewApp(Config{Hosts: []string{"h1"}, Theme: Options{Dark: true}}), 120, 40)
-	a = pressKey(t, a, "5")
+	a = pressKey(t, a, "4")
 
 	if got := plain(a.logPanel(70, 20)); !strings.Contains(got, "no command log") {
 		t.Fatalf("logPanel() = %q", got)
