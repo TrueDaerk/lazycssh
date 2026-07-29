@@ -38,7 +38,8 @@ requirement.
 For a terminal with no colour at all, `Options.NoColor` drops colour entirely. That is why
 **no view may encode meaning in colour alone**:
 
-- the focused frame is a **thicker** border as well as a brighter one,
+- the focused frame, normally a colour change at the same border weight (lazygit style, in the
+  green `Focus` colour), becomes a **thicker** border when colour is off,
 - the insecure-host-key marker is **reverse video**, not just red,
 - the list cursor is reverse video when colour is off,
 - a failed host is **bold** as well as red.

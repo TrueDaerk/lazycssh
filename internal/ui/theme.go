@@ -41,7 +41,7 @@ func DarkPalette() Palette {
 		Text:      lipgloss.Color("#d0d0d0"),
 		Muted:     lipgloss.Color("#7a7a7a"),
 		Border:    lipgloss.Color("#4a4a4a"),
-		Focus:     lipgloss.Color("#7aa2f7"),
+		Focus:     lipgloss.Color("#9ece6a"),
 		Accent:    lipgloss.Color("#bb9af7"),
 		Success:   lipgloss.Color("#9ece6a"),
 		Warning:   lipgloss.Color("#e0af68"),
@@ -56,7 +56,7 @@ func LightPalette() Palette {
 		Text:      lipgloss.Color("#1c1c1c"),
 		Muted:     lipgloss.Color("#6c6c6c"),
 		Border:    lipgloss.Color("#b0b0b0"),
-		Focus:     lipgloss.Color("#2f5fd0"),
+		Focus:     lipgloss.Color("#2e7d32"),
 		Accent:    lipgloss.Color("#7a3fbf"),
 		Success:   lipgloss.Color("#2e7d32"),
 		Warning:   lipgloss.Color("#8a5a00"),
@@ -98,8 +98,9 @@ type Theme struct {
 
 	// Panel is the frame around an unfocused panel.
 	Panel lipgloss.Style
-	// PanelFocused is the frame around the focused panel. The border is both
-	// coloured and thicker, so focus survives a terminal without colour.
+	// PanelFocused is the frame around the focused panel: the same border at
+	// the same weight, in the focus colour, lazygit style. On a terminal
+	// without colour the border thickens instead, so focus survives there too.
 	PanelFocused lipgloss.Style
 	// PanelBody and PanelBodyFocused are the panel frames without their top
 	// edge. The top line of a titled panel box is drawn by hand so the title
@@ -119,8 +120,8 @@ type Theme struct {
 	PaneFocused lipgloss.Style
 	// PaneFailed frames a pane whose last command exited non-zero.
 	PaneFailed lipgloss.Style
-	// PaneFocusedFailed frames the focused pane of a failing host: the thick
-	// border keeps saying "focus", the colour keeps saying "failed".
+	// PaneFocusedFailed frames the focused pane of a failing host: the colour
+	// keeps saying "failed"; the header's cursor style keeps saying "focus".
 	PaneFocusedFailed lipgloss.Style
 	// PaneHeader is the per-pane status line.
 	PaneHeader lipgloss.Style
@@ -202,18 +203,25 @@ func NewTheme(opts Options) Theme {
 		return s.BorderForeground(c)
 	}
 
-	// The focused frame is a thicker border as well as a brighter one: focus
-	// has to be unmistakable on a terminal that renders no colour at all.
+	// The focused frame keeps the weight of the unfocused one and changes only
+	// colour, lazygit style. Only on a terminal without colour does the focused
+	// border thicken instead, so focus still cannot be missed there.
+	focusedPanelBorder := lipgloss.RoundedBorder()
+	focusedPaneBorder := lipgloss.NormalBorder()
+	if opts.NoColor {
+		focusedPanelBorder = lipgloss.ThickBorder()
+		focusedPaneBorder = lipgloss.ThickBorder()
+	}
 	t.Panel = border(lipgloss.RoundedBorder(), palette.Border)
-	t.PanelFocused = border(lipgloss.ThickBorder(), palette.Focus)
+	t.PanelFocused = border(focusedPanelBorder, palette.Focus)
 	t.PanelBody = t.Panel.BorderTop(false).Padding(0, 1)
 	t.PanelBodyFocused = t.PanelFocused.BorderTop(false).Padding(0, 1)
 	t.BorderText = fg(palette.Border)
 	t.BorderTextFocused = fg(palette.Focus)
 	t.Pane = border(lipgloss.NormalBorder(), palette.Border)
-	t.PaneFocused = border(lipgloss.ThickBorder(), palette.Focus)
+	t.PaneFocused = border(focusedPaneBorder, palette.Focus)
 	t.PaneFailed = border(lipgloss.NormalBorder(), palette.Danger)
-	t.PaneFocusedFailed = border(lipgloss.ThickBorder(), palette.Danger)
+	t.PaneFocusedFailed = border(focusedPaneBorder, palette.Danger)
 	t.PaneHeader = fg(palette.Muted).Padding(0, 1)
 	t.PaneButton = fg(palette.Danger)
 
@@ -309,10 +317,11 @@ func (t Theme) PanelBodyFrame(focused bool) lipgloss.Style {
 }
 
 // PanelBorderChars returns the border character set for a panel, focused or
-// not, for the hand-drawn title line of a titled box. The focused set is
-// thicker as well as brighter, so focus survives a terminal without colour.
+// not, for the hand-drawn title line of a titled box. Focus is a colour change
+// at the same weight, lazygit style; only without colour does the focused set
+// thicken instead.
 func (t Theme) PanelBorderChars(focused bool) lipgloss.Border {
-	if focused {
+	if focused && t.NoColor {
 		return lipgloss.ThickBorder()
 	}
 	return lipgloss.RoundedBorder()

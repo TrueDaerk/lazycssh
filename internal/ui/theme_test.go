@@ -93,10 +93,18 @@ func TestStateStyleForEveryState(t *testing.T) {
 func TestFrameHelpers(t *testing.T) {
 	th := NewTheme(Options{Dark: true})
 
-	if th.PanelFrame(true).GetBorderStyle() == th.PanelFrame(false).GetBorderStyle() {
+	// With colour available, focus is a colour change at the same border
+	// weight, lazygit style.
+	if th.PanelFrame(true).GetBorderStyle() != th.PanelFrame(false).GetBorderStyle() {
+		t.Fatal("the focused panel changed border weight; focus is colour only")
+	}
+	if th.PanelFrame(true).GetBorderTopForeground() == th.PanelFrame(false).GetBorderTopForeground() {
 		t.Fatal("PanelFrame does not distinguish focus")
 	}
-	if th.PaneFrame(true, false).GetBorderStyle() == th.PaneFrame(false, false).GetBorderStyle() {
+	if th.PaneFrame(true, false).GetBorderStyle() != th.PaneFrame(false, false).GetBorderStyle() {
+		t.Fatal("the focused pane changed border weight; focus is colour only")
+	}
+	if th.PaneFrame(true, false).GetBorderTopForeground() == th.PaneFrame(false, false).GetBorderTopForeground() {
 		t.Fatal("PaneFrame does not distinguish focus")
 	}
 	if th.PaneFrame(false, true).GetBorderTopForeground() == th.PaneFrame(false, false).GetBorderTopForeground() {
