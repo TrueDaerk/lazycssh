@@ -2,6 +2,12 @@
 
 ## 2026-07-29
 
+- `ctrl+a` toggles a connected-only view: panes of hosts that cannot take input leave the grid,
+  broadcast `all`/`selected` follow the visible set via the router's visibility limit, and the
+  status bar says `CONNECTED HOSTS ONLY` for as long as it narrows anything. While typing into a
+  pane or the broadcast bar the chord stays a keystroke for the hosts. `core/tui.md` and
+  `core/keys.md` updated. Version 0.8.3.
+
 - Groups and open sessions. The Groups panel now manages the saved session files as **groups**:
   `n` creates one in a two-question dialog (name, then host patterns), `d` deletes after `y/n`,
   `enter`/`space` opens one as a session — resolved through `~/.ssh/config` as every connect is.

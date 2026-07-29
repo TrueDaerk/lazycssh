@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-07-29T21:00:00Z
+timestamp: 2026-07-29T22:00:00Z
 ---
 
 # Keymap and help
@@ -46,6 +46,7 @@ duplicate still fails.
 | `!` | global | jump to the next host whose last command failed |
 | `S` | global (app level) | save the run as a session, prompt prefilled |
 | `n` | global (app level) | connect a new host: opens the pattern prompt in the Status panel, ssh-config aliases complete with `tab` |
+| `ctrl+a` | global (app level) | show only the connected hosts; broadcast follows the visible set |
 | `a` | global (app level) | select every host |
 | `i` | global (app level) | invert the selection |
 | `c` | global (app level) | clear the selection |

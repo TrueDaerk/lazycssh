@@ -142,6 +142,10 @@ type App struct {
 	open   []openSession
 	active int
 
+	// connectedOnly narrows the grid - and with it the broadcast limit - to
+	// the hosts that can take input right now.
+	connectedOnly bool
+
 	// broadcastLine is the broadcast bar's local echo of what was typed
 	// since the last enter. The truth is on the hosts; this is the reminder.
 	broadcastLine []rune
@@ -289,7 +293,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case FleetUpdatedMsg:
 		// Nothing to store: the panels read the fleet's live state when they
-		// render. Redrawing is the whole effect.
+		// render. Redrawing is (almost) the whole effect - under the
+		// connected-only filter the visible set follows liveness, so the
+		// broadcast limit must follow too.
+		if a.connectedOnly {
+			a = a.syncBroadcastLimit()
+		}
 		return a.followFocus(), nil
 
 	case SessionOutputMsg:
@@ -449,6 +458,9 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return next.syncFocusTarget(), nil
 	case key.Matches(msg, a.keys.BroadcastFleet):
 		return a.setBroadcastMode(broadcast.ModeFleet), nil
+
+	case key.Matches(msg, a.keys.ConnectedOnly):
+		return a.toggleConnectedOnly()
 
 	case key.Matches(msg, a.keys.NextFailure):
 		// Global, not a grid key: "which host went wrong" is the question
@@ -803,6 +815,11 @@ func (a App) renderMain() string {
 	focused := a.focus == AreaGrid
 
 	if len(a.hostIDs()) == 0 {
+		if a.connectedOnly && len(a.sessionHosts()) > 0 {
+			// The filter hid every pane; that must not read as an empty run.
+			hint := "no connected hosts\n\nctrl+a shows all of them again."
+			return a.frame(a.theme.PaneFrame(focused, false), r, a.theme.Muted.Render(hint))
+		}
 		// The empty state says what to do next rather than showing an empty
 		// frame: this is the argumentless start.
 		hint := "no hosts\n\n" +
