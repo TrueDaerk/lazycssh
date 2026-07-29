@@ -381,5 +381,8 @@ func (m *Model) resizePTYs() {
 func (m *Model) View() tea.View {
 	v := m.app.View()
 	v.AltScreen = true
+	// Cell-motion reports clicks, releases and the wheel - what the UI acts
+	// on - without the bare-movement chatter of all-motion.
+	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }

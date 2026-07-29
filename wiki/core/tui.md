@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-29T15:00:00Z
+timestamp: 2026-07-29T16:00:00Z
 ---
 
 # TUI shell
@@ -374,6 +374,23 @@ in the warning style while the bar has the keyboard. On short terminals the bar 
 bare line and then disappears before the grid gives up a row.
 
 The pane-management chords (`alt+arrows` and friends) keep working from the bar.
+
+## Mouse
+
+The mouse does what it looks like it should. Hit-testing is pure arithmetic over the same
+`Layout`, `SidebarHeights` and `Grid.Cells` rects the renderer draws from (`internal/ui/
+hittest.go`), so a click resolves without a terminal and the tests stay table-driven.
+
+- **Click** a pane and it takes the keyboard — clicking a terminal is focusing it, so typing
+  starts there. Click the `[x]` at the right of a pane header to close a live host or remove a
+  dead one, exactly like `alt+x`. Click a sidebar box to select its panel, a row to move that
+  panel's cursor there, the broadcast bar to give it the keyboard.
+- **Wheel** over a pane scrolls **that** pane's scrollback a few lines per notch — the pane
+  under the pointer, not the focused one, and without stealing focus. Over a sidebar list it
+  moves the cursor.
+
+Mouse reporting is cell-motion: clicks, releases and the wheel, without bare-movement chatter.
+Full screen is special-cased — the whole main area is the focused pane.
 
 ## The command line
 

@@ -124,6 +124,9 @@ type Theme struct {
 	PaneFocusedFailed lipgloss.Style
 	// PaneHeader is the per-pane status line.
 	PaneHeader lipgloss.Style
+	// PaneButton is the clickable [x] in a pane header. The literal
+	// characters carry the meaning on a terminal without colour.
+	PaneButton lipgloss.Style
 
 	// StatusBar is the bar along the bottom.
 	StatusBar lipgloss.Style
@@ -212,6 +215,7 @@ func NewTheme(opts Options) Theme {
 	t.PaneFailed = border(lipgloss.NormalBorder(), palette.Danger)
 	t.PaneFocusedFailed = border(lipgloss.ThickBorder(), palette.Danger)
 	t.PaneHeader = fg(palette.Muted).Padding(0, 1)
+	t.PaneButton = fg(palette.Danger)
 
 	t.StatusBar = fg(palette.Text).Padding(0, 1)
 	t.StatusWarning = fg(palette.Warning).Bold(true).Padding(0, 1)

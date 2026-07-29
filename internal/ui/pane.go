@@ -4,8 +4,14 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
+
+// paneCloseButton is the clickable close control at the right end of a pane
+// header. Literal characters, so it survives a terminal without colour, and a
+// fixed width, so the hit-test arithmetic cannot drift from the rendering.
+const paneCloseButton = "[x]"
 
 // paneHeader renders the one line that identifies a pane: its number, its
 // host, the connection state and the last exit code, all read from live state
@@ -31,14 +37,19 @@ func (a App) paneHeader(host, width int, focused bool) string {
 		exitWidth = 1 + len([]rune(ansi.Strip(exitLabel)))
 	}
 
-	avail := width - len(number) - len([]rune(stateLabel)) - exitWidth
+	buttonWidth := 0
+	if width >= len(number)+minHeaderName+len(paneCloseButton)+1 {
+		buttonWidth = len(paneCloseButton) + 1
+	}
+
+	avail := width - len(number) - len([]rune(stateLabel)) - exitWidth - buttonWidth
 	if avail < minHeaderName {
 		stateLabel = ""
-		avail = width - len(number) - exitWidth
+		avail = width - len(number) - exitWidth - buttonWidth
 	}
 	if avail < minHeaderName {
 		exitLabel = ""
-		avail = width - len(number)
+		avail = width - len(number) - buttonWidth
 	}
 	name := truncateLeft(id, max(0, avail))
 
@@ -55,6 +66,13 @@ func (a App) paneHeader(host, width int, focused bool) string {
 	}
 	if exitLabel != "" {
 		line += " " + exitLabel
+	}
+	if buttonWidth > 0 {
+		// The button sits flush right, where paneCloseHit expects it.
+		if pad := width - lipgloss.Width(line) - len(paneCloseButton); pad > 0 {
+			line += strings.Repeat(" ", pad)
+		}
+		line += a.theme.PaneButton.Render(paneCloseButton)
 	}
 	return line
 }

@@ -290,6 +290,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		return a.handleKey(msg)
+
+	case tea.MouseClickMsg:
+		if msg.Button == tea.MouseLeft {
+			return a.handleClick(msg.X, msg.Y)
+		}
+		return a, nil
+
+	case tea.MouseWheelMsg:
+		return a.handleWheel(msg), nil
 	}
 
 	return a, nil

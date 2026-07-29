@@ -2,6 +2,15 @@
 
 ## 2026-07-29
 
+- Mouse support: cell-motion reporting is on. Clicking a pane focuses it (typing starts there),
+  the new `[x]` button at the right of every pane header closes a live host or removes a dead
+  one, clicking a sidebar box selects its panel and a row moves that panel's cursor, and
+  clicking the broadcast bar gives it the keyboard. The wheel scrolls the pane under the
+  pointer — not the focused one, without stealing focus — and moves sidebar cursors.
+  Hit-testing is pure arithmetic over the existing layout rects (`internal/ui/hittest.go`,
+  `mouse.go`), table-tested without a terminal. `core/tui.md` and `core/keys.md` updated.
+  Version 0.7.0.
+
 - Live broadcast bar: an always-visible input line under the grid (`Layout.Broadcast`, degrades
   to a bare line and then disappears on short terminals). `6` focuses it, tab reaches it after
   the last panel, `ctrl+]` leaves. Every keystroke fans out live through the broadcast scope —
