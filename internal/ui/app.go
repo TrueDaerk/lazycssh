@@ -509,6 +509,10 @@ func (a App) handleHostsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		a.filter.Focus()
 		return a, nil
 	}
+
+	if next, handled := a.handleSelectionKey(msg.String()); handled {
+		return next, nil
+	}
 	return a, nil
 }
 

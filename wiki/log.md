@@ -2,6 +2,12 @@
 
 ## 2026-07-28
 
+- Selection-set operations: `a`, `i`, `c`, `u` and `d` in the Hosts panel, and `/select` /
+  `/deselect` with a glob from the command line. Patterns match across the whole run rather than
+  the working set, and `/`-prefixed lines are never sent to a host - `select` is a shell builtin
+  and a real command must never be intercepted. `core/broadcast-scope.md` and `core/keys.md`
+  updated. Version 0.1.29.
+
 - Added the broadcast command line: `:` opens a prompt that carries the target count while the
   command is typed, `enter` sends it to the active broadcast set and reports how many hosts of the
   scope received it, and the prompt owns the keyboard so editing keys cannot leak to the remote

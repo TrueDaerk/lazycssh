@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"io"
 	"strings"
 	"testing"
 
@@ -382,4 +383,19 @@ func TestBroadcastKeysWithoutARouter(t *testing.T) {
 	if a.BroadcastMode() != broadcast.ModeAll {
 		t.Fatalf("BroadcastMode() = %v without a router", a.BroadcastMode())
 	}
+}
+
+// Connected and Writer make the fake fleet a broadcast.Sessions as well as a
+// Fleet, so the router can be attached in tests exactly as it is in a run.
+func (f *fakeFleet) Connected(id string) bool {
+	s, ok := f.sessions[id]
+	return ok && s.State() == ssh.StateConnected
+}
+
+func (f *fakeFleet) Writer(id string) (io.Writer, bool) {
+	s, ok := f.sessions[id]
+	if !ok || s.State() != ssh.StateConnected {
+		return nil, false
+	}
+	return s, true
 }

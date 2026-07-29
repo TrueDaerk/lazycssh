@@ -42,6 +42,11 @@ are tests, not conventions.
 | `enter` | sidebar | focus that host's pane |
 | `space` | sidebar | toggle selection |
 | `/` | sidebar | filter |
+| `a` | sidebar | select every host |
+| `i` | sidebar | invert the selection |
+| `c` | sidebar | clear the selection |
+| `u` | sidebar | select the hosts that are up |
+| `d` | sidebar | select the hosts that are down |
 | `w` | sidebar | save the working set or session |
 | `[` / `]` | sidebar | previous / next chunk of hosts |
 | `←`/`h`, `→`/`l`, `↑`/`k`, `↓`/`j` | panes | move between panes |

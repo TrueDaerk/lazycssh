@@ -170,6 +170,97 @@ func (r *Router) SelectWorkingSet() {
 	}
 }
 
+// SelectWhere selects every host in the run matching a predicate and reports
+// how many are selected as a result.
+//
+// The predicate is supplied by the caller because the router knows liveness but
+// not state: "every failed host" is a question about the transport, and pushing
+// it in here would drag the whole session model into this package.
+func (r *Router) SelectWhere(match func(id string) bool) int {
+	if match == nil {
+		return len(r.selected)
+	}
+	for _, id := range r.ws.Hosts() {
+		if match(id) {
+			r.selected[id] = struct{}{}
+		}
+	}
+	return len(r.selected)
+}
+
+// SelectMatching selects the hosts matching a glob and reports how many matched.
+//
+// The pattern is matched against every host in the run, not only the working
+// set: a selection is a statement about machines, and silently skipping the
+// ones outside the current window would make `web-*` mean different things at
+// different times.
+func (r *Router) SelectMatching(glob string) (int, error) {
+	pattern, err := workingset.NewPattern(glob)
+	if err != nil {
+		return 0, err
+	}
+
+	matched := pattern.Select(r.ws.Hosts())
+	r.Select(matched...)
+	return len(matched), nil
+}
+
+// DeselectMatching removes the hosts matching a glob and reports how many
+// matched.
+func (r *Router) DeselectMatching(glob string) (int, error) {
+	pattern, err := workingset.NewPattern(glob)
+	if err != nil {
+		return 0, err
+	}
+
+	matched := pattern.Select(r.ws.Hosts())
+	r.Deselect(matched...)
+	return len(matched), nil
+}
+
+// InvertSelection selects everything that was not selected, and vice versa,
+// across the whole run.
+func (r *Router) InvertSelection() int {
+	inverted := make(map[string]struct{})
+	for _, id := range r.ws.Hosts() {
+		if _, ok := r.selected[id]; !ok {
+			inverted[id] = struct{}{}
+		}
+	}
+	r.selected = inverted
+	return len(r.selected)
+}
+
+// SelectAll selects every host in the run.
+func (r *Router) SelectAll() int {
+	for _, id := range r.ws.Hosts() {
+		r.selected[id] = struct{}{}
+	}
+	return len(r.selected)
+}
+
+// SelectConnected selects the hosts that can take input right now. Without a
+// transport nothing is known about liveness, so nothing is selected rather than
+// everything.
+func (r *Router) SelectConnected() int {
+	if r.sessions == nil {
+		return len(r.selected)
+	}
+	return r.SelectWhere(r.sessions.Connected)
+}
+
+// SelectDisconnected selects the hosts that cannot take input right now, which
+// is how "show me what broke" is built.
+func (r *Router) SelectDisconnected() int {
+	if r.sessions == nil {
+		return len(r.selected)
+	}
+	return r.SelectWhere(func(id string) bool { return !r.sessions.Connected(id) })
+}
+
+// SelectionCount is how many hosts are toggled.
+func (r *Router) SelectionCount() int { return len(r.selected) }
+
 // ClearSelection empties the selection.
 func (r *Router) ClearSelection() { r.selected = make(map[string]struct{}) }
 
