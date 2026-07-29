@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-29T19:00:00Z
+timestamp: 2026-07-29T21:00:00Z
 ---
 
 # TUI shell
@@ -306,39 +306,44 @@ and `!` jumps to the next failure. What a dedicated Hosts panel used to add live
   name.
 
 An argumentless start opens on the Status panel with **no** input focused: the empty grid names
-the options — `n` to connect, the Sessions panel, the CLI — and which of them comes first is the
+the options — `n` to connect, the Groups panel, the CLI — and which of them comes first is the
 user's call, not the program's.
 
-### [2] Groups / Views
+### [2] Groups
 
-The working sets defined for this run — see [Working sets](./working-sets.md) — plus where the
-window sits.
+The saved groups — the [session files](./session-files.md) on disk — each with its host count
+and description. This panel is a group's whole lifecycle; the full model is in
+[Groups and open sessions](./groups-and-sessions.md).
 
-Rows: the built-in **all hosts** entry first (undoing a narrowing has to be one keystroke away),
-then every named set with its definition, and — when the active set is neither — the **unnamed**
-ad hoc set the user is actually in, so the panel can never hide where they are.
+- `enter`/`space` open the group as a session: the program resolves its patterns through
+  `~/.ssh/config` and connects; a group whose session is already open is foregrounded instead
+  of dialled twice. The open group's row is marked with `▸` as well as a style,
+- `n` creates a group: a two-question dialog (name, then host patterns, brace expansion
+  allowed) that owns the keyboard; a taken name or a malformed pattern keeps the dialog open
+  with what was typed,
+- `d` asks `delete "x"? y/n` and removes the file on `y` — an open session of that group is
+  untouched,
+- `w` saves the current run as a group: a name prompt that owns the keyboard. An existing name
+  is **never** replaced silently: the first `enter` turns into `overwrite "x"? y/n`. The run's
+  **patterns** are written, not the hostnames they expanded to,
+- `[` and `]` page the **working set** by its own chunk size — see
+  [Working sets](./working-sets.md),
+- one unreadable file becomes one `(unreadable)` row rather than an empty panel — hiding the
+  other groups would make a typo look like data loss.
 
-- the active row is marked with `▸` as well as a style, so it survives a terminal without colour,
-- `enter` makes that row the working set: the one keystroke from "which twenty am I working on"
-  to "these twenty",
-- `[` and `]` page the **working set** by its own chunk size. That is a different thing from
-  `alt+p`/`alt+n`, which page the pane window; the panel shows both lines for exactly that reason.
+The panel does not dial. `enter` emits a `GroupOpenMsg`; the layer that owns the transport acts
+on it, which keeps `internal/ui` unable to open a connection. While this panel has focus, `n`
+and `d` deliberately shadow their global meanings (connect a host, select the down hosts) —
+lazygit-style panel keys, resolved by routing order before the global bindings.
 
 ### [3] Sessions
 
-The saved [session files](./session-files.md), each with its host count and description.
+The **open** sessions — the runtime workspaces, one per opened group plus the ad hoc session of
+an unnamed run — each with its up count, the foreground one marked with `▸`.
 
-- `enter` launches the session under the cursor, `space` merges it into the current run,
-- `w` saves the current run: a name prompt that owns the keyboard, pre-filled with the session
-  the run was started from,
-- an existing name is **never** replaced silently: the first `enter` turns into `overwrite "x"?
-  y/n`, and nothing is written until it is answered,
-- the run's **patterns** are written, not the hostnames they expanded to,
-- one unreadable file becomes one `(unreadable)` row rather than an empty panel — hiding the
-  other sessions would make a typo look like data loss.
-
-The panel does not dial. `enter` emits a `SessionLaunchMsg`; the layer that owns the transport
-acts on it, which keeps `internal/ui` unable to open a connection.
+- `enter`/`space` bring the session under the cursor to the foreground: its panes replace the
+  grid, the broadcast scope follows, and nothing is dialled or torn down — a background
+  session keeps every connection.
 
 ### [4] Command log
 
@@ -422,8 +427,10 @@ typed, and the audit trail is for commands.
 | `FleetUpdatedMsg` | redraw; the panels read the fleet's live state themselves |
 | `SessionOutputMsg` | redraw; the pane reads the live scrollback itself |
 | `HostsChangedMsg` | replace the host list, keeping the focused host |
-| `SessionsChangedMsg` | re-read the session directory |
-| `SessionLaunchMsg` | emitted, not handled: the program opens or merges a saved session |
+| `SessionsChangedMsg` | re-read the group directory |
+| `GroupOpenMsg` | emitted, not handled: the program resolves and connects a saved group's hosts |
+| `SessionOpenedMsg` | a group's hosts are in the fleet: upsert its open session and foreground it |
+| `GridChangedMsg` | emitted, not handled: the visible panes changed shape, the program resizes the PTYs |
 | `HostConnectMsg` | emitted, not handled: the program resolves and connects the asked-for patterns |
 | `ConnectErrorMsg` | a connect request's resolve error, shown in the Status panel |
 | `ReconnectHostMsg` | emitted, not handled: `r` in the grid asks the program to reconnect the focused host |

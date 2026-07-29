@@ -46,8 +46,17 @@ func TestAllReturnsEveryBinding(t *testing.T) {
 	}
 }
 
+// deliberateShadows are the keys that intentionally mean something else in one
+// panel than they do globally, lazygit style: the Groups panel keeps n and d
+// for itself, and the router in handleKey resolves them before the global
+// bindings are consulted. Every other duplicate is a bug.
+var deliberateShadows = map[Area]map[string]bool{
+	AreaSidebar: {"n": true, "d": true},
+}
+
 // No key binding is ambiguous between two things that are handled at the same
-// time: an area's own bindings plus the global ones.
+// time: an area's own bindings plus the global ones - except the declared
+// panel shadows, which are resolved by routing order.
 func TestNoAmbiguousBindingsWithinAnArea(t *testing.T) {
 	k := DefaultKeyMap()
 
@@ -58,6 +67,9 @@ func TestNoAmbiguousBindingsWithinAnArea(t *testing.T) {
 
 			for _, b := range active {
 				for _, pressed := range b.Keys() {
+					if deliberateShadows[area][pressed] {
+						continue
+					}
 					if other, taken := seen[pressed]; taken {
 						t.Errorf("key %q means both %q and %q while the %s has focus",
 							pressed, other, b.Help().Desc, area)
@@ -85,6 +97,9 @@ func TestGlobalBindingsDoNotCollideWithAnyArea(t *testing.T) {
 	for _, area := range []Area{AreaSidebar, AreaGrid} {
 		for _, b := range k.Bindings(area) {
 			for _, pressed := range b.Keys() {
+				if deliberateShadows[area][pressed] {
+					continue
+				}
 				if clash, taken := globals[pressed]; taken {
 					t.Errorf("%s: key %q is both %q and the global %q",
 						area, pressed, b.Help().Desc, clash.Help().Desc)

@@ -99,6 +99,14 @@ type Router struct {
 	mode     Mode
 	selected map[string]struct{}
 	focus    string
+
+	// limit is the visibility limit: the hosts the user can currently see.
+	// Nil means no limit. When set, [ModeAll] and [ModeSelected] are
+	// intersected with it, so a keystroke never reaches a host whose pane is
+	// not on screen. [ModeSingle] is already bounded to the focused pane, and
+	// [ModeFleet] deliberately ignores it - it is the explicit every-host
+	// escape hatch and stays one.
+	limit map[string]struct{}
 }
 
 // Attach connects the router to the live transport. Until it is attached the
@@ -291,6 +299,39 @@ func (r *Router) Excluded() []string {
 // SetFocus records the focused pane, the target of [ModeSingle].
 func (r *Router) SetFocus(id string) { r.focus = id }
 
+// SetLimit restricts [ModeAll] and [ModeSelected] to the given hosts - the
+// ones whose panes are on screen. Nil lifts the limit. The limit is pushed by
+// the UI, which is the only layer that knows what is visible; the router only
+// enforces that a keystroke cannot reach past it.
+func (r *Router) SetLimit(ids []string) {
+	if ids == nil {
+		r.limit = nil
+		return
+	}
+	limit := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		limit[id] = struct{}{}
+	}
+	r.limit = limit
+}
+
+// Limited reports whether a visibility limit is in force.
+func (r *Router) Limited() bool { return r.limit != nil }
+
+// withinLimit filters hosts by the visibility limit, keeping order.
+func (r *Router) withinLimit(ids []string) []string {
+	if r.limit == nil {
+		return ids
+	}
+	var out []string
+	for _, id := range ids {
+		if _, ok := r.limit[id]; ok {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
 // Forget drops every trace of hosts that left the run: their selection, and
 // the focus if it pointed at one of them. Selection state that outlives its
 // host over-reports counts and prints a dead host in the single-mode label.
@@ -354,7 +395,7 @@ func (r *Router) Scope() []string {
 				out = append(out, id)
 			}
 		}
-		return out
+		return r.withinLimit(out)
 	case ModeSingle:
 		// Single mode deliberately ignores the working set: it is one host, it
 		// is the pane the user is looking at, and it is how a password prompt
@@ -369,7 +410,7 @@ func (r *Router) Scope() []string {
 		}
 		return nil
 	default:
-		return r.ws.Members()
+		return r.withinLimit(r.ws.Members())
 	}
 }
 

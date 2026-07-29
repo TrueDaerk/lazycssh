@@ -78,13 +78,15 @@ type KeyMap struct {
 	SelectDwn key.Binding
 
 	// Sidebar.
-	Up        key.Binding
-	Down      key.Binding
-	Choose    key.Binding
-	Toggle    key.Binding
-	SaveSet   key.Binding
-	NextChunk key.Binding
-	PrevChunk key.Binding
+	Up          key.Binding
+	Down        key.Binding
+	Choose      key.Binding
+	Toggle      key.Binding
+	SaveSet     key.Binding
+	NextChunk   key.Binding
+	PrevChunk   key.Binding
+	GroupNew    key.Binding
+	GroupDelete key.Binding
 
 	// Grid. A focused pane is a terminal: plain keys are forwarded to the
 	// host, so everything lazycssh keeps for itself here is an alt or shift
@@ -151,11 +153,15 @@ func DefaultKeyMap() KeyMap {
 
 		Up:        key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
 		Down:      key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
-		Choose:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "choose this row")),
-		Toggle:    key.NewBinding(key.WithKeys("space", " "), key.WithHelp("space", "merge this session in")),
-		SaveSet:   key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "save the working set or session")),
+		Choose:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open / bring to the foreground")),
+		Toggle:    key.NewBinding(key.WithKeys("space", " "), key.WithHelp("space", "open / bring to the foreground")),
+		SaveSet:   key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "save the run as a group")),
 		NextChunk: key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "next chunk of hosts")),
 		PrevChunk: key.NewBinding(key.WithKeys("["), key.WithHelp("[", "previous chunk of hosts")),
+		GroupNew: key.NewBinding(key.WithKeys("n"),
+			key.WithHelp("n", "new group (in the Groups panel)")),
+		GroupDelete: key.NewBinding(key.WithKeys("d"),
+			key.WithHelp("d", "delete this group (in the Groups panel)")),
 
 		LeaveTyping: key.NewBinding(key.WithKeys("ctrl+]"),
 			key.WithHelp("ctrl+]", "stop typing to the host")),
@@ -198,6 +204,7 @@ func (k KeyMap) sidebar() []key.Binding {
 	return []key.Binding{
 		k.Up, k.Down, k.Choose, k.Toggle,
 		k.SaveSet, k.NextChunk, k.PrevChunk,
+		k.GroupNew, k.GroupDelete,
 	}
 }
 

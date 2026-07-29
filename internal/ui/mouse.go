@@ -103,9 +103,9 @@ func (a App) hostIDAt(index int) string {
 func (a App) moveCursorToVisibleRow(panel Panel, bodyRow int) App {
 	switch panel {
 	case PanelGroups:
-		a.groupCursor = clamp(bodyRow, 0, max(0, len(a.groupRows())-1))
+		a.groupCursor = clamp(bodyRow, 0, max(0, len(a.groupList)-1))
 	case PanelSessions:
-		a.sessionCursor = clamp(bodyRow, 0, max(0, len(a.sessionRows)-1))
+		a.sessionCursor = clamp(bodyRow, 0, max(0, len(a.open)-1))
 	case PanelCommandLog:
 		a.logCursor = clamp(bodyRow, 0, max(0, len(a.logEntries())-1))
 	}
@@ -117,9 +117,9 @@ func (a App) moveCursorToVisibleRow(panel Panel, bodyRow int) App {
 func (a App) movePanelCursor(panel Panel, delta int) App {
 	switch panel {
 	case PanelGroups:
-		a.groupCursor = clamp(a.groupCursor+delta, 0, max(0, len(a.groupRows())-1))
+		a.groupCursor = clamp(a.groupCursor+delta, 0, max(0, len(a.groupList)-1))
 	case PanelSessions:
-		a.sessionCursor = clamp(a.sessionCursor+delta, 0, max(0, len(a.sessionRows)-1))
+		a.sessionCursor = clamp(a.sessionCursor+delta, 0, max(0, len(a.open)-1))
 	case PanelCommandLog:
 		a.logCursor = clamp(a.logCursor+delta, 0, max(0, len(a.logEntries())-1))
 	}

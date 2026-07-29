@@ -23,9 +23,9 @@ const (
 	// PanelStatus answers "what happens if I type". It also hosts the new-host
 	// prompt: connecting is about the run, and the run's summary is here.
 	PanelStatus Panel = iota
-	// PanelGroups lists the working sets.
+	// PanelGroups lists the saved groups: create, delete, open.
 	PanelGroups
-	// PanelSessions lists the saved session configs.
+	// PanelSessions lists the open sessions and switches the foreground.
 	PanelSessions
 	// PanelCommandLog is the audit trail of what was sent this run.
 	PanelCommandLog
@@ -128,6 +128,20 @@ type App struct {
 	searchInput textinput.Model
 	hostInput   textinput.Model
 
+	// The new-group dialog: first the name, then the host patterns.
+	groupNameInput  textinput.Model
+	groupHostsInput textinput.Model
+	groupStage      groupStage
+	groupErr        error
+	// deleteGroup is the group the d key asked about; the panel shows the
+	// question until y answers it or anything else withdraws it.
+	deleteGroup string
+
+	// open are the open sessions, in open order; active is the foreground
+	// one, -1 when nothing is open.
+	open   []openSession
+	active int
+
 	// broadcastLine is the broadcast bar's local echo of what was typed
 	// since the last enter. The truth is on the hosts; this is the reminder.
 	broadcastLine []rune
@@ -146,8 +160,8 @@ type App struct {
 	cmdHistoryPos int
 	lastDelivery  string
 
-	sessionRows      []sessionRow
-	sessionsErr      error
+	groupList        []groupRow
+	groupsErr        error
 	saveErr          error
 	confirmOverwrite bool
 
@@ -189,23 +203,37 @@ func NewApp(cfg Config) App {
 	host.Placeholder = "host, user@host:port, web-{01..04}"
 	host.Prompt = ""
 
+	groupName := textinput.New()
+	groupName.Placeholder = "group name"
+	groupName.Prompt = ""
+
+	groupHosts := textinput.New()
+	groupHosts.Placeholder = "host patterns, space separated"
+	groupHosts.Prompt = ""
+
 	a := App{
-		cfg:         cfg,
-		keys:        keys,
-		theme:       theme,
-		help:        h,
-		saveInput:   save,
-		cmdInput:    command,
-		searchInput: search,
-		hostInput:   host,
-		scroll:      make(map[string]int),
-		focus:       AreaSidebar,
-		panel:       PanelStatus,
+		cfg:             cfg,
+		keys:            keys,
+		theme:           theme,
+		help:            h,
+		saveInput:       save,
+		cmdInput:        command,
+		searchInput:     search,
+		hostInput:       host,
+		groupNameInput:  groupName,
+		groupHostsInput: groupHosts,
+		scroll:          make(map[string]int),
+		focus:           AreaSidebar,
+		panel:           PanelStatus,
+		active:          -1,
 	}
+	// A run that starts with hosts starts with a session holding them: the
+	// CLI arguments are a workspace like any opened group.
+	a = a.adoptNewHosts()
 	// An argumentless start opens with nothing focused: the empty grid says
 	// what the options are, and which of them comes first - connect, launch a
 	// session, read the help - is the user's call, not the program's.
-	return a.loadSessions()
+	return a.loadGroups()
 }
 
 // Init asks the terminal for its background colour so the palette can match it.
@@ -249,7 +277,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.sendCommand(msg.Command)
 
 	case SessionsChangedMsg:
-		return a.loadSessions(), nil
+		return a.loadGroups(), nil
+
+	case SessionOpenedMsg:
+		if msg.Patterns != nil {
+			a.cfg.RunPatterns = msg.Patterns
+		}
+		a.connectErr = ""
+		next := a.openSessionAt(msg.Name, msg.Hosts)
+		return next, gridChanged()
 
 	case FleetUpdatedMsg:
 		// Nothing to store: the panels read the fleet's live state when they
@@ -262,7 +298,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case HostsChangedMsg:
-		next := a.withHosts(msg.Hosts).followFocus()
+		focused := a.FocusedHost()
+		next := a.withHosts(msg.Hosts).pruneSessions().adoptNewHosts().refocus(focused).followFocus()
 		// The fleet changed, so whatever a connect complained about is stale.
 		next.connectErr = ""
 		if msg.Patterns != nil {
@@ -302,7 +339,8 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// the pane forwards.
 	if msg.String() == "ctrl+q" &&
 		(a.cmdInput.Focused() || a.hostInput.Focused() ||
-			a.searchInput.Focused() || a.Saving()) {
+			a.searchInput.Focused() || a.Saving() ||
+			a.GroupDialogOpen() || a.deleteGroup != "") {
 		return a, tea.Quit
 	}
 
@@ -317,6 +355,17 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// the filter does: a session called "x" has to be nameable.
 	if a.Saving() {
 		return a.handleSaveKey(msg)
+	}
+
+	// The new-group dialog has the keyboard while it is open, for the same
+	// reason the save prompt does: a group called "n" has to be nameable.
+	if a.GroupDialogOpen() {
+		return a.handleGroupDialogKey(msg)
+	}
+
+	// So does the delete question: it is answered, never typed past.
+	if a.deleteGroup != "" {
+		return a.handleGroupDeleteKey(msg)
 	}
 
 	// The new-host prompt has the keyboard while it is open: a pattern
@@ -352,6 +401,18 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.handleBroadcastKey(msg)
 	}
 
+	// The Groups panel's own letters shadow the global ones while it has
+	// focus: n creates a group rather than connecting a host, d asks to
+	// delete rather than selecting the hosts that are down.
+	if a.focus == AreaSidebar && a.panel == PanelGroups {
+		switch {
+		case key.Matches(msg, a.keys.GroupNew):
+			return a.beginNewGroup(), nil
+		case key.Matches(msg, a.keys.GroupDelete):
+			return a.beginDeleteGroup(), nil
+		}
+	}
+
 	switch {
 	case key.Matches(msg, a.keys.Quit):
 		return a, tea.Quit
@@ -372,8 +433,8 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, a.keys.QuickSave):
 		// Saving works from anywhere at the app level: the prompt is
 		// prefilled and enter confirms, so the common case is three keys.
-		// The Sessions panel is where the prompt renders, so it opens too.
-		a.panel = PanelSessions
+		// The Groups panel is where the prompt renders, so it opens too.
+		a.panel = PanelGroups
 		a.focus = AreaSidebar
 		return a.beginSave(), nil
 
@@ -539,9 +600,10 @@ func (a App) handleLogKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
-// handleSessionsKey drives the Sessions panel.
+// handleSessionsKey drives the Sessions panel: the arrows move through the
+// open sessions and enter or space brings one to the foreground.
 func (a App) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	rows := len(a.sessionRows)
+	rows := len(a.open)
 
 	switch {
 	case key.Matches(msg, a.keys.Up):
@@ -554,23 +616,18 @@ func (a App) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return a.movePanel(+1), nil
 		}
 		return a.moveSessionCursor(+1), nil
-	case key.Matches(msg, a.keys.Choose):
-		return a.launchSelectedSession(false)
-	case key.Matches(msg, a.keys.Toggle):
-		// Space merges rather than replaces, which is the same "add to what I
-		// have" meaning it carries in the Hosts panel.
-		return a.launchSelectedSession(true)
-	case key.Matches(msg, a.keys.SaveSet):
-		return a.beginSave(), nil
+	case key.Matches(msg, a.keys.Choose), key.Matches(msg, a.keys.Toggle):
+		return a.foregroundSelectedSession()
 	}
 	return a, nil
 }
 
-// handleGroupsKey drives the Groups panel: the arrows move the group cursor and
-// enter makes that group the working set, which is the one keystroke the panel
-// exists for.
+// handleGroupsKey drives the Groups panel: the arrows move the group cursor
+// and enter or space opens that group as a session, which is the one keystroke
+// the panel exists for. n and d are handled earlier, before the global
+// bindings could shadow them.
 func (a App) handleGroupsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	rows := len(a.groupRows())
+	rows := len(a.groupList)
 
 	switch {
 	case key.Matches(msg, a.keys.Up):
@@ -583,14 +640,10 @@ func (a App) handleGroupsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return a.movePanel(+1), nil
 		}
 		return a.moveGroupCursor(+1), nil
-	case key.Matches(msg, a.keys.Choose):
-		next, err := a.activateSelectedGroup()
-		if err != nil {
-			// A working set that cannot be activated is a bug in the model,
-			// not something the user can fix; it must not take the run down.
-			return a, nil
-		}
-		return next, nil
+	case key.Matches(msg, a.keys.Choose), key.Matches(msg, a.keys.Toggle):
+		return a.openSelectedGroup()
+	case key.Matches(msg, a.keys.SaveSet):
+		return a.beginSave(), nil
 	case key.Matches(msg, a.keys.NextChunk):
 		if a.cfg.WorkingSet != nil {
 			a.cfg.WorkingSet.Next()
@@ -842,8 +895,22 @@ func (a App) renderStatusBar() string {
 	}
 
 	parts = append(parts, a.theme.Base.Render("lazycssh"))
-	if a.cfg.SessionName != "" {
-		parts = append(parts, a.theme.Base.Render("@"+a.cfg.SessionName))
+	// The foreground session is what the panes and the broadcast scope are
+	// about, so its name is the one the bar carries.
+	sessionLabel := a.ActiveSession()
+	if sessionLabel == "" {
+		sessionLabel = a.cfg.SessionName
+	}
+	if sessionLabel == adHocSessionName {
+		// An unnamed run has no name worth a label; the panel still lists it.
+		sessionLabel = ""
+	}
+	if sessionLabel != "" {
+		parts = append(parts, a.theme.Base.Render("@"+sessionLabel))
+	}
+	if len(a.open) > 1 {
+		parts = append(parts, a.theme.Muted.Render(
+			fmt.Sprintf("%d sessions", len(a.open))))
 	}
 	hosts := len(a.hostIDs())
 	parts = append(parts, a.theme.Muted.Render(fmt.Sprintf("%d host%s", hosts, plural(hosts))))

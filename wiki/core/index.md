@@ -13,6 +13,7 @@ The runtime pieces of lazycssh.
 * [Working sets](./working-sets.md) - the current subject of work: counts, ranges, patterns, paging and named sets
 * [Broadcast scope](./broadcast-scope.md) - what `all` means when a working set is active, and how the target count stays honest
 * [Session files](./session-files.md) - the on-disk format for a saved run, and why no credential ever appears in one
+* [Groups and open sessions](./groups-and-sessions.md) - persisted host groups, the sessions they open into, and what the foreground scopes
 * [Credential handling](./credentials.md) - agent, identity file or secret_command, and how a secret stays out of logs and files
 * [Theme and styles](./theme.md) - the one place styles live, and why colour is never the only carrier of meaning
 * [Keymap and help](./keys.md) - every binding declared once, the help generated from it, and how ambiguity is prevented

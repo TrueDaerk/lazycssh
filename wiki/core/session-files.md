@@ -4,13 +4,17 @@ title: Session files
 description: The on-disk format for a saved run — schema, location, strictness, and why no credential ever appears in one.
 resource: internal/sessions
 tags: [config, yaml, xdg, sessions, security]
-timestamp: 2026-07-29T17:00:00Z
+timestamp: 2026-07-29T21:00:00Z
 ---
 
 # Session files
 
 Typing forty hostnames and their users on every run defeats the purpose of the tool. A **session
 file** names a set of hosts plus how to reach them, so `lazycssh @prod-web` reproduces the run.
+
+In the TUI these files are the **groups**: the Groups panel lists, creates, deletes and opens
+them, and opening one makes an [open session](./groups-and-sessions.md) out of it. Same format,
+same directory — one file is both a CLI argument and a panel row.
 
 ## Location
 
@@ -51,7 +55,7 @@ working_set: first 20
 |-------|---------|
 | `version` | schema version; a file newer than the build is refused, not half-read |
 | `name` | must match the filename — `lazycssh @a` never opens the session called `b` |
-| `description` | free text, shown in the Sessions panel |
+| `description` | free text, shown in the Groups panel |
 | `defaults` | connection options for every entry that does not override them |
 | `hosts[].pattern` | a host argument **unexpanded**, so `srv1-{01..40}.example.com` stays readable |
 | `hosts[].user`, `.port`, `.identity_file`, `.jump_host` | per-entry overrides |

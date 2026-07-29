@@ -272,8 +272,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resizePTYs()
 		return m, m.forward(ui.HostsChangedMsg{Hosts: m.mgr.IDs(), Patterns: m.patterns})
 
-	case ui.SessionLaunchMsg:
-		return m.launchSession(msg)
+	case ui.GroupOpenMsg:
+		return m.openGroup(msg)
+
+	case ui.GridChangedMsg:
+		// The visible panes changed shape - a session switch, a filter - so
+		// the remote PTYs must match what is drawn now.
+		m.resizePTYs()
+		return m, nil
 
 	case ui.HostConnectMsg:
 		return m.connectHosts(msg)
@@ -291,17 +297,20 @@ func (m *Model) forward(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
-// launchSession adds a saved session's hosts to the running fleet. Launching
-// and merging both add: the panes of hosts already in the run are never torn
-// down by loading more. A non-merge launch additionally applies the session's
-// broadcast mode and working set, because that is what "launch" promises.
-func (m *Model) launchSession(msg ui.SessionLaunchMsg) (tea.Model, tea.Cmd) {
+// openGroup opens a saved group as a session: its hosts are resolved through
+// ~/.ssh/config - HostName, Port and IdentityFile apply, the way every connect
+// does - and added to the fleet. Hosts already in the run are reused, never
+// dialled twice: opening a group a second time foregrounds its session.
+//
+// The group's broadcast mode and working set are applied, because opening is
+// an explicit action about what the next keystroke should mean.
+func (m *Model) openGroup(msg ui.GroupOpenMsg) (tea.Model, tea.Cmd) {
 	if m.store == nil {
 		return m, nil
 	}
 	sess, err := m.store.Load(msg.Name)
 	if err != nil {
-		// The Sessions panel shows unreadable files on its rows; re-reading
+		// The Groups panel shows unreadable files on its rows; re-reading
 		// the directory is how the error becomes visible.
 		return m, m.forward(ui.SessionsChangedMsg{})
 	}
@@ -311,23 +320,31 @@ func (m *Model) launchSession(msg ui.SessionLaunchMsg) (tea.Model, tea.Cmd) {
 		return m, m.forward(ui.SessionsChangedMsg{})
 	}
 
+	running := make(map[string]bool)
+	for _, id := range m.mgr.IDs() {
+		running[id] = true
+	}
+	ids := make([]string, 0, len(fleet))
 	for _, host := range fleet {
-		m.mgr.Add(m.ctx, host)
+		if running[host.Alias] {
+			ids = append(ids, host.Alias)
+			continue
+		}
+		ids = append(ids, m.mgr.Add(m.ctx, host))
 	}
 	m.addPatterns(sess.Patterns())
 	m.ws.SetHosts(m.mgr.IDs())
 
-	if !msg.Merge {
-		if mode, err := sess.Mode(); err == nil {
-			_ = m.router.SetMode(mode)
-		}
-		if sel, err := sess.Selector(); err == nil && sel != nil {
-			_ = m.ws.Apply(sel)
-		}
+	if mode, err := sess.Mode(); err == nil {
+		_ = m.router.SetMode(mode)
+	}
+	if sel, err := sess.Selector(); err == nil && sel != nil {
+		_ = m.ws.Apply(sel)
 	}
 
+	cmd := m.forward(ui.SessionOpenedMsg{Name: msg.Name, Hosts: ids, Patterns: m.patterns})
 	m.resizePTYs()
-	return m, m.forward(ui.HostsChangedMsg{Hosts: m.mgr.IDs(), Patterns: m.patterns})
+	return m, cmd
 }
 
 // connectHosts adds the hosts the UI asked to connect - an ssh-config alias
@@ -402,8 +419,9 @@ func (m *Model) resizePTYs() {
 	if m.width <= 0 || m.height <= 0 {
 		return
 	}
-	layout := ui.ComputeLayout(m.width, m.height)
-	grid := ui.TileGrid(layout.Main, m.mgr.Len())
+	// The UI knows which panes are drawn - the foreground session, not the
+	// fleet - so its grid is the shape the remotes must match.
+	grid := m.app.Grid()
 	if grid.Empty() {
 		return
 	}
