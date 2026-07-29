@@ -2,6 +2,16 @@
 
 ## 2026-07-29
 
+- Connect from inside the TUI: the Hosts panel lists the concrete `~/.ssh/config` aliases as
+  connect candidates under a `─ ssh config ─` divider (`Resolver.Aliases()` is new) — `enter`
+  connects the one under the cursor, `space` marks several, and `n` opens a free-text prompt
+  for any pattern including brace expansion and `user@host:port`. The UI emits
+  `HostConnectMsg`; the program resolves, skips hosts already in the run, adds the rest with
+  `Manager.Add`, and sends resolve errors back as `ConnectErrorMsg` for the panel to show. An
+  argumentless start now opens on the Hosts panel, so a fresh install reaches a fleet with the
+  keyboard alone. `core/tui.md`, `core/keys.md`, `core/cli.md` and `core/host-resolution.md`
+  updated. Version 0.4.0.
+
 - Lazygit-faithful shell: the sidebar is now a stack of individually bordered panels with their
   titles and number shortcuts in the top border line (`╭ Hosts [2] ─╮`), the selected panel
   expanding and the others collapsing to titled boxes (`SidebarHeights`, `titledBox`). `tab` /

@@ -4,7 +4,7 @@ title: Host resolution
 description: How an expanded host argument becomes a dialable target using ~/.ssh/config, and the precedence between command line, config and defaults.
 resource: internal/hosts/resolve.go
 tags: [hosts, ssh-config, cli]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-07-29T12:00:00Z
 ---
 
 # Host resolution
@@ -48,6 +48,14 @@ A resolved host keeps both:
 
 With `Host web-1 / HostName 10.0.0.1`, the pane is labelled `web-1` and the connection goes to
 `10.0.0.1`.
+
+## Listing candidates
+
+`Resolver.Aliases()` enumerates the concrete host aliases the config declares, in file order,
+deduplicated — the offer behind the Hosts panel's connect candidates. Only patterns that *name*
+one host qualify: wildcards (`*`, `web-?`) match rather than name, negations (`!bastion`)
+exclude, and neither is expanded into the hosts it would cover — the config does not know them
+either. A nil resolver or one without a config returns nil.
 
 ## Missing or unusable config
 

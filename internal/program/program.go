@@ -127,6 +127,9 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 		Recorder:    logbook,
 		CommandLog:  logbook,
 		Insecure:    cfg.Insecure,
+		// The Hosts panel offers these as connect candidates; the UI still
+		// cannot dial, it can only ask.
+		ConfigAliases: resolver.Aliases(),
 	}
 	// A typed nil in the interface field would read as "there is a store";
 	// leave it absent instead.
@@ -254,6 +257,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ui.SessionLaunchMsg:
 		return m.launchSession(msg)
+
+	case ui.HostConnectMsg:
+		return m.connectHosts(msg)
 	}
 
 	return m, m.forward(msg)
@@ -302,6 +308,41 @@ func (m *Model) launchSession(msg ui.SessionLaunchMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	m.resizePTYs()
+	return m, m.forward(ui.HostsChangedMsg{Hosts: m.mgr.IDs()})
+}
+
+// connectHosts adds the hosts the UI asked to connect - an ssh-config alias
+// picked in the Hosts panel, or a typed pattern with brace expansion.
+//
+// Hosts already in the run are skipped by identifier, so pressing enter twice
+// on the same candidate cannot mint a duplicate "host-2" session; a resolve
+// error goes back to the UI instead of being dropped, because the user just
+// typed the thing that failed.
+func (m *Model) connectHosts(msg ui.HostConnectMsg) (tea.Model, tea.Cmd) {
+	fleet, err := m.resolver.ResolveAll(msg.Patterns)
+	if err != nil {
+		return m, m.forward(ui.ConnectErrorMsg{Err: err.Error()})
+	}
+
+	running := make(map[string]bool)
+	for _, id := range m.mgr.IDs() {
+		running[id] = true
+	}
+	added := false
+	for _, host := range fleet {
+		if running[host.Alias] {
+			continue
+		}
+		running[host.Alias] = true
+		m.mgr.Add(m.ctx, host)
+		added = true
+	}
+	if !added {
+		return m, nil
+	}
+
+	m.ws.SetHosts(m.mgr.IDs())
 	m.resizePTYs()
 	return m, m.forward(ui.HostsChangedMsg{Hosts: m.mgr.IDs()})
 }

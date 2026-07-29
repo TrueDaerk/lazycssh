@@ -253,3 +253,41 @@ func TestEmptyRunGrowsBySessionLaunch(t *testing.T) {
 		t.Errorf("the working set covers %d hosts, want 3", got)
 	}
 }
+
+func TestHostConnectRequestAddsHosts(t *testing.T) {
+	m, _ := testModel(t)
+	if m.Manager().Len() != 0 {
+		t.Fatalf("setup: Len() = %d", m.Manager().Len())
+	}
+
+	drive(t, m, ui.HostConnectMsg{Patterns: []string{"web-{01..02}"}})
+	got := m.Manager().SortedIDs()
+	if len(got) != 2 || got[0] != "web-01" || got[1] != "web-02" {
+		t.Fatalf("IDs() = %v after connecting web-{01..02}", got)
+	}
+}
+
+// Enter twice on the same candidate must not mint a duplicate web-01-2.
+func TestHostConnectRequestSkipsRunningHosts(t *testing.T) {
+	m, _ := testModel(t, "web-01")
+
+	drive(t, m, ui.HostConnectMsg{Patterns: []string{"web-01", "db-01"}})
+	drive(t, m, ui.HostConnectMsg{Patterns: []string{"web-01"}})
+
+	got := m.Manager().SortedIDs()
+	if len(got) != 2 || got[0] != "db-01" || got[1] != "web-01" {
+		t.Fatalf("IDs() = %v, want db-01 and web-01 once each", got)
+	}
+}
+
+func TestHostConnectRequestReportsResolveErrors(t *testing.T) {
+	m, _ := testModel(t)
+
+	drive(t, m, ui.HostConnectMsg{Patterns: []string{"web-{01"}})
+	if m.Manager().Len() != 0 {
+		t.Fatalf("Len() = %d after a failed resolve", m.Manager().Len())
+	}
+	if m.app.ConnectError() == "" {
+		t.Fatal("the resolve error did not reach the UI")
+	}
+}

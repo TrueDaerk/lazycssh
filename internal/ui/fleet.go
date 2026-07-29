@@ -72,6 +72,23 @@ type CloseHostMsg struct {
 	ID string
 }
 
+// HostConnectMsg asks the program to connect to hosts. The UI cannot dial, so
+// it is emitted, not handled: it carries the patterns as the user gave them -
+// an ssh-config alias picked from the Hosts panel, or free text that may hold
+// brace expansion and user@host:port syntax.
+type HostConnectMsg struct {
+	// Patterns are the host patterns to resolve and connect, in order.
+	Patterns []string
+}
+
+// ConnectErrorMsg reports that a [HostConnectMsg] could not be resolved. The
+// program sends it back so the failure is visible where the user asked, rather
+// than being dropped.
+type ConnectErrorMsg struct {
+	// Err is the resolve error, already rendered.
+	Err string
+}
+
 // hostIDs returns the run's hosts: the fleet's when there is one, the
 // configured list otherwise, so views can be tested without a transport.
 func (a App) hostIDs() []string {

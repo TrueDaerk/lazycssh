@@ -103,6 +103,11 @@ type Config struct {
 	// Insecure reports that host key verification is off, which the status bar
 	// then says for the whole run.
 	Insecure bool
+	// ConfigAliases are the concrete host aliases of the user's ~/.ssh/config,
+	// which the Hosts panel offers as connect candidates. A plain slice keeps
+	// this package free of the resolver, and the views testable without a
+	// config file.
+	ConfigAliases []string
 }
 
 // App is the root bubbletea model: it owns the layout, the focus and the panel
@@ -121,6 +126,15 @@ type App struct {
 	saveInput   textinput.Model
 	cmdInput    textinput.Model
 	searchInput textinput.Model
+	hostInput   textinput.Model
+
+	// candidateMarks are the connect candidates space has marked. Candidates
+	// are not sessions yet, so the marks live here rather than in the
+	// broadcast router; they clear when a connect is asked for.
+	candidateMarks map[string]bool
+	// connectErr is the last connect request's resolve error, shown in the
+	// Hosts panel until the fleet changes.
+	connectErr string
 
 	// scroll is each pane's scrollback offset in wrapped lines from the
 	// bottom; a missing entry is the tail. searchTerm is the one term every
@@ -177,23 +191,29 @@ func NewApp(cfg Config) App {
 	search.Placeholder = "search"
 	search.Prompt = ""
 
+	host := textinput.New()
+	host.Placeholder = "host, user@host:port, web-{01..04}"
+	host.Prompt = ""
+
 	a := App{
-		cfg:         cfg,
-		keys:        keys,
-		theme:       theme,
-		help:        h,
-		filter:      filter,
-		saveInput:   save,
-		cmdInput:    command,
-		searchInput: search,
-		scroll:      make(map[string]int),
-		focus:       AreaSidebar,
-		panel:       PanelStatus,
+		cfg:            cfg,
+		keys:           keys,
+		theme:          theme,
+		help:           h,
+		filter:         filter,
+		saveInput:      save,
+		cmdInput:       command,
+		searchInput:    search,
+		hostInput:      host,
+		candidateMarks: make(map[string]bool),
+		scroll:         make(map[string]int),
+		focus:          AreaSidebar,
+		panel:          PanelStatus,
 	}
 	if len(a.hostIDs()) == 0 {
-		// An argumentless start has nothing to show yet; the saved sessions
-		// are the thing the user came to pick from.
-		a.panel = PanelSessions
+		// An argumentless start has nothing to show yet; the hosts to connect
+		// to are the thing the user came to pick.
+		a.panel = PanelHosts
 	}
 	return a.loadSessions()
 }
@@ -252,7 +272,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case HostsChangedMsg:
-		return a.withHosts(msg.Hosts).followFocus(), nil
+		next := a.withHosts(msg.Hosts).followFocus()
+		// The fleet changed, so whatever a connect complained about is stale.
+		next.connectErr = ""
+		return next, nil
+
+	case ConnectErrorMsg:
+		a.connectErr = msg.Err
+		return a, nil
 
 	case tea.KeyPressMsg:
 		return a.handleKey(msg)
@@ -287,6 +314,12 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// must be typeable without closing a pane.
 	if a.filter.Focused() {
 		return a.handleFilterKey(msg)
+	}
+
+	// So does the new-host prompt: a pattern containing "b" must not switch
+	// the broadcast mode.
+	if a.hostInput.Focused() {
+		return a.handleHostInputKey(msg)
 	}
 
 	// So does the scrollback search, for the same reason.
@@ -380,6 +413,31 @@ func (a App) handleFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	a.filter, cmd = a.filter.Update(msg)
 	a.hostCursor = clamp(a.hostCursor, 0, max(0, len(a.hostRows())-1))
+	return a, cmd
+}
+
+// handleHostInputKey feeds the new-host prompt, which owns the keyboard while
+// it is open. enter asks the program to connect the typed pattern; esc
+// abandons it.
+func (a App) handleHostInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		pattern := strings.TrimSpace(a.hostInput.Value())
+		a.hostInput.SetValue("")
+		a.hostInput.Blur()
+		if pattern == "" {
+			return a, nil
+		}
+		a.connectErr = ""
+		return a, func() tea.Msg { return HostConnectMsg{Patterns: []string{pattern}} }
+	case "esc":
+		a.hostInput.SetValue("")
+		a.hostInput.Blur()
+		return a, nil
+	}
+
+	var cmd tea.Cmd
+	a.hostInput, cmd = a.hostInput.Update(msg)
 	return a, cmd
 }
 
@@ -545,9 +603,17 @@ func (a App) handleHostsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, a.keys.Toggle):
 		return a.toggleSelectedHost(), nil
 	case key.Matches(msg, a.keys.Choose):
+		// Enter means "go there" on a host of the run and "connect" on an
+		// ssh-config candidate; the row under the cursor says which.
+		if a.SelectedCandidate() != "" {
+			return a.connectSelected()
+		}
 		return a.focusSelectedHost(), nil
 	case key.Matches(msg, a.keys.Filter):
 		a.filter.Focus()
+		return a, nil
+	case key.Matches(msg, a.keys.NewHost):
+		a.hostInput.Focus()
 		return a, nil
 	}
 
@@ -741,7 +807,8 @@ func (a App) renderMain() string {
 		// The empty state says what to do next rather than showing an empty
 		// frame: this is the argumentless start.
 		hint := "no hosts\n\n" +
-			"pick a session in [4] Sessions and press enter,\n" +
+			"pick a host from ~/.ssh/config in [2] Hosts and press enter,\n" +
+			"press n to type one, pick a session in [4] Sessions,\n" +
 			"or start with hosts: lazycssh <host...>"
 		return a.frame(a.theme.PaneFrame(focused, false), r, a.theme.Muted.Render(hint))
 	}
