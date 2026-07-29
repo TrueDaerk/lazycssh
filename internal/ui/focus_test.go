@@ -72,7 +72,7 @@ func TestArrowsMoveWithinTheSidebar(t *testing.T) {
 	}
 
 	a = pressKey(t, a, "j")
-	if a.Panel() != PanelHosts {
+	if a.Panel() != PanelGroups {
 		t.Fatalf("Panel() = %v after moving down", a.Panel())
 	}
 	a = pressKey(t, a, "k")
@@ -113,7 +113,7 @@ func TestTheSameKeyMeansOneThingAtATime(t *testing.T) {
 	if a.PaneIndex() != paneBefore {
 		t.Fatal("a key handled by the sidebar also moved the pane focus")
 	}
-	if a.Panel() != PanelHosts {
+	if a.Panel() != PanelGroups {
 		t.Fatalf("Panel() = %v", a.Panel())
 	}
 }

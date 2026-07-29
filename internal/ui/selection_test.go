@@ -45,7 +45,7 @@ func TestSelectionKeys(t *testing.T) {
 		t.Fatalf("c left %q selected", got)
 	}
 
-	a = pressKey(t, a, " ") // toggle the host under the cursor
+	a = pressKey(t, a, "alt+ ") // toggle the focused pane's host
 	a = pressKey(t, a, "i")
 	if got := selected(t, a); got != "web-02,db-01" {
 		t.Fatalf("i left %q selected", got)
@@ -209,7 +209,7 @@ func TestSelectionWithoutARouter(t *testing.T) {
 	for _, k := range []string{"a", "i", "c", "u", "d"} {
 		a = pressKey(t, a, k)
 	}
-	if a.Panel() != PanelHosts {
+	if a.Panel() != PanelGroups {
 		t.Fatalf("a selection key changed the panel to %v", a.Panel())
 	}
 

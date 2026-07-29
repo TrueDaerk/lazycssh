@@ -227,7 +227,7 @@ func TestTabCyclesFocus(t *testing.T) {
 
 func TestNumberKeysSelectPanelsAndFocusTheSidebar(t *testing.T) {
 	a := resize(t, testApp(), 120, 40)
-	a = pressKey(t, a, "5") // start away from the first panel
+	a = pressKey(t, a, "4") // start away from the first panel
 
 	for i, panel := range Panels() {
 		a = pressKey(t, a, string(rune('1'+i)))
@@ -259,13 +259,13 @@ func TestHelpOverlayTogglesAndSwallowsTheNextKey(t *testing.T) {
 	if !a.HelpVisible() {
 		t.Fatal("? did not open the help")
 	}
-	if !strings.Contains(plain(a.View().Content), "reconnect this host") {
+	if !strings.Contains(plain(a.View().Content), "connect a new host") {
 		t.Fatalf("the overlay does not list the bindings:\n%s", plain(a.View().Content))
 	}
 
 	// While the overlay is open it is the only thing listening.
 	before := a.Panel()
-	a = pressKey(t, a, "3")
+	a = pressKey(t, a, "2")
 	if a.HelpVisible() {
 		t.Fatal("a key press did not close the help")
 	}
@@ -295,15 +295,13 @@ func TestSidebarStacksEveryPanel(t *testing.T) {
 	a := resize(t, testApp(), 120, 40)
 	view := plain(a.View().Content)
 
-	for _, want := range []string{"Status [1]", "Hosts [2]", "Groups [3]", "Sessions [4]", "Command log [5]"} {
+	for _, want := range []string{"Status [1]", "Groups [2]", "Sessions [3]", "Command log [4]"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the sidebar does not show the %q box:\n%s", want, view)
 		}
 	}
 
-	// PanelStatus is selected, so its body is on screen and the host list -
-	// the Hosts panel's body - is not in the sidebar. The pane headers show
-	// the host names too, so assert on a string only the hosts panel renders.
+	// PanelStatus is selected, so its body is on screen.
 	if !strings.Contains(view, "session: prod-web") {
 		t.Fatalf("the selected panel's body is missing:\n%s", view)
 	}
@@ -462,19 +460,26 @@ func TestUnknownMessageIsIgnored(t *testing.T) {
 	}
 }
 
-func TestArgumentlessStartOpensOnTheHostsPanel(t *testing.T) {
+func TestArgumentlessStartOpensTheHostPrompt(t *testing.T) {
 	a := NewApp(Config{Theme: Options{Dark: true}})
-	if a.Panel() != PanelHosts {
-		t.Fatalf("Panel() = %v, want the Hosts panel on an empty start", a.Panel())
+	if a.Panel() != PanelStatus {
+		t.Fatalf("Panel() = %v, want the Status panel on an empty start", a.Panel())
+	}
+	if !a.ConnectPromptOpen() {
+		t.Fatal("the host prompt is not open on an empty start")
 	}
 
-	// A run that has hosts keeps the status panel; see TestNewAppDefaults.
+	// A run that has hosts starts with the prompt closed.
+	b := NewApp(Config{Hosts: []string{"h1"}, Theme: Options{Dark: true}})
+	if b.ConnectPromptOpen() {
+		t.Fatal("the host prompt is open although the run has hosts")
+	}
 }
 
 func TestEmptyRunRendersAHint(t *testing.T) {
 	a := resize(t, NewApp(Config{Theme: Options{Dark: true}}), 120, 40)
 	view := plain(a.View().Content)
-	for _, want := range []string{"no hosts", "[2] Hosts", "press n to type one", "[4] Sessions", "lazycssh <host...>"} {
+	for _, want := range []string{"no hosts", "press n and type a host", "[3] Sessions", "lazycssh <host...>"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the empty grid does not say %q:\n%s", want, view)
 		}

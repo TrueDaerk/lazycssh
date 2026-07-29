@@ -63,19 +63,12 @@ func (a App) handleTypingKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
-// leaveTyping hands the keyboard back to the app: focus returns to the Hosts
-// panel with the cursor on the host that was just typed to, which is the host
-// any follow-up command is about.
+// leaveTyping hands the keyboard back to the app: focus returns to the Status
+// panel, which answers the question a user leaving a terminal has - where do
+// my keys go now.
 func (a App) leaveTyping() App {
-	focused := a.FocusedHost()
 	a.focus = AreaSidebar
-	a.panel = PanelHosts
-	for i, row := range a.hostRows() {
-		if !row.Candidate && row.ID == focused {
-			a.hostCursor = i
-			break
-		}
-	}
+	a.panel = PanelStatus
 	return a
 }
 
@@ -94,6 +87,13 @@ func (a App) handlePaneKey(msg tea.KeyPressMsg) (App, tea.Cmd, bool) {
 		return a.enterPane().movePane(-a.grid().Columns).followFocus(), nil, true
 	case key.Matches(msg, a.keys.PaneDown):
 		return a.enterPane().movePane(+a.grid().Columns).followFocus(), nil, true
+	case key.Matches(msg, a.keys.ToggleSelect):
+		// The selection lives in the router, keyed by host identifier, so it
+		// survives a reconnect and a page turn.
+		if id := a.FocusedHost(); id != "" && a.cfg.Targets != nil {
+			a.cfg.Targets.Toggle(id)
+		}
+		return a, nil, true
 	case key.Matches(msg, a.keys.NextPage):
 		return a.pageBy(+1), nil, true
 	case key.Matches(msg, a.keys.PrevPage):

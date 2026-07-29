@@ -4,7 +4,7 @@ title: Working sets
 description: The current subject of work — which hosts a command is about, defined by count, range, pattern or selection.
 resource: internal/workingset
 tags: [working-set, hosts, broadcast]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-07-29T19:00:00Z
 ---
 
 # Working sets
@@ -34,7 +34,7 @@ is re-sorted.
 | `All` | `all`, `*` | every host in the run |
 | `Range` | `20`, `first 20`, `21-40` | positions in the host list, 1-based and inclusive |
 | `Pattern` | `web-*`, `db-01` | shell glob against the host identifier |
-| `Manual` | `selection` | the hosts currently toggled with `space` |
+| `Manual` | `selection` | the hosts currently toggled with `alt+space` |
 
 `ParseSelector` reads all of these. A malformed glob or a reversed range is an error, not a
 pattern that silently matches nothing — the same rule host expansion follows

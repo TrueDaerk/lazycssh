@@ -13,8 +13,6 @@ func (a App) panelBody(panel Panel, width, height int) string {
 	switch panel {
 	case PanelStatus:
 		return a.statusPanel(width)
-	case PanelHosts:
-		return a.hostsPanel(width, height)
 	case PanelGroups:
 		return a.groupsPanel(width, height)
 	case PanelSessions:
@@ -35,7 +33,16 @@ func (a App) panelBody(panel Panel, width, height int) string {
 func (a App) statusPanel(width int) string {
 	var lines []string
 
-	// The first line answers the panel's question directly: where do my
+	// The open new-host prompt comes first: while it has the keyboard it is
+	// the thing being interacted with, and its hints must not be pushed off a
+	// short panel.
+	lines = append(lines, a.hostPromptLines()...)
+	if a.connectErr != "" {
+		// A connect that failed to resolve reports where it was asked for.
+		lines = append(lines, a.theme.Failure.Render(a.connectErr))
+	}
+
+	// The next line answers the panel's question directly: where do my
 	// keys go right now.
 	switch a.focus {
 	case AreaGrid:

@@ -12,7 +12,7 @@ func barApp(t *testing.T, names ...string) (App, *fakeSender) {
 	t.Helper()
 
 	a, sender, _, _ := cmdApp(t, names...)
-	a = pressKey(t, a, "6")
+	a = pressKey(t, a, "5")
 	if a.Focus() != AreaBroadcast {
 		t.Fatal("6 did not focus the broadcast bar")
 	}
@@ -63,7 +63,7 @@ func TestBroadcastBarEchoLine(t *testing.T) {
 // enter - the audit trail is for commands.
 func TestBroadcastBarRecordsTheLineOnEnterOnly(t *testing.T) {
 	a, _, _, log := cmdApp(t, "web-01")
-	a = pressKey(t, a, "6")
+	a = pressKey(t, a, "5")
 
 	for _, r := range "uptime" {
 		a = pressKey(t, a, string(r))
@@ -89,7 +89,7 @@ func TestBroadcastBarNamesItsTargets(t *testing.T) {
 	a, _ := barApp(t, "web-01", "web-02", "web-03")
 
 	view := plain(a.View().Content)
-	if !strings.Contains(view, "Broadcast [6]") {
+	if !strings.Contains(view, "Broadcast [5]") {
 		t.Fatalf("the bar has no title:\n%s", view)
 	}
 	if !strings.Contains(view, "BROADCASTING") || !strings.Contains(view, escapeKeystroke) {
@@ -113,7 +113,7 @@ func TestBroadcastBarLeaveKey(t *testing.T) {
 // The bar survives a run without a transport by saying so.
 func TestBroadcastBarWithoutATransport(t *testing.T) {
 	a := resize(t, NewApp(Config{Hosts: []string{"h1"}, Theme: Options{Dark: true}}), 120, 40)
-	a = pressKey(t, a, "6")
+	a = pressKey(t, a, "5")
 	a = pressKey(t, a, "x")
 
 	if !strings.Contains(a.LastDelivery(), "nothing was sent") {

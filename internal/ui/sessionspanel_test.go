@@ -34,7 +34,7 @@ func sessionsApp(t *testing.T, saved ...*sessions.Session) (App, *sessions.Store
 		Theme:       Options{Dark: true},
 	}), 120, 40)
 
-	return pressKey(t, a, "4"), store
+	return pressKey(t, a, "3"), store
 }
 
 func savedSession(name string, patterns ...string) *sessions.Session {
@@ -296,7 +296,7 @@ func TestUnreadableSessionBecomesOneRow(t *testing.T) {
 
 func TestSessionsPanelWithoutAStore(t *testing.T) {
 	a := resize(t, NewApp(Config{Hosts: []string{"h1"}, Theme: Options{Dark: true}}), 120, 40)
-	a = pressKey(t, a, "4")
+	a = pressKey(t, a, "3")
 
 	if got := plain(a.sessionsPanel(60, 20)); !strings.Contains(got, "no session directory") {
 		t.Fatalf("sessionsPanel() = %q", got)
@@ -397,6 +397,7 @@ func TestSavingAnEmptyRunKeepsThePrompt(t *testing.T) {
 	}
 	a := resize(t, NewApp(Config{Sessions: store, Theme: Options{Dark: true}}), 120, 40)
 
+	a = pressKey(t, a, "esc") // close the auto-opened host prompt
 	a = pressKey(t, a, "S")
 	for _, r := range "prod" {
 		a = pressKey(t, a, string(r))

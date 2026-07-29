@@ -44,8 +44,6 @@ func (a App) withHosts(hosts []string) App {
 			delete(a.scroll, id)
 		}
 	}
-	a.hostCursor = clamp(a.hostCursor, 0, max(0, len(a.hostRows())-1))
-
 	if focused != "" {
 		for i, id := range hosts {
 			if id == focused {
