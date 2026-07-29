@@ -1,5 +1,14 @@
 # Log
 
+## 2026-07-29
+
+- Panes render their session's scrollback: tail-following, hard-wrapped at the pane width with
+  colours kept across the break, and a `~ N lines dropped ~` marker where the bounded buffer
+  evicted output. SGR sequences pass through so `ls --color` looks right; cursor movement, screen
+  clearing, OSC and stray control bytes are neutralized so one host emitting `clear` cannot
+  corrupt the layout. `SessionOutputMsg` asks for a redraw and carries no bytes. `core/tui.md`
+  updated. Version 0.1.31.
+
 ## 2026-07-28
 
 - Added raw keystroke passthrough on `ctrl+]`: every key is encoded and written to the remote

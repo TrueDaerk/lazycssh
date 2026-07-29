@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-07-29T00:00:00Z
 ---
 
 # TUI shell
@@ -146,6 +146,34 @@ keystroke — that is the entire reason the two are separate concepts.
 - the page indicator (`page 2/5`) appears in the status bar only when there is more than one page,
 - the page is clamped on every render: a terminal that shrinks produces more pages, and the page
   the user was on may stop existing.
+
+## Pane output
+
+Each pane renders its session's [scrollback](./scrollback.md) below a one-line header naming the
+host, following the tail: the newest output is what the user is watching for. Rendering is a pure
+function of the buffer's current content — `SessionOutputMsg` carries no bytes, it only asks for
+a redraw, so a coalesced or dropped message costs nothing.
+
+The buffer stores escape sequences verbatim; the renderer decides what they may do:
+
+- **SGR sequences pass through.** `ls --color` looks like `ls --color`.
+- **Everything else is neutralized.** Cursor movement, screen clearing, OSC titles, charset
+  selection and stray control bytes are removed before the line is drawn — a pane renders
+  scrollback text, not a terminal, and one host emitting `clear` must not corrupt the layout
+  around it. Full VT emulation is a separate idea issue, deliberately.
+- A line that still carries a colour is closed with a reset, so an unbalanced SGR from one host
+  cannot bleed into the border or the neighbouring pane.
+- Tabs expand to 8-column stops; an escape sequence the remote never finished drops the tail of
+  its line rather than being half-rendered.
+
+Long lines hard-wrap at the pane width with the colours kept intact across the break, and wide
+characters are counted by their display width. When the buffer has evicted lines to stay within
+its bound, a `~ N lines dropped ~` marker sits where the missing output was, so truncated
+scrollback is visible rather than silent.
+
+Scrolling back through the buffer and searching it is [#43](https://github.com/TrueDaerk/lazycssh/issues/43);
+the per-pane status header with connection state and exit code is
+[#42](https://github.com/TrueDaerk/lazycssh/issues/42).
 
 ## Focus survives the host list changing
 
@@ -292,6 +320,7 @@ one garbled line.
 | `tea.BackgroundColorMsg` | rebuild the theme for a light or dark terminal |
 | `tea.KeyPressMsg` | dispatch by focus |
 | `FleetUpdatedMsg` | redraw; the panels read the fleet's live state themselves |
+| `SessionOutputMsg` | redraw; the pane reads the live scrollback itself |
 | `HostsChangedMsg` | replace the host list, keeping the focused host |
 | `SessionsChangedMsg` | re-read the session directory |
 | `SessionLaunchMsg` | emitted, not handled: the program opens or merges a saved session |
