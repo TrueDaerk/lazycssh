@@ -429,3 +429,42 @@ func drainFor(t *testing.T, events <-chan Event, want State) {
 		}
 	}
 }
+
+// Tab completion happens on the remote host, not here: the tab byte has to
+// arrive at the PTY and the answer has to come back through the session's
+// scrollback. The test shell completes "up" to "uptime", so a completed word in
+// the scrollback is proof the raw keystroke made the round trip.
+func TestSessionForwardsTabForRemoteCompletion(t *testing.T) {
+	srv := newTestServer(t)
+	s, _ := newSession(t, srv, nil)
+
+	if err := s.Start(t.Context()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForOutput(t, s, "welcome")
+
+	if _, err := s.Write([]byte("up\t")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	waitForOutput(t, s, "uptime")
+}
+
+// A raw control byte reaches the remote PTY unchanged. ctrl+c is the one that
+// matters: it has to interrupt the remote command rather than kill lazycssh.
+func TestSessionForwardsControlBytes(t *testing.T) {
+	srv := newTestServer(t)
+	s, _ := newSession(t, srv, nil)
+
+	if err := s.Start(t.Context()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForOutput(t, s, "welcome")
+
+	if _, err := s.Write([]byte{0x03}); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	// The session stays up: an interrupt is for the remote shell.
+	if got := s.State(); got != StateConnected {
+		t.Fatalf("State() = %v after an interrupt byte", got)
+	}
+}

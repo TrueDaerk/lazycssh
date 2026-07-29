@@ -134,6 +134,7 @@ type App struct {
 	panel         Panel
 	paneIndex     int
 	page          int
+	passthrough   bool
 	hostCursor    int
 	groupCursor   int
 	sessionCursor int
@@ -240,6 +241,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKey dispatches a key press. Bindings are matched by area, so a key
 // means one thing at a time; see [KeyMap].
 func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// Passthrough owns the keyboard entirely, except for the one key that gets
+	// it back. A shell that cannot see tab or ctrl+c is not a shell.
+	if a.passthrough {
+		return a.handlePassthroughKey(msg)
+	}
+
 	// The command line has the keyboard while it is open: a command containing
 	// a "b" must not switch the broadcast mode, and ctrl+c while editing must
 	// not reach forty machines.
@@ -287,6 +294,9 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, a.keys.CommandLine):
 		return a.openCommandLine(), nil
+
+	case key.Matches(msg, a.keys.Passthrough):
+		return a.togglePassthrough(), nil
 
 	case key.Matches(msg, a.keys.BroadcastAll):
 		return a.setBroadcastMode(broadcast.ModeAll), nil
@@ -740,6 +750,15 @@ func (a App) renderStatusBar() string {
 	// Status panel, because the bar is the one thing that is on screen whatever
 	// the user has scrolled to.
 	parts = append(parts, a.activeFlags()...)
+
+	if a.passthrough {
+		// Everything else is suspended, so the status bar is the only thing
+		// that can say how to get the keyboard back.
+		return a.theme.StatusInsecure.
+			Width(a.layout.Width).
+			MaxHeight(StatusBarHeight).
+			Render(a.passthroughLabel())
+	}
 
 	line := strings.Join(parts, " ")
 	short := a.help.ShortHelpView(a.keys.For(a.focus).ShortHelp())

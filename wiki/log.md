@@ -2,6 +2,13 @@
 
 ## 2026-07-28
 
+- Added raw keystroke passthrough on `ctrl+]`: every key is encoded and written to the remote
+  PTYs, lazycssh keeps only the escape binding, and the status bar names it. `ctrl+c` reaches the
+  hosts without quitting, `tab` reaches the remote shell rather than cycling focus, and raw keys
+  are never written to the command log. The test SSH server now completes a word on tab, so the
+  round trip is asserted against a real PTY. `core/tui.md` and `core/keys.md` updated.
+  Version 0.1.30.
+
 - Selection-set operations: `a`, `i`, `c`, `u` and `d` in the Hosts panel, and `/select` /
   `/deselect` with a glob from the command line. Patterns match across the whole run rather than
   the working set, and `/`-prefixed lines are never sent to a host - `select` is a shell builtin
