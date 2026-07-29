@@ -149,8 +149,15 @@ keystroke — that is the entire reason the two are separate concepts.
 
 ## Pane output
 
-Each pane renders its session's [scrollback](./scrollback.md) below a one-line header naming the
-host, following the tail: the newest output is what the user is watching for. Rendering is a pure
+Each pane carries a one-line header — pane number, host name, connection state — all read from
+live state at render time, so a state change is on screen the moment the redraw happens. When the
+width cannot hold everything the state gives up its space first, and the host name truncates
+**from the left** (`…-1a-40.example.com`): in a fleet of near-identical names the suffix is the
+distinguishing part. The last exit code joins the header with
+[#41](https://github.com/TrueDaerk/lazycssh/issues/41), which owns the detection mechanism.
+
+Below the header the pane renders its session's [scrollback](./scrollback.md), following the
+tail: the newest output is what the user is watching for. Rendering is a pure
 function of the buffer's current content — `SessionOutputMsg` carries no bytes, it only asks for
 a redraw, so a coalesced or dropped message costs nothing.
 
@@ -171,9 +178,7 @@ characters are counted by their display width. When the buffer has evicted lines
 its bound, a `~ N lines dropped ~` marker sits where the missing output was, so truncated
 scrollback is visible rather than silent.
 
-Scrolling back through the buffer and searching it is [#43](https://github.com/TrueDaerk/lazycssh/issues/43);
-the per-pane status header with connection state and exit code is
-[#42](https://github.com/TrueDaerk/lazycssh/issues/42).
+Scrolling back through the buffer and searching it is [#43](https://github.com/TrueDaerk/lazycssh/issues/43).
 
 ## Focus survives the host list changing
 

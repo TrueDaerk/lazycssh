@@ -7,6 +7,64 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+// paneHeader renders the one line that identifies a pane: its number, its host
+// and the connection state, all read from live state at render time so a state
+// change is on screen the moment the redraw happens.
+//
+// When the width cannot hold everything, the state goes first and the host
+// name is truncated from the left: in a fleet of web-01…web-40 the suffix is
+// the distinguishing part, and a header full of identical prefixes says
+// nothing.
+func (a App) paneHeader(host, width int, focused bool) string {
+	if host < 0 || host >= len(a.hostIDs()) || width <= 0 {
+		return ""
+	}
+	id := a.hostIDs()[host]
+	number := fmt.Sprintf("%d ", host+1)
+
+	state := a.state(id)
+	label := " " + state.String()
+
+	avail := width - len(number) - len([]rune(label))
+	if avail < minHeaderName {
+		label = ""
+		avail = width - len(number)
+	}
+	name := truncateLeft(id, max(0, avail))
+
+	style := a.theme.Muted
+	if focused {
+		style = a.theme.Cursor
+	} else if host == a.paneIndex {
+		style = a.theme.Selected
+	}
+
+	line := style.Render(number + name)
+	if label != "" {
+		line += a.theme.State(state).Render(label)
+	}
+	return line
+}
+
+// minHeaderName is the least of a host name worth showing next to the state.
+// Below it the state gives up its space instead: an unreadable name helps no
+// one, and the border colour still carries the focus.
+const minHeaderName = 6
+
+// truncateLeft shortens s to at most width runes by cutting from the left,
+// marking the cut with "…". The suffix survives because it is the part that
+// distinguishes host-01 from host-40.
+func truncateLeft(s string, width int) string {
+	r := []rune(s)
+	if len(r) <= width {
+		return s
+	}
+	if width < 2 {
+		return string(r[len(r)-width:])
+	}
+	return "…" + string(r[len(r)-width+1:])
+}
+
 // paneBody renders one host's scrollback into an area of width columns and
 // height rows: sanitized, hard-wrapped, following the tail. It is a pure
 // function of the buffer's current content, so two renders of the same state

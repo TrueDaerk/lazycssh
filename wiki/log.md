@@ -2,6 +2,11 @@
 
 ## 2026-07-29
 
+- Per-pane status header: pane number, host name and connection state, read from live state at
+  render time. Too-long host names truncate from the left so the distinguishing suffix survives,
+  and at widths that cannot hold both, the state yields to the name. The last exit code joins the
+  header with #41. `core/tui.md` updated. Version 0.1.32.
+
 - Panes render their session's scrollback: tail-following, hard-wrapped at the pane width with
   colours kept across the break, and a `~ N lines dropped ~` marker where the bounded buffer
   evicted output. SGR sequences pass through so `ls --color` looks right; cursor movement, screen
