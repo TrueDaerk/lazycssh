@@ -3,23 +3,39 @@ package ui
 import (
 	"fmt"
 	"strings"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 // filterPrompt is what the filter input shows while it is open.
 const filterPrompt = "/"
 
-// hostRows returns the hosts the Hosts panel lists: every host of the run,
-// minus the ones the filter excludes, each with the position it has in the full
-// list so the pane number stays the pane number.
+// newHostPrompt is what the new-host input shows while it is open.
+const newHostPrompt = "+"
+
+// hostRows returns what the Hosts panel lists: every host of the run, then -
+// below them - the ssh-config aliases not yet in the run, as candidates to
+// connect to. The filter applies to both sections; the cursor walks both.
 func (a App) hostRows() []hostRow {
 	filter := strings.ToLower(strings.TrimSpace(a.filter.Value()))
+	match := func(id string) bool {
+		return filter == "" || strings.Contains(strings.ToLower(id), filter)
+	}
 
 	var rows []hostRow
+	running := make(map[string]bool)
 	for i, id := range a.hostIDs() {
-		if filter != "" && !strings.Contains(strings.ToLower(id), filter) {
-			continue
+		running[id] = true
+		if match(id) {
+			rows = append(rows, hostRow{Index: i, ID: id})
 		}
-		rows = append(rows, hostRow{Index: i, ID: id})
+	}
+	for _, alias := range a.cfg.ConfigAliases {
+		// A connected candidate is a host now; listing it twice would offer
+		// the duplicate connect this panel exists to avoid.
+		if !running[alias] && match(alias) {
+			rows = append(rows, hostRow{ID: alias, Candidate: true})
+		}
 	}
 	return rows
 }
@@ -27,24 +43,55 @@ func (a App) hostRows() []hostRow {
 // hostRow is one line of the Hosts panel.
 type hostRow struct {
 	// Index is the host's position in the full list, which is its pane number
-	// minus one. Filtering must not renumber panes.
+	// minus one. Filtering must not renumber panes. Meaningless for a
+	// candidate, which has no pane yet.
 	Index int
-	// ID is the host identifier.
+	// ID is the host identifier, or the ssh-config alias of a candidate.
 	ID string
+	// Candidate reports that this row is an ssh-config alias to connect to,
+	// not a host of the run.
+	Candidate bool
 }
 
 // HostCursor is the position of the cursor within the filtered rows.
 func (a App) HostCursor() int { return a.hostCursor }
 
-// SelectedHost is the host under the Hosts panel cursor, or the empty string
-// when the filter matches nothing.
-func (a App) SelectedHost() string {
+// selectedRow is the row under the Hosts panel cursor.
+func (a App) selectedRow() (hostRow, bool) {
 	rows := a.hostRows()
 	if len(rows) == 0 {
+		return hostRow{}, false
+	}
+	return rows[clamp(a.hostCursor, 0, len(rows)-1)], true
+}
+
+// SelectedHost is the host under the Hosts panel cursor, or the empty string
+// when the filter matches nothing or the cursor is on a connect candidate.
+func (a App) SelectedHost() string {
+	row, ok := a.selectedRow()
+	if !ok || row.Candidate {
 		return ""
 	}
-	return rows[clamp(a.hostCursor, 0, len(rows)-1)].ID
+	return row.ID
 }
+
+// SelectedCandidate is the connect candidate under the cursor, or the empty
+// string when the cursor is on a host of the run.
+func (a App) SelectedCandidate() string {
+	row, ok := a.selectedRow()
+	if !ok || !row.Candidate {
+		return ""
+	}
+	return row.ID
+}
+
+// CandidateMarked reports whether space has marked a candidate for the next
+// connect.
+func (a App) CandidateMarked(alias string) bool { return a.candidateMarks[alias] }
+
+// ConnectError is the last connect request's resolve error, empty when there
+// is none. It clears when the fleet changes.
+func (a App) ConnectError() string { return a.connectErr }
 
 // Filtering reports whether the filter input has the keyboard.
 func (a App) Filtering() bool { return a.filter.Focused() }
@@ -58,17 +105,28 @@ func (a App) moveHostCursor(delta int) App {
 	return a
 }
 
-// toggleSelectedHost flips the selection of the host under the cursor.
+// toggleSelectedHost flips the selection of the host under the cursor, or the
+// connect mark of the candidate under it.
 //
-// Selection is held by the broadcast router and keyed by host identifier, so it
-// survives a reconnect, a filter and a page turn: the pane moves, the host keeps
-// its name.
+// Host selection is held by the broadcast router and keyed by host identifier,
+// so it survives a reconnect, a filter and a page turn: the pane moves, the
+// host keeps its name. Candidates are not sessions yet, so their marks live on
+// the model and mean only "connect this one too".
 func (a App) toggleSelectedHost() App {
-	if a.cfg.Targets == nil {
+	row, ok := a.selectedRow()
+	if !ok {
 		return a
 	}
-	if id := a.SelectedHost(); id != "" {
-		a.cfg.Targets.Toggle(id)
+	if row.Candidate {
+		if a.candidateMarks[row.ID] {
+			delete(a.candidateMarks, row.ID)
+		} else {
+			a.candidateMarks[row.ID] = true
+		}
+		return a
+	}
+	if a.cfg.Targets != nil {
+		a.cfg.Targets.Toggle(row.ID)
 	}
 	return a
 }
@@ -90,6 +148,29 @@ func (a App) focusSelectedHost() App {
 	return a.followFocus()
 }
 
+// connectSelected asks the program to connect the marked candidates, or - when
+// none are marked - the candidate under the cursor. The marks clear with the
+// request: what enter meant has been said.
+func (a App) connectSelected() (App, tea.Cmd) {
+	var patterns []string
+	for _, row := range a.hostRows() {
+		if row.Candidate && a.candidateMarks[row.ID] {
+			patterns = append(patterns, row.ID)
+		}
+	}
+	if len(patterns) == 0 {
+		alias := a.SelectedCandidate()
+		if alias == "" {
+			return a, nil
+		}
+		patterns = []string{alias}
+	}
+
+	a.candidateMarks = make(map[string]bool)
+	a.connectErr = ""
+	return a, func() tea.Msg { return HostConnectMsg{Patterns: patterns} }
+}
+
 // hostsPanel renders the host list: connection state, pane number, selection
 // marker, and the filter when it is open.
 //
@@ -100,8 +181,19 @@ func (a App) hostsPanel(width, height int) string {
 	rows := a.hostRows()
 
 	var b strings.Builder
+	if a.hostInput.Focused() {
+		b.WriteString(a.theme.Base.Render(newHostPrompt + a.hostInput.Value()))
+		b.WriteString("\n")
+		height--
+	}
 	if a.filter.Focused() || a.filter.Value() != "" {
 		b.WriteString(a.theme.Base.Render(filterPrompt + a.filter.Value()))
+		b.WriteString("\n")
+		height--
+	}
+	if a.connectErr != "" {
+		// A connect that failed to resolve reports where it was asked for.
+		b.WriteString(a.theme.Failure.Render(a.connectErr))
 		b.WriteString("\n")
 		height--
 	}
@@ -110,7 +202,7 @@ func (a App) hostsPanel(width, height int) string {
 		if a.filter.Value() != "" {
 			b.WriteString(a.theme.Muted.Render("no host matches"))
 		} else {
-			b.WriteString(a.theme.Muted.Render("no hosts"))
+			b.WriteString(a.theme.Muted.Render("no hosts — n to type one"))
 		}
 		return a.theme.Base.Width(max(0, width)).Render(b.String())
 	}
@@ -120,6 +212,12 @@ func (a App) hostsPanel(width, height int) string {
 
 	for i := first; i < last; i++ {
 		if i > first {
+			b.WriteString("\n")
+		}
+		// The candidates read as their own section: the first one visible
+		// carries the divider naming where they come from.
+		if rows[i].Candidate && (i == 0 || !rows[i-1].Candidate || i == first) {
+			b.WriteString(a.theme.Muted.Render("─ ssh config ─"))
 			b.WriteString("\n")
 		}
 		b.WriteString(a.hostLine(rows[i], i == cursor))
@@ -137,6 +235,25 @@ func (a App) hostsPanel(width, height int) string {
 // when the last command failed - its exit code, so a failing host is findable
 // in the list as well as in the grid.
 func (a App) hostLine(row hostRow, underCursor bool) string {
+	if row.Candidate {
+		// A candidate has no pane number and no state: it is an offer, not a
+		// host. The mark is a character as well as a style, so it survives a
+		// terminal without colour.
+		marker := " "
+		if a.candidateMarks[row.ID] {
+			marker = "+"
+		}
+		line := marker + " " + row.ID
+		switch {
+		case underCursor:
+			return a.theme.Cursor.Render(line)
+		case marker == "+":
+			return a.theme.Selected.Render(line)
+		default:
+			return a.theme.Muted.Render(line)
+		}
+	}
+
 	marker := ""
 	if a.cfg.Targets != nil && a.cfg.Targets.IsSelected(row.ID) {
 		marker = "*"

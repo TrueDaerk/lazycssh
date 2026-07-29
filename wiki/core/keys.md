@@ -42,7 +42,7 @@ are tests, not conventions.
 | `!` | global | jump to the next host whose last command failed |
 | `↑`/`k`, `↓`/`j` | sidebar | move |
 | `enter` | sidebar | focus that host's pane |
-| `space` | sidebar | toggle selection |
+| `space` | sidebar | toggle selection, or mark a connect candidate |
 | `/` | sidebar | filter |
 | `a` | sidebar | select every host |
 | `i` | sidebar | invert the selection |
@@ -51,6 +51,7 @@ are tests, not conventions.
 | `d` | sidebar | select the hosts that are down |
 | `w` | sidebar | save the working set or session |
 | `[` / `]` | sidebar | previous / next chunk of hosts |
+| `n` | sidebar | connect a new host: opens the free-text pattern prompt |
 | `←`/`h`, `→`/`l`, `↑`/`k`, `↓`/`j` | panes | move between panes |
 | `f` | panes | full-screen this pane |
 | `r` | panes | reconnect this host |

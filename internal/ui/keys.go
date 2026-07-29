@@ -78,6 +78,7 @@ type KeyMap struct {
 	SaveSet   key.Binding
 	NextChunk key.Binding
 	PrevChunk key.Binding
+	NewHost   key.Binding
 
 	// Grid.
 	PaneLeft   key.Binding
@@ -139,6 +140,7 @@ func DefaultKeyMap() KeyMap {
 		SaveSet:   key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "save the working set or session")),
 		NextChunk: key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "next chunk of hosts")),
 		PrevChunk: key.NewBinding(key.WithKeys("["), key.WithHelp("[", "previous chunk of hosts")),
+		NewHost:   key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "connect a new host")),
 
 		PaneLeft:   key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "pane left")),
 		PaneRight:  key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "pane right")),
@@ -176,7 +178,7 @@ func (k KeyMap) sidebar() []key.Binding {
 	return []key.Binding{
 		k.Up, k.Down, k.Choose, k.Toggle, k.Filter,
 		k.SelectAll, k.Invert, k.ClearSel, k.SelectUp, k.SelectDwn,
-		k.SaveSet, k.NextChunk, k.PrevChunk,
+		k.SaveSet, k.NextChunk, k.PrevChunk, k.NewHost,
 	}
 }
 

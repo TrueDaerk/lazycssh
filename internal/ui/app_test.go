@@ -390,10 +390,10 @@ func TestUnknownMessageIsIgnored(t *testing.T) {
 	}
 }
 
-func TestArgumentlessStartOpensOnTheSessionsPanel(t *testing.T) {
+func TestArgumentlessStartOpensOnTheHostsPanel(t *testing.T) {
 	a := NewApp(Config{Theme: Options{Dark: true}})
-	if a.Panel() != PanelSessions {
-		t.Fatalf("Panel() = %v, want the Sessions panel on an empty start", a.Panel())
+	if a.Panel() != PanelHosts {
+		t.Fatalf("Panel() = %v, want the Hosts panel on an empty start", a.Panel())
 	}
 
 	// A run that has hosts keeps the status panel; see TestNewAppDefaults.
@@ -402,7 +402,7 @@ func TestArgumentlessStartOpensOnTheSessionsPanel(t *testing.T) {
 func TestEmptyRunRendersAHint(t *testing.T) {
 	a := resize(t, NewApp(Config{Theme: Options{Dark: true}}), 120, 40)
 	view := plain(a.View().Content)
-	for _, want := range []string{"no hosts", "[4] Sessions", "lazycssh <host...>"} {
+	for _, want := range []string{"no hosts", "[2] Hosts", "press n to type one", "[4] Sessions", "lazycssh <host...>"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the empty grid does not say %q:\n%s", want, view)
 		}

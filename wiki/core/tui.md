@@ -271,7 +271,24 @@ that takes a second row, because the tail is where the warnings are.
 
 ### [2] Hosts
 
-Every host of the run: pane number, selection marker, name, connection state.
+Every host of the run: pane number, selection marker, name, connection state. Below them, under
+a `─ ssh config ─` divider, the concrete aliases of `~/.ssh/config` that are not in the run yet
+— **connect candidates**. Nothing connects on its own: candidates are an offer the cursor can
+take, and the default view stays as it is until the user acts.
+
+- `enter` on a candidate connects it; `space` marks several and `enter` connects all marked.
+  A mark is a `+` character as well as a style, and marks clear with the connect request,
+- `n` opens a free-text prompt accepting any host pattern — `host`, `user@host:port`, brace
+  expansion like `web-{01..04}`. It owns the keyboard while open: a pattern containing `b` must
+  not switch the broadcast mode. `enter` connects, `esc` abandons,
+- a candidate that connects leaves the candidate list — it is a host now, and offering the
+  duplicate connect is what the dedupe exists to avoid,
+- a connect that fails to resolve shows its error in the panel until the fleet next changes,
+- the panel cannot dial. It emits `HostConnectMsg`; the program resolves, skips hosts already
+  in the run (double-enter must not mint `host-2`), and adds the rest via `Manager.Add`.
+
+An argumentless start opens on this panel, so a fresh install with no saved sessions can reach
+a fleet with the keyboard alone.
 
 - `↑`/`k` and `↓`/`j` move the host cursor; running off either end moves to the neighbouring
   panel, so the panel list stays reachable with the same keys,
@@ -383,6 +400,8 @@ one garbled line.
 | `HostsChangedMsg` | replace the host list, keeping the focused host |
 | `SessionsChangedMsg` | re-read the session directory |
 | `SessionLaunchMsg` | emitted, not handled: the program opens or merges a saved session |
+| `HostConnectMsg` | emitted, not handled: the program resolves and connects the asked-for patterns |
+| `ConnectErrorMsg` | a connect request's resolve error, shown in the Hosts panel |
 | `ReconnectHostMsg` | emitted, not handled: `r` in the grid asks the program to reconnect the focused host |
 | `CloseHostMsg` | emitted, not handled: `x` in the grid asks the program to close the focused host's session |
 | `CommandResendMsg` | resend a logged command to the current broadcast set |

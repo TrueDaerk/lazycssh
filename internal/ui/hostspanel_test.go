@@ -298,3 +298,191 @@ func TestToggleWithoutARouterDoesNothing(t *testing.T) {
 		t.Fatalf("SelectedHost() = %q", a.SelectedHost())
 	}
 }
+
+// candidateApp builds an app on the Hosts panel with running hosts and
+// ssh-config connect candidates.
+func candidateApp(t *testing.T, hosts, aliases []string) App {
+	t.Helper()
+	a := resize(t, NewApp(Config{
+		Hosts:         hosts,
+		ConfigAliases: aliases,
+		Theme:         Options{Dark: true},
+	}), 120, 40)
+	return pressKey(t, a, "2")
+}
+
+// keyCmdMsg presses one key and returns the message its command produces.
+func keyCmdMsg(t *testing.T, a App, keystroke string) (App, tea.Msg) {
+	t.Helper()
+	var msg tea.KeyPressMsg
+	if keystroke == "enter" {
+		msg = tea.KeyPressMsg{Code: tea.KeyEnter}
+	} else {
+		msg = tea.KeyPressMsg{Code: []rune(keystroke)[0], Text: keystroke}
+	}
+	model, cmd := a.Update(msg)
+	next, ok := model.(App)
+	if !ok {
+		t.Fatalf("Update returned a %T", model)
+	}
+	if cmd == nil {
+		return next, nil
+	}
+	return next, cmd()
+}
+
+func TestHostsPanelListsConfigCandidates(t *testing.T) {
+	a := candidateApp(t, []string{"web-01"}, []string{"web-01", "db-01", "bastion"})
+	view := plain(a.hostsPanel(40, 20))
+
+	for _, want := range []string{"─ ssh config ─", "db-01", "bastion"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("the panel does not show %q:\n%s", want, view)
+		}
+	}
+	// A connected alias is a host now, not also a candidate.
+	if strings.Count(view, "web-01") != 1 {
+		t.Fatalf("web-01 is listed more than once:\n%s", view)
+	}
+}
+
+func TestEnterOnACandidateEmitsHostConnectMsg(t *testing.T) {
+	a := candidateApp(t, []string{"web-01"}, []string{"db-01"})
+	a = pressKey(t, a, "j") // onto the candidate
+	if a.SelectedCandidate() != "db-01" {
+		t.Fatalf("SelectedCandidate() = %q", a.SelectedCandidate())
+	}
+
+	_, msg := keyCmdMsg(t, a, "enter")
+	connect, ok := msg.(HostConnectMsg)
+	if !ok {
+		t.Fatalf("enter produced %T, want HostConnectMsg", msg)
+	}
+	if strings.Join(connect.Patterns, ",") != "db-01" {
+		t.Fatalf("Patterns = %v", connect.Patterns)
+	}
+}
+
+func TestSpaceMarksCandidatesAndEnterConnectsThem(t *testing.T) {
+	a := candidateApp(t, nil, []string{"db-01", "db-02", "db-03"})
+
+	a = pressKey(t, a, " ") // mark db-01
+	a = pressKey(t, a, "j")
+	a = pressKey(t, a, " ") // mark db-02
+	if !a.CandidateMarked("db-01") || !a.CandidateMarked("db-02") {
+		t.Fatal("space did not mark the candidates")
+	}
+	if !strings.Contains(plain(a.hostsPanel(40, 20)), "+ db-01") {
+		t.Fatalf("a mark is not visible:\n%s", plain(a.hostsPanel(40, 20)))
+	}
+
+	// Marks toggle off again.
+	a = pressKey(t, a, " ")
+	if a.CandidateMarked("db-02") {
+		t.Fatal("space did not unmark")
+	}
+	a = pressKey(t, a, " ")
+
+	next, msg := keyCmdMsg(t, a, "enter")
+	connect, ok := msg.(HostConnectMsg)
+	if !ok {
+		t.Fatalf("enter produced %T, want HostConnectMsg", msg)
+	}
+	if strings.Join(connect.Patterns, ",") != "db-01,db-02" {
+		t.Fatalf("Patterns = %v", connect.Patterns)
+	}
+	if next.CandidateMarked("db-01") {
+		t.Fatal("the marks survived the connect request")
+	}
+}
+
+func TestNewHostPromptEmitsThePattern(t *testing.T) {
+	a := candidateApp(t, nil, nil)
+
+	a = pressKey(t, a, "n")
+	if !a.hostInput.Focused() {
+		t.Fatal("n did not open the new-host prompt")
+	}
+	if !strings.Contains(plain(a.hostsPanel(40, 20)), newHostPrompt) {
+		t.Fatalf("the open prompt is not visible:\n%s", plain(a.hostsPanel(40, 20)))
+	}
+	for _, r := range "web-{01..02}" {
+		a = pressKey(t, a, string(r))
+	}
+
+	next, msg := keyCmdMsg(t, a, "enter")
+	connect, ok := msg.(HostConnectMsg)
+	if !ok {
+		t.Fatalf("enter produced %T, want HostConnectMsg", msg)
+	}
+	if strings.Join(connect.Patterns, ",") != "web-{01..02}" {
+		t.Fatalf("Patterns = %v", connect.Patterns)
+	}
+	if next.hostInput.Focused() || next.hostInput.Value() != "" {
+		t.Fatal("the prompt did not close and clear")
+	}
+}
+
+func TestNewHostPromptEscAbandons(t *testing.T) {
+	a := candidateApp(t, nil, nil)
+	a = pressKey(t, a, "n")
+	for _, r := range "web" {
+		a = pressKey(t, a, string(r))
+	}
+
+	model, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	next := model.(App)
+	if cmd != nil {
+		t.Fatal("esc produced a command")
+	}
+	if next.hostInput.Focused() || next.hostInput.Value() != "" {
+		t.Fatal("esc did not abandon the prompt")
+	}
+}
+
+func TestEmptyNewHostPromptEmitsNothing(t *testing.T) {
+	a := candidateApp(t, nil, nil)
+	a = pressKey(t, a, "n")
+	_, msg := keyCmdMsg(t, a, "enter")
+	if msg != nil {
+		t.Fatalf("an empty prompt produced %T", msg)
+	}
+}
+
+func TestFilterAppliesToCandidates(t *testing.T) {
+	a := candidateApp(t, []string{"web-01"}, []string{"db-01", "cache-01"})
+	a = typeFilter(t, a, "db")
+
+	rows := a.hostRows()
+	if len(rows) != 1 || rows[0].ID != "db-01" || !rows[0].Candidate {
+		t.Fatalf("hostRows() = %+v, want only the db-01 candidate", rows)
+	}
+}
+
+func TestConnectErrorIsShownUntilTheFleetChanges(t *testing.T) {
+	a := candidateApp(t, nil, nil)
+
+	model, _ := a.Update(ConnectErrorMsg{Err: `expand "web-{": unclosed brace`})
+	a = model.(App)
+	if !strings.Contains(plain(a.hostsPanel(60, 20)), "unclosed brace") {
+		t.Fatalf("the connect error is not shown:\n%s", plain(a.hostsPanel(60, 20)))
+	}
+
+	model, _ = a.Update(HostsChangedMsg{Hosts: []string{"web-01"}})
+	a = model.(App)
+	if strings.Contains(plain(a.hostsPanel(60, 20)), "unclosed brace") {
+		t.Fatal("the connect error survived the fleet changing")
+	}
+}
+
+func TestConnectedCandidateLeavesTheCandidateList(t *testing.T) {
+	a := candidateApp(t, nil, []string{"db-01"})
+	model, _ := a.Update(HostsChangedMsg{Hosts: []string{"db-01"}})
+	a = model.(App)
+
+	for _, row := range a.hostRows() {
+		if row.Candidate && row.ID == "db-01" {
+			t.Fatal("a connected host is still offered as a candidate")
+		}
+	}
+}
