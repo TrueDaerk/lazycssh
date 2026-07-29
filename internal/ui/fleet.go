@@ -49,6 +49,15 @@ type Targeter interface {
 // hints would be wrong exactly when it matters.
 type FleetUpdatedMsg struct{}
 
+// SessionOutputMsg says a session appended output. It carries no bytes: the
+// pane reads the live scrollback when it renders, so the message only has to
+// cause a redraw - and a coalesced or dropped message costs nothing, because
+// the next one shows everything that arrived in between.
+type SessionOutputMsg struct {
+	// ID is the session that produced output.
+	ID string
+}
+
 // hostIDs returns the run's hosts: the fleet's when there is one, the
 // configured list otherwise, so views can be tested without a transport.
 func (a App) hostIDs() []string {

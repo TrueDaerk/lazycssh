@@ -228,6 +228,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// render. Redrawing is the whole effect.
 		return a.followFocus(), nil
 
+	case SessionOutputMsg:
+		// Nothing to store here either: the pane reads the scrollback when it
+		// renders. Redrawing is the whole effect.
+		return a, nil
+
 	case HostsChangedMsg:
 		return a.withHosts(msg.Hosts).followFocus(), nil
 
@@ -702,9 +707,8 @@ func (a App) renderMain() string {
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
 
-// renderPane draws one host's pane. The output itself arrives with the
-// rendering issue; until then the pane names its host, which is what the
-// tiling tests assert against.
+// renderPane draws one host's pane: a one-line header naming the host, then
+// the session's scrollback following its tail.
 func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 	if host < 0 || host >= len(a.hostIDs()) {
 		return a.frame(a.theme.Pane, cell, "")
@@ -720,7 +724,14 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 		header = a.theme.Selected.Render(name)
 	}
 
-	return a.frame(a.theme.PaneFrame(focused), cell, header)
+	// The border eats two columns and rows, the header the top line of what
+	// remains.
+	content := header
+	if body := a.paneBody(name, cell.Width-2, cell.Height-3); body != "" {
+		content = header + "\n" + body
+	}
+
+	return a.frame(a.theme.PaneFrame(focused), cell, content)
 }
 
 // renderStatusBar draws the bottom line: what is selected, how many hosts are in
