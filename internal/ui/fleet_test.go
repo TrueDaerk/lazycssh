@@ -9,12 +9,7 @@ import (
 // gridApp is a sized app with the grid focused on its first pane.
 func gridApp(t *testing.T) App {
 	t.Helper()
-	a := resize(t, testApp(), 120, 40)
-	a = pressKey(t, a, "tab")
-	if a.Focus() != AreaGrid {
-		t.Fatalf("Focus() = %v, want the grid", a.Focus())
-	}
-	return a
+	return focusGrid(t, resize(t, testApp(), 120, 40))
 }
 
 // keyMsgResult drives one key press and returns the message its command

@@ -100,6 +100,17 @@ type Theme struct {
 	// PanelFocused is the frame around the focused panel. The border is both
 	// coloured and thicker, so focus survives a terminal without colour.
 	PanelFocused lipgloss.Style
+	// PanelBody and PanelBodyFocused are the panel frames without their top
+	// edge. The top line of a titled panel box is drawn by hand so the title
+	// can sit inside the border, lazygit style; the body supplies the other
+	// three sides.
+	PanelBody        lipgloss.Style
+	PanelBodyFocused lipgloss.Style
+	// BorderText and BorderTextFocused colour border characters that are drawn
+	// by hand rather than by lipgloss's border machinery - the top line of a
+	// titled panel box.
+	BorderText        lipgloss.Style
+	BorderTextFocused lipgloss.Style
 
 	// Pane is the frame around an unfocused host pane.
 	Pane lipgloss.Style
@@ -187,6 +198,10 @@ func NewTheme(opts Options) Theme {
 	// has to be unmistakable on a terminal that renders no colour at all.
 	t.Panel = border(lipgloss.RoundedBorder(), palette.Border)
 	t.PanelFocused = border(lipgloss.ThickBorder(), palette.Focus)
+	t.PanelBody = t.Panel.BorderTop(false).Padding(0, 1)
+	t.PanelBodyFocused = t.PanelFocused.BorderTop(false).Padding(0, 1)
+	t.BorderText = fg(palette.Border)
+	t.BorderTextFocused = fg(palette.Focus)
 	t.Pane = border(lipgloss.NormalBorder(), palette.Border)
 	t.PaneFocused = border(lipgloss.ThickBorder(), palette.Focus)
 	t.PaneFailed = border(lipgloss.NormalBorder(), palette.Danger)
@@ -272,6 +287,33 @@ func (t Theme) PaneFrame(focused, failed bool) lipgloss.Style {
 	default:
 		return t.Pane
 	}
+}
+
+// PanelBodyFrame returns the three-sided frame of a titled panel box, focused
+// or not. The missing top edge is the hand-drawn title line.
+func (t Theme) PanelBodyFrame(focused bool) lipgloss.Style {
+	if focused {
+		return t.PanelBodyFocused
+	}
+	return t.PanelBody
+}
+
+// PanelBorderChars returns the border character set for a panel, focused or
+// not, for the hand-drawn title line of a titled box. The focused set is
+// thicker as well as brighter, so focus survives a terminal without colour.
+func (t Theme) PanelBorderChars(focused bool) lipgloss.Border {
+	if focused {
+		return lipgloss.ThickBorder()
+	}
+	return lipgloss.RoundedBorder()
+}
+
+// PanelBorderText returns the style for hand-drawn border characters.
+func (t Theme) PanelBorderText(focused bool) lipgloss.Style {
+	if focused {
+		return t.BorderTextFocused
+	}
+	return t.BorderText
 }
 
 // PanelTitle returns the heading style for a panel, focused or not.

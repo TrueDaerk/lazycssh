@@ -44,6 +44,23 @@ func pressKey(t *testing.T, a App, keystroke string) App {
 	return next
 }
 
+// focusGrid presses tab until the grid has focus. Tab cycles through every
+// sidebar panel before it reaches the grid, so the walk is bounded by the
+// number of stops in the cycle.
+func focusGrid(t *testing.T, a App) App {
+	t.Helper()
+	for range len(Panels()) + 1 {
+		if a.Focus() == AreaGrid {
+			return a
+		}
+		a = pressKey(t, a, "tab")
+	}
+	if a.Focus() != AreaGrid {
+		t.Fatal("tab never reached the grid")
+	}
+	return a
+}
+
 // resize drives a window size message through the model.
 func resize(t *testing.T, a App, width, height int) App {
 	t.Helper()
@@ -142,29 +159,40 @@ func TestTooSmallSaysSo(t *testing.T) {
 	}
 }
 
+// Tab walks the lazygit cycle: every sidebar panel in order, then the grid,
+// then round to the first panel again; shift+tab walks it backwards.
 func TestTabCyclesFocus(t *testing.T) {
 	a := resize(t, testApp(), 120, 40)
+	if a.Panel() != PanelStatus {
+		t.Fatalf("setup: Panel() = %v", a.Panel())
+	}
 
-	a = pressKey(t, a, "tab")
-	if a.Focus() != AreaGrid {
-		t.Fatalf("Focus() = %v after tab, want the grid", a.Focus())
+	for _, want := range Panels()[1:] {
+		a = pressKey(t, a, "tab")
+		if a.Focus() != AreaSidebar || a.Panel() != want {
+			t.Fatalf("Focus() = %v, Panel() = %v, want the %v panel", a.Focus(), a.Panel(), want)
+		}
 	}
 	a = pressKey(t, a, "tab")
-	if a.Focus() != AreaSidebar {
-		t.Fatalf("Focus() = %v after a second tab", a.Focus())
+	if a.Focus() != AreaGrid {
+		t.Fatalf("Focus() = %v after the last panel, want the grid", a.Focus())
+	}
+	a = pressKey(t, a, "tab")
+	if a.Focus() != AreaSidebar || a.Panel() != PanelStatus {
+		t.Fatalf("Focus() = %v, Panel() = %v after the grid, want the first panel", a.Focus(), a.Panel())
 	}
 	a = pressKey(t, a, "shift+tab")
 	if a.Focus() != AreaGrid {
-		t.Fatalf("Focus() = %v after shift+tab", a.Focus())
+		t.Fatalf("Focus() = %v after shift+tab, want the grid", a.Focus())
+	}
+	a = pressKey(t, a, "shift+tab")
+	if a.Focus() != AreaSidebar || a.Panel() != PanelCommandLog {
+		t.Fatalf("Focus() = %v, Panel() = %v after a second shift+tab", a.Focus(), a.Panel())
 	}
 }
 
 func TestNumberKeysSelectPanelsAndFocusTheSidebar(t *testing.T) {
-	a := resize(t, testApp(), 120, 40)
-	a = pressKey(t, a, "tab") // focus the grid first
-	if a.Focus() != AreaGrid {
-		t.Fatal("setup: the grid did not take focus")
-	}
+	a := focusGrid(t, resize(t, testApp(), 120, 40))
 
 	for i, panel := range Panels() {
 		a = pressKey(t, a, string(rune('1'+i)))
@@ -208,6 +236,41 @@ func TestHelpOverlayTogglesAndSwallowsTheNextKey(t *testing.T) {
 	}
 	if a.Panel() != before {
 		t.Fatal("the key that closed the help also changed the panel")
+	}
+}
+
+// The help is a popup over the frame, not a replacement for it: the fleet
+// stays visible underneath.
+func TestHelpOverlayCompositesOverTheFrame(t *testing.T) {
+	a := resize(t, testApp(), 120, 40)
+	a = pressKey(t, a, "?")
+
+	view := plain(a.View().Content)
+	if !strings.Contains(view, "Keybindings") {
+		t.Fatalf("the overlay has no title:\n%s", view)
+	}
+	if !strings.Contains(view, "web-01") {
+		t.Fatalf("the frame is not visible under the overlay:\n%s", view)
+	}
+}
+
+// The sidebar is a stack of titled boxes: every panel's title is always
+// visible, only the selected panel shows its body.
+func TestSidebarStacksEveryPanel(t *testing.T) {
+	a := resize(t, testApp(), 120, 40)
+	view := plain(a.View().Content)
+
+	for _, want := range []string{"Status [1]", "Hosts [2]", "Groups [3]", "Sessions [4]", "Command log [5]"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("the sidebar does not show the %q box:\n%s", want, view)
+		}
+	}
+
+	// PanelStatus is selected, so its body is on screen and the host list -
+	// the Hosts panel's body - is not in the sidebar. The pane headers show
+	// the host names too, so assert on a string only the hosts panel renders.
+	if !strings.Contains(view, "session: prod-web") {
+		t.Fatalf("the selected panel's body is missing:\n%s", view)
 	}
 }
 

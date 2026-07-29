@@ -18,7 +18,47 @@ const (
 	// Smaller than this it renders a single message instead.
 	MinWidth  = 24
 	MinHeight = 4
+	// CollapsedPanelHeight is a titled sidebar box with no body: the title
+	// line, one empty row, the bottom border.
+	CollapsedPanelHeight = 3
 )
+
+// SidebarHeights divides the sidebar's height over the stacked panels, lazygit
+// style: every unselected panel collapses to a titled box and the selected one
+// takes everything that is left.
+//
+// When even the collapsed boxes do not fit, the unselected panels shrink to a
+// bare one-line title, and when that does not fit either they vanish and the
+// selected panel gets the whole column. Heights are never negative and always
+// sum to at most total, so a hostile resize cannot push a renderer below zero.
+func SidebarHeights(total, panels, selected int) []int {
+	if panels <= 0 {
+		return nil
+	}
+	heights := make([]int, panels)
+	if total <= 0 {
+		return heights
+	}
+	selected = clamp(selected, 0, panels-1)
+
+	collapsed := CollapsedPanelHeight
+	switch {
+	case total >= CollapsedPanelHeight*panels:
+		// Room for every box plus a selected panel at least as tall.
+	case total >= (panels-1)+CollapsedPanelHeight:
+		collapsed = 1
+	default:
+		collapsed = 0
+	}
+
+	for i := range heights {
+		if i != selected {
+			heights[i] = collapsed
+		}
+	}
+	heights[selected] = total - collapsed*(panels-1)
+	return heights
+}
 
 // Rect is a region of the terminal. A zero-width or zero-height rect is not
 // drawn.

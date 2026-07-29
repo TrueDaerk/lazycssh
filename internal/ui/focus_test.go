@@ -16,7 +16,7 @@ func fleetApp(t *testing.T, n int) App {
 		hosts = append(hosts, fmt.Sprintf("web-%02d", i))
 	}
 	a := resize(t, NewApp(Config{Hosts: hosts, Theme: Options{Dark: true}}), 120, 40)
-	return pressKey(t, a, "tab")
+	return focusGrid(t, a)
 }
 
 func TestArrowsMoveWithinTheGrid(t *testing.T) {

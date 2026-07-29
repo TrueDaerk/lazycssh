@@ -150,8 +150,8 @@ func DefaultKeyMap() KeyMap {
 		NextPage:   key.NewBinding(key.WithKeys("pgdown", "n"), key.WithHelp("pgdn/n", "next page of panes")),
 		PrevPage:   key.NewBinding(key.WithKeys("pgup", "p"), key.WithHelp("pgup/p", "previous page of panes")),
 
-		ScrollUp:     key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "scroll this pane back")),
-		ScrollDown:   key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "scroll this pane forward")),
+		ScrollUp:     key.NewBinding(key.WithKeys("ctrl+u"), key.WithHelp("ctrl+u", "scroll back")),
+		ScrollDown:   key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "scroll forward")),
 		ScrollTop:    key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "oldest retained output")),
 		ScrollBottom: key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "back to the tail")),
 		SearchPane:   key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search the scrollback")),

@@ -2,6 +2,15 @@
 
 ## 2026-07-29
 
+- Lazygit-faithful shell: the sidebar is now a stack of individually bordered panels with their
+  titles and number shortcuts in the top border line (`╭ Hosts [2] ─╮`), the selected panel
+  expanding and the others collapsing to titled boxes (`SidebarHeights`, `titledBox`). `tab` /
+  `shift+tab` walk the lazygit cycle — each panel, then the grid. The `?` help is a keybindings
+  popup composited **over** the frame with lipgloss layers instead of replacing it, and the
+  status bar right-aligns its key hints. Frames now fill their rects exactly (lipgloss v2 counts
+  the border into `Width`/`Height`). `core/tui.md`, `core/keys.md` and `core/theme.md` updated.
+  Version 0.3.0.
+
 - Argumentless start: `lazycssh` without host arguments opens the TUI on an empty run instead
   of exiting with a usage error. The Sessions panel has focus, the empty grid renders a hint
   ("no hosts — pick a session in [4] Sessions …"), and launching a saved session connects its
