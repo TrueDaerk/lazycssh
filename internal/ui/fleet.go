@@ -26,6 +26,9 @@ type Targeter interface {
 	SetMode(m broadcast.Mode) error
 	// SetFocus records the focused pane, which is what single mode sends to.
 	SetFocus(id string)
+	// SetLimit restricts all and selected mode to the visible hosts; nil
+	// lifts the limit. The UI pushes it, the router enforces it.
+	SetLimit(ids []string)
 	// Targets are the hosts a keystroke reaches right now.
 	Targets() []string
 	// Count is how many hosts that is.
@@ -97,14 +100,19 @@ type ConnectErrorMsg struct {
 	Err string
 }
 
-// hostIDs returns the run's hosts: the fleet's when there is one, the
+// fleetIDs returns every host in the run: the fleet's when there is one, the
 // configured list otherwise, so views can be tested without a transport.
-func (a App) hostIDs() []string {
+func (a App) fleetIDs() []string {
 	if a.cfg.Fleet != nil {
 		return a.cfg.Fleet.IDs()
 	}
 	return a.cfg.Hosts
 }
+
+// hostIDs returns the hosts whose panes are drawn: the foreground session's,
+// or the whole fleet when no session is open. Everything pane-shaped - the
+// grid, the focus, paging, hit-testing - indexes into this list.
+func (a App) hostIDs() []string { return a.sessionHosts() }
 
 // counts summarises the fleet for the status panel. Without a transport only
 // the total is known, and it says so by leaving the rest at zero.

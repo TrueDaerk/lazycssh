@@ -159,7 +159,7 @@ func TestCloseRequestReachesTheManager(t *testing.T) {
 	}
 }
 
-func TestSessionLaunchAddsTheSavedHosts(t *testing.T) {
+func TestGroupOpenAddsTheSavedHosts(t *testing.T) {
 	m, _ := testModel(t, "srv1")
 	m.Init()
 	m.Manager().Wait()
@@ -172,7 +172,7 @@ func TestSessionLaunchAddsTheSavedHosts(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	drive(t, m, ui.SessionLaunchMsg{Name: "web", Merge: true})
+	drive(t, m, ui.GroupOpenMsg{Name: "web"})
 	m.Manager().Wait()
 
 	want := []string{"srv1", "web1", "web2"}
@@ -190,12 +190,12 @@ func TestSessionLaunchAddsTheSavedHosts(t *testing.T) {
 	}
 }
 
-func TestSessionLaunchOfAMissingNameLeavesTheRunAlone(t *testing.T) {
+func TestGroupOpenOfAMissingNameLeavesTheRunAlone(t *testing.T) {
 	m, _ := testModel(t, "srv1")
 	m.Init()
 	m.Manager().Wait()
 
-	drive(t, m, ui.SessionLaunchMsg{Name: "no-such"})
+	drive(t, m, ui.GroupOpenMsg{Name: "no-such"})
 	m.Manager().Wait()
 
 	if got := m.Manager().Len(); got != 1 {
@@ -227,7 +227,7 @@ func TestViewIsFullScreen(t *testing.T) {
 	}
 }
 
-func TestEmptyRunGrowsBySessionLaunch(t *testing.T) {
+func TestEmptyRunGrowsByGroupOpen(t *testing.T) {
 	m, _ := testModel(t)
 	m.Init()
 	m.Manager().Wait()
@@ -244,7 +244,7 @@ func TestEmptyRunGrowsBySessionLaunch(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	drive(t, m, ui.SessionLaunchMsg{Name: "web"})
+	drive(t, m, ui.GroupOpenMsg{Name: "web"})
 	m.Manager().Wait()
 
 	if got := m.Manager().Counts(); got.Connected != 3 {
@@ -330,5 +330,35 @@ func TestRunPatternsFollowRuntimeConnects(t *testing.T) {
 	drive(t, m, ui.RemoveHostMsg{ID: "web-01"})
 	if got := strings.Join(m.patterns, ","); got != "web-{01..02},cache-01" {
 		t.Fatalf("patterns = %q after removals", got)
+	}
+}
+
+// Opening a group twice foregrounds its session instead of dialling twice.
+func TestReopeningAGroupDoesNotDuplicateHosts(t *testing.T) {
+	m, _ := testModel(t, "srv1")
+	m.Init()
+	m.Manager().Wait()
+
+	if err := m.store.Save(&sessions.Session{
+		Version: sessions.FormatVersion,
+		Name:    "web",
+		Hosts:   []sessions.HostEntry{{Pattern: "web{1..2}"}},
+	}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	drive(t, m, ui.GroupOpenMsg{Name: "web"})
+	m.Manager().Wait()
+	drive(t, m, ui.GroupOpenMsg{Name: "web"})
+	m.Manager().Wait()
+
+	if got := m.Manager().Len(); got != 3 {
+		t.Fatalf("Len() = %d; reopening minted duplicate sessions", got)
+	}
+	if got := m.app.ActiveSession(); got != "web" {
+		t.Fatalf("ActiveSession() = %q after opening the group", got)
+	}
+	if got := strings.Join(m.app.OpenSessionNames(), ","); got != "adhoc,web" {
+		t.Fatalf("open sessions = %q", got)
 	}
 }

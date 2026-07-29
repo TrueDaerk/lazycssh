@@ -1,19 +1,24 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/TrueDaerk/lazycssh/internal/sessions"
 	"github.com/TrueDaerk/lazycssh/internal/workingset"
 )
 
-// allHostsRow is the built-in entry that returns to every host. It is always
-// first, because "undo my narrowing" has to be one keystroke away.
-const allHostsRow = "all hosts"
+// A **group** is a persisted host list: the saved YAML file the store reads
+// and writes. The Groups panel is its whole lifecycle - create with n, delete
+// with d, open with enter - and opening one makes an open session out of it;
+// see internal/ui/opensessions.go.
 
-// WorkingSets is what the Groups panel needs from the working set model. It is
-// the subset of [workingset.Manager] the interface uses, declared here so the
-// panel can be tested against a fake and so the UI cannot reach past it.
+// WorkingSets is what the interface needs from the working set model: the
+// status bar describes it, and the chunk keys page it. It is the subset of
+// [workingset.Manager] the interface uses, declared here so it can be faked.
 type WorkingSets interface {
 	// Describe renders the active set with its counts.
 	Describe() string
@@ -21,12 +26,6 @@ type WorkingSets interface {
 	Active() workingset.Selector
 	// ActiveName is the name of the active set, empty when it is ad hoc.
 	ActiveName() string
-	// Named returns the saved sets in definition order.
-	Named() []workingset.Set
-	// Activate makes a named set the working set.
-	Activate(name string) error
-	// Reset makes every host the working set again.
-	Reset()
 	// Count is how many hosts are in the working set.
 	Count() int
 	// Total is how many hosts are in the run.
@@ -36,135 +35,305 @@ type WorkingSets interface {
 	Prev() bool
 }
 
-// groupRow is one line of the Groups panel.
+// groupRow is one line of the Groups panel: one saved group file.
 type groupRow struct {
-	// Name is what the row activates, empty for the built-in all-hosts row.
+	// Name is the group name.
 	Name string
-	// Label is what the row shows.
-	Label string
-	// Active marks the row as the working set in force.
-	Active bool
+	// Hosts is how many hosts it opens, or -1 when the file could not be read.
+	Hosts int
+	// Description is the group's free-text note.
+	Description string
+	// Err is why the row could not be read, if it could not.
+	Err error
 }
 
-// groupRows returns the rows of the Groups panel: the built-in all-hosts entry,
-// every named set, and - when the active set is neither - the ad hoc set the
-// user is in right now, so the panel never hides where they are.
-func (a App) groupRows() []groupRow {
-	ws := a.cfg.WorkingSet
-	if ws == nil {
-		return nil
+// Label renders the row.
+func (r groupRow) Label() string {
+	if r.Err != nil {
+		return fmt.Sprintf("%s (unreadable)", r.Name)
+	}
+	label := fmt.Sprintf("%s (%d host%s)", r.Name, r.Hosts, plural(r.Hosts))
+	if r.Description != "" {
+		label += " — " + r.Description
+	}
+	return label
+}
+
+// groupStage is where the new-group dialog is: closed, asking for the name,
+// or asking for the hosts.
+type groupStage int
+
+const (
+	groupStageNone groupStage = iota
+	groupStageName
+	groupStageHosts
+)
+
+// loadGroups re-reads the group directory. One unreadable file becomes one
+// unreadable row rather than an empty panel: the other groups are still
+// usable, and hiding them would make a typo look like data loss.
+func (a App) loadGroups() App {
+	a.groupList = nil
+	a.groupsErr = nil
+
+	if a.cfg.Sessions == nil {
+		return a
 	}
 
-	activeName := ws.ActiveName()
-	everyHost := ws.Active() != nil && ws.Active().Kind() == workingset.KindAll
+	names, err := a.cfg.Sessions.List()
+	if err != nil {
+		a.groupsErr = err
+		return a
+	}
 
-	rows := []groupRow{{Label: allHostsRow, Active: activeName == "" && everyHost}}
-	for _, set := range ws.Named() {
-		rows = append(rows, groupRow{
-			Name:   set.Name,
-			Label:  fmt.Sprintf("%s (%s)", set.Name, set.Selector.String()),
-			Active: set.Name == activeName,
+	for _, name := range names {
+		sess, err := a.cfg.Sessions.Load(name)
+		if err != nil {
+			a.groupList = append(a.groupList, groupRow{Name: name, Hosts: -1, Err: err})
+			continue
+		}
+		count, err := sess.HostCount()
+		if err != nil {
+			a.groupList = append(a.groupList, groupRow{Name: name, Hosts: -1, Err: err})
+			continue
+		}
+		a.groupList = append(a.groupList, groupRow{
+			Name: name, Hosts: count, Description: sess.Description,
 		})
 	}
-
-	if activeName == "" && !everyHost {
-		rows = append(rows, groupRow{
-			Label:  fmt.Sprintf("(unnamed) %s", ws.Active().String()),
-			Active: true,
-		})
-	}
-	return rows
+	a.groupCursor = clamp(a.groupCursor, 0, max(0, len(a.groupList)-1))
+	return a
 }
 
 // GroupCursor is the position of the cursor in the Groups panel.
 func (a App) GroupCursor() int { return a.groupCursor }
 
-// SelectedGroup is the row under the Groups panel cursor.
+// SelectedGroup is the group under the Groups panel cursor.
 func (a App) SelectedGroup() string {
-	rows := a.groupRows()
-	if len(rows) == 0 {
+	if len(a.groupList) == 0 {
 		return ""
 	}
-	return rows[clamp(a.groupCursor, 0, len(rows)-1)].Label
+	return a.groupList[clamp(a.groupCursor, 0, len(a.groupList)-1)].Name
 }
+
+// GroupDialogOpen reports whether the new-group dialog has the keyboard.
+func (a App) GroupDialogOpen() bool { return a.groupStage != groupStageNone }
+
+// DeleteGroupPending is the group the delete question is about, empty when
+// none is being asked.
+func (a App) DeleteGroupPending() string { return a.deleteGroup }
 
 // moveGroupCursor moves the cursor, stopping at the ends.
 func (a App) moveGroupCursor(delta int) App {
-	a.groupCursor = clamp(a.groupCursor+delta, 0, max(0, len(a.groupRows())-1))
+	a.groupCursor = clamp(a.groupCursor+delta, 0, max(0, len(a.groupList)-1))
 	return a
 }
 
-// activateSelectedGroup makes the row under the cursor the working set. That is
-// the panel's whole purpose: one keystroke from "which twenty am I working on"
-// to "these twenty".
-func (a App) activateSelectedGroup() (App, error) {
-	ws := a.cfg.WorkingSet
-	rows := a.groupRows()
-	if ws == nil || len(rows) == 0 {
+// openSelectedGroup asks the program to open the group under the cursor. The
+// UI cannot dial: it says what the user chose, and the program resolves the
+// patterns through ~/.ssh/config and connects.
+func (a App) openSelectedGroup() (App, tea.Cmd) {
+	name := a.SelectedGroup()
+	if name == "" {
+		return a, nil
+	}
+	return a, func() tea.Msg { return GroupOpenMsg{Name: name} }
+}
+
+// beginNewGroup opens the create dialog on its first question.
+func (a App) beginNewGroup() App {
+	a.groupErr = nil
+	a.groupStage = groupStageName
+	a.groupNameInput.SetValue("")
+	a.groupNameInput.Focus()
+	a.groupHostsInput.SetValue("")
+	return a
+}
+
+// cancelNewGroup closes the dialog without writing anything.
+func (a App) cancelNewGroup() App {
+	a.groupStage = groupStageNone
+	a.groupNameInput.SetValue("")
+	a.groupNameInput.Blur()
+	a.groupHostsInput.SetValue("")
+	a.groupHostsInput.Blur()
+	return a
+}
+
+// handleGroupDialogKey drives the two questions of the create dialog: the
+// name, then the host patterns. enter advances, esc abandons, and every error
+// - a taken name, a malformed pattern - keeps the dialog open with what was
+// typed, because the user's input must survive the telling.
+func (a App) handleGroupDialogKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		return a.cancelNewGroup(), nil
+	case "enter":
+		if a.groupStage == groupStageName {
+			name := strings.TrimSpace(a.groupNameInput.Value())
+			if name == "" {
+				return a, nil
+			}
+			if err := sessions.ValidateName(name); err != nil {
+				a.groupErr = err
+				return a, nil
+			}
+			if a.cfg.Sessions != nil && a.cfg.Sessions.Exists(name) {
+				a.groupErr = fmt.Errorf("group %q already exists", name)
+				return a, nil
+			}
+			a.groupErr = nil
+			a.groupStage = groupStageHosts
+			a.groupNameInput.Blur()
+			a.groupHostsInput.Focus()
+			return a, nil
+		}
+		return a.commitNewGroup()
+	}
+
+	var cmd tea.Cmd
+	if a.groupStage == groupStageName {
+		a.groupNameInput, cmd = a.groupNameInput.Update(msg)
+	} else {
+		a.groupHostsInput, cmd = a.groupHostsInput.Update(msg)
+	}
+	return a, cmd
+}
+
+// commitNewGroup writes the group. The patterns are stored as typed - brace
+// expansion stays readable - and are validated by the store before anything
+// lands on disk.
+func (a App) commitNewGroup() (App, tea.Cmd) {
+	patterns := strings.Fields(a.groupHostsInput.Value())
+	if len(patterns) == 0 {
+		a.groupErr = errors.New("a group needs at least one host")
+		return a, nil
+	}
+	if a.cfg.Sessions == nil {
+		a.groupErr = errors.New("no group directory")
 		return a, nil
 	}
 
-	row := rows[clamp(a.groupCursor, 0, len(rows)-1)]
-	switch {
-	case row.Name == "" && row.Label == allHostsRow:
-		ws.Reset()
+	name := strings.TrimSpace(a.groupNameInput.Value())
+	run := sessions.Run{Name: name, Patterns: patterns}
+	if _, err := a.cfg.Sessions.SaveRun(run, false); err != nil {
+		a.groupErr = err
 		return a, nil
-	case row.Name == "":
-		// The ad hoc row is where the user already is.
-		return a, nil
-	default:
-		if err := ws.Activate(row.Name); err != nil {
-			return a, err
+	}
+
+	next := a.cancelNewGroup()
+	return next, func() tea.Msg { return SessionsChangedMsg{} }
+}
+
+// beginDeleteGroup opens the delete question for the group under the cursor.
+// A file is never removed without the user answering for it.
+func (a App) beginDeleteGroup() App {
+	a.groupErr = nil
+	a.deleteGroup = a.SelectedGroup()
+	return a
+}
+
+// handleGroupDeleteKey answers the delete question: y removes the file,
+// anything else withdraws the question. An open session of that group is
+// untouched - deleting a definition must not tear down live connections.
+func (a App) handleGroupDeleteKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	name := a.deleteGroup
+	a.deleteGroup = ""
+	switch msg.String() {
+	case "y", "Y":
+		if a.cfg.Sessions == nil {
+			return a, nil
 		}
+		if err := a.cfg.Sessions.Remove(name); err != nil {
+			a.groupErr = err
+			return a, nil
+		}
+		return a, func() tea.Msg { return SessionsChangedMsg{} }
+	default:
 		return a, nil
 	}
 }
 
-// groupsPanel renders the working sets: which exist, which is active, and where
-// the window sits.
+// groupsPanel renders the saved groups, the create dialog, the delete
+// question, and the save prompt.
 func (a App) groupsPanel(width, height int) string {
-	if a.cfg.WorkingSet == nil {
-		return a.theme.Muted.Render("no working sets yet")
-	}
-
-	rows := a.groupRows()
-	cursor := clamp(a.groupCursor, 0, max(0, len(rows)-1))
-	first, last := visibleRange(cursor, len(rows), max(1, height-2))
-
 	var b strings.Builder
-	for i := first; i < last; i++ {
-		if i > first {
-			b.WriteString("\n")
-		}
-		b.WriteString(a.groupLine(rows[i], i == cursor))
+
+	switch {
+	case a.groupStage == groupStageName:
+		b.WriteString(a.theme.Base.Render("new group name: " + a.groupNameInput.Value()))
+		b.WriteString("\n")
+	case a.groupStage == groupStageHosts:
+		b.WriteString(a.theme.Base.Render(
+			"hosts for " + strings.TrimSpace(a.groupNameInput.Value()) + ": " + a.groupHostsInput.Value()))
+		b.WriteString("\n")
+	case a.deleteGroup != "":
+		b.WriteString(a.theme.StatusWarning.Render(
+			fmt.Sprintf("delete %q? y/n", a.deleteGroup)))
+		b.WriteString("\n")
+	case a.confirmOverwrite:
+		b.WriteString(a.theme.StatusWarning.Render(
+			fmt.Sprintf("overwrite %q? y/n", strings.TrimSpace(a.saveInput.Value()))))
+		b.WriteString("\n")
+	case a.saveInput.Focused():
+		b.WriteString(a.theme.Base.Render("save as: " + a.saveInput.Value()))
+		b.WriteString("\n")
+	}
+	if a.groupErr != nil {
+		b.WriteString(a.theme.Failure.Render(a.groupErr.Error()))
+		b.WriteString("\n")
+	}
+	if a.saveErr != nil {
+		// The error must be visible while the prompt is still open: an empty
+		// run keeps the prompt so the name survives.
+		b.WriteString(a.theme.Failure.Render(a.saveErr.Error()))
+		b.WriteString("\n")
 	}
 
-	// The window position belongs here as much as the sets do: it is the other
-	// half of "which hosts am I looking at", and the two are not the same
-	// question - see wiki/core/working-sets.md.
-	b.WriteString("\n")
-	b.WriteString(a.theme.Muted.Render(a.cfg.WorkingSet.Describe()))
-	if label := a.windowLabel(); label != "" {
-		b.WriteString("\n")
-		b.WriteString(a.theme.Muted.Render(label))
+	switch {
+	case a.cfg.Sessions == nil:
+		b.WriteString(a.theme.Muted.Render("no group directory"))
+	case a.groupsErr != nil:
+		b.WriteString(a.theme.Failure.Render(a.groupsErr.Error()))
+	case len(a.groupList) == 0:
+		b.WriteString(a.theme.Muted.Render("no groups — n creates one"))
+	default:
+		openNames := make(map[string]bool, len(a.open))
+		for _, s := range a.open {
+			openNames[s.Name] = true
+		}
+		cursor := clamp(a.groupCursor, 0, len(a.groupList)-1)
+		first, last := visibleRange(cursor, len(a.groupList), max(1, height-1))
+		for i := first; i < last; i++ {
+			if i > first {
+				b.WriteString("\n")
+			}
+			b.WriteString(a.groupLine(a.groupList[i], i == cursor, openNames[a.groupList[i].Name]))
+		}
+		if hidden := len(a.groupList) - last; hidden > 0 {
+			b.WriteString("\n")
+			b.WriteString(a.theme.Muted.Render(fmt.Sprintf("+%d more", hidden)))
+		}
 	}
 
 	return a.theme.Base.Width(max(0, width)).Render(b.String())
 }
 
-// groupLine renders one row. The active set is marked with a character as well
-// as a style, so it survives a terminal without colour.
-func (a App) groupLine(row groupRow, underCursor bool) string {
+// groupLine renders one saved group. A group with an open session is marked
+// with a character as well as a style, so it survives a terminal without
+// colour.
+func (a App) groupLine(row groupRow, underCursor, open bool) string {
 	marker := "  "
-	if row.Active {
+	if open {
 		marker = "▸ "
 	}
-
-	label := marker + row.Label
+	label := marker + row.Label()
 	switch {
 	case underCursor:
 		return a.theme.Cursor.Render(label)
-	case row.Active:
+	case row.Err != nil:
+		return a.theme.Failure.Render(label)
+	case open:
 		return a.theme.Selected.Render(label)
 	default:
 		return a.theme.Base.Render(label)

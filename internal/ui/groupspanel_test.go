@@ -1,197 +1,377 @@
 package ui
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/TrueDaerk/lazycssh/internal/workingset"
+	"github.com/TrueDaerk/lazycssh/internal/sessions"
 )
 
-// groupsApp builds an app on the Groups panel over a working set with two named
-// sets defined.
-func groupsApp(t *testing.T) (App, *workingset.Manager) {
+// groupsStoreApp builds an app on the Groups panel over a store in a temporary
+// directory.
+func groupsStoreApp(t *testing.T, saved ...*sessions.Session) (App, *sessions.Store) {
 	t.Helper()
 
-	a, _, _, ws := statusApp(t, "web-01", "web-02", "db-01", "db-02")
-	if err := ws.Define("front", workingset.Range{From: 1, To: 2}); err != nil {
-		t.Fatalf("Define: %v", err)
+	store, err := sessions.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
 	}
-	if err := ws.Define("databases", workingset.Pattern{Glob: "db-*"}); err != nil {
-		t.Fatalf("Define: %v", err)
+	for _, s := range saved {
+		if err := store.Save(s); err != nil {
+			t.Fatalf("Save %s: %v", s.Name, err)
+		}
 	}
-	return pressKey(t, a, "2"), ws
+
+	a := resize(t, NewApp(Config{
+		Hosts:       []string{"web-01", "web-02"},
+		RunPatterns: []string{"web-{01..02}.example.com"},
+		Sessions:    store,
+		Theme:       Options{Dark: true},
+	}), 120, 40)
+
+	return pressKey(t, a, "2"), store
 }
 
-func TestGroupsPanelListsTheSets(t *testing.T) {
-	a, _ := groupsApp(t)
+// groupsApp is the three-group fixture the mouse tests share: enough rows for
+// a click on the third one.
+func groupsApp(t *testing.T) (App, *sessions.Store) {
+	t.Helper()
+	return groupsStoreApp(t,
+		savedGroup("alpha", "h1"), savedGroup("beta", "h2"), savedGroup("gamma", "h3"))
+}
 
-	view := plain(a.groupsPanel(40, 20))
-	for _, want := range []string{allHostsRow, "front (first-2)", "databases (db-*)"} {
+func savedGroup(name string, patterns ...string) *sessions.Session {
+	s := &sessions.Session{Version: sessions.FormatVersion, Name: name}
+	for _, p := range patterns {
+		s.Hosts = append(s.Hosts, sessions.HostEntry{Pattern: p})
+	}
+	return s
+}
+
+// typeInto feeds a string character by character, the way a user types it.
+func typeInto(t *testing.T, a App, s string) App {
+	t.Helper()
+	for _, r := range s {
+		a = press(t, a, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	return a
+}
+
+func TestGroupsPanelListsSavedGroupsWithHostCounts(t *testing.T) {
+	prod := savedGroup("prod", "srv1-{01..04}.example.com")
+	prod.Description = "the production web tier"
+	a, _ := groupsStoreApp(t, prod, savedGroup("staging", "stage-01"))
+
+	view := plain(a.groupsPanel(60, 20))
+	for _, want := range []string{"prod (4 hosts)", "the production web tier", "staging (1 host)"} {
 		if !strings.Contains(view, want) {
-			t.Fatalf("the Groups panel does not list %q:\n%s", want, view)
+			t.Fatalf("the Groups panel does not show %q:\n%s", want, view)
 		}
 	}
 }
 
-// The acceptance criterion: the active working set is unmistakably marked.
-func TestActiveGroupIsMarked(t *testing.T) {
-	a, ws := groupsApp(t)
+// The acceptance criterion: opening from here is equivalent to `lazycssh @name`.
+// The panel does not dial; it says what the user chose.
+func TestEnterOpensTheSelectedGroup(t *testing.T) {
+	a, _ := groupsStoreApp(t, savedGroup("prod", "h1"), savedGroup("staging", "h2"))
+	a = pressKey(t, a, "j")
 
-	// Every host is the working set to begin with.
-	line := activeLine(t, plain(a.groupsPanel(40, 20)))
-	if !strings.Contains(line, allHostsRow) {
-		t.Fatalf("the all-hosts row is not marked active:\n%s", line)
+	model, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if _, ok := model.(App); !ok {
+		t.Fatalf("Update returned a %T", model)
 	}
-
-	if err := ws.Activate("databases"); err != nil {
-		t.Fatalf("Activate: %v", err)
+	if cmd == nil {
+		t.Fatal("enter produced no command")
 	}
-	line = activeLine(t, plain(a.groupsPanel(40, 20)))
-	if !strings.Contains(line, "databases") {
-		t.Fatalf("the active set is not marked:\n%s", line)
+	msg, ok := cmd().(GroupOpenMsg)
+	if !ok {
+		t.Fatalf("the command produced a %T", cmd())
 	}
-	// The marker is a character, not only a colour, so it survives a terminal
-	// without colour.
-	mono := NewApp(Config{WorkingSet: ws, Theme: Options{NoColor: true}})
-	mono = resize(t, mono, 120, 40)
-	if !strings.Contains(plain(mono.groupsPanel(40, 20)), "▸ databases") {
-		t.Fatalf("the active marker vanished without colour:\n%s", plain(mono.groupsPanel(40, 20)))
+	if msg.Name != "staging" {
+		t.Fatalf("GroupOpenMsg = %+v", msg)
 	}
 }
 
-// activeLine returns the line carrying the active marker.
-func activeLine(t *testing.T, view string) string {
-	t.Helper()
-	for _, line := range strings.Split(view, "\n") {
-		if strings.Contains(line, "▸") {
-			return line
-		}
+func TestSpaceOpensTheSelectedGroupToo(t *testing.T) {
+	a, _ := groupsStoreApp(t, savedGroup("prod", "h1"))
+
+	model, cmd := a.Update(tea.KeyPressMsg{Code: ' ', Text: " "})
+	if _, ok := model.(App); !ok {
+		t.Fatalf("Update returned a %T", model)
 	}
-	t.Fatalf("no row is marked active:\n%s", view)
-	return ""
+	if cmd == nil {
+		t.Fatal("space produced no command")
+	}
+	if msg, ok := cmd().(GroupOpenMsg); !ok || msg.Name != "prod" {
+		t.Fatalf("space produced %T %+v", cmd(), cmd())
+	}
 }
 
-// The acceptance criterion: selecting a group makes it the working set in one
-// keystroke.
-func TestEnterActivatesTheSelectedGroup(t *testing.T) {
-	a, ws := groupsApp(t)
+// The acceptance criterion: a group created in the dialog survives a restart -
+// it is a file the store can read back, patterns as typed.
+func TestNCreatesAGroup(t *testing.T) {
+	a, store := groupsStoreApp(t)
 
-	a = pressKey(t, a, "j") // onto "front"
-	if !strings.Contains(a.SelectedGroup(), "front") {
-		t.Fatalf("SelectedGroup() = %q", a.SelectedGroup())
+	a = pressKey(t, a, "n")
+	if !a.GroupDialogOpen() {
+		t.Fatal("n did not open the new-group dialog")
 	}
+	a = typeInto(t, a, "web")
+	a = pressKey(t, a, "enter")
+	a = typeInto(t, a, "web-{01..03}.example.com db-01")
 
-	model, _ := a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	model, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	a, ok := model.(App)
 	if !ok {
 		t.Fatalf("Update returned a %T", model)
 	}
-	if ws.ActiveName() != "front" {
-		t.Fatalf("ActiveName() = %q after enter", ws.ActiveName())
+	if a.GroupDialogOpen() {
+		t.Fatal("the dialog is still open after a successful save")
 	}
-	if got := ws.Count(); got != 2 {
-		t.Fatalf("the working set holds %d hosts, want 2", got)
+	if cmd == nil {
+		t.Fatal("saving did not ask the panel to reload")
+	}
+	if _, ok := cmd().(SessionsChangedMsg); !ok {
+		t.Fatalf("saving produced a %T", cmd())
+	}
+
+	sess, err := store.Load("web")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := strings.Join(sess.Patterns(), ","); got != "web-{01..03}.example.com,db-01" {
+		t.Fatalf("saved patterns = %q", got)
 	}
 }
 
-func TestEnterOnAllHostsResets(t *testing.T) {
-	a, ws := groupsApp(t)
-	if err := ws.Activate("front"); err != nil {
-		t.Fatalf("Activate: %v", err)
+func TestNewGroupRefusesATakenName(t *testing.T) {
+	a, store := groupsStoreApp(t, savedGroup("prod", "h1"))
+
+	a = pressKey(t, a, "n")
+	a = typeInto(t, a, "prod")
+	a = pressKey(t, a, "enter")
+
+	if !a.GroupDialogOpen() {
+		t.Fatal("a taken name closed the dialog")
+	}
+	if !strings.Contains(plain(a.groupsPanel(60, 20)), "already exists") {
+		t.Fatalf("the panel does not report the taken name:\n%s", plain(a.groupsPanel(60, 20)))
+	}
+	sess, err := store.Load("prod")
+	if err != nil || len(sess.Hosts) != 1 {
+		t.Fatalf("the existing group was touched: %v, %v", sess, err)
+	}
+}
+
+// A malformed pattern must be refused before anything lands on disk, and the
+// typed input must survive the telling.
+func TestNewGroupRefusesAMalformedPattern(t *testing.T) {
+	a, store := groupsStoreApp(t)
+
+	a = pressKey(t, a, "n")
+	a = typeInto(t, a, "web")
+	a = pressKey(t, a, "enter")
+	a = typeInto(t, a, "web-{01")
+	a = pressKey(t, a, "enter")
+
+	if !a.GroupDialogOpen() {
+		t.Fatal("a malformed pattern closed the dialog")
+	}
+	if a.groupErr == nil {
+		t.Fatal("a malformed pattern produced no error")
+	}
+	if store.Exists("web") {
+		t.Fatal("a malformed pattern was written anyway")
+	}
+	if a.groupHostsInput.Value() != "web-{01" {
+		t.Fatalf("the typed patterns did not survive: %q", a.groupHostsInput.Value())
+	}
+}
+
+func TestEscapeAbandonsTheGroupDialog(t *testing.T) {
+	a, store := groupsStoreApp(t)
+
+	a = pressKey(t, a, "n")
+	a = typeInto(t, a, "web")
+	a = pressKey(t, a, "esc")
+
+	if a.GroupDialogOpen() {
+		t.Fatal("escape left the dialog open")
+	}
+	if store.Exists("web") {
+		t.Fatal("escape wrote the group anyway")
+	}
+}
+
+// The dialog owns the keyboard: a group called "1" has to be nameable, and a
+// host list contains spaces.
+func TestGroupDialogOwnsTheKeyboard(t *testing.T) {
+	a, _ := groupsStoreApp(t)
+	a = pressKey(t, a, "n")
+	a = typeInto(t, a, "1b")
+
+	if a.Panel() != PanelGroups {
+		t.Fatalf("a keystroke meant for the name changed the panel to %v", a.Panel())
+	}
+	if !strings.Contains(plain(a.groupsPanel(60, 20)), "new group name: 1b") {
+		t.Fatalf("the name did not take the keystrokes:\n%s", plain(a.groupsPanel(60, 20)))
+	}
+}
+
+// The acceptance criterion: deleting asks first, and no deletes nothing.
+func TestDeleteAsksFirst(t *testing.T) {
+	a, store := groupsStoreApp(t, savedGroup("prod", "h1"))
+
+	a = pressKey(t, a, "d")
+	if a.DeleteGroupPending() != "prod" {
+		t.Fatalf("DeleteGroupPending() = %q", a.DeleteGroupPending())
+	}
+	if !strings.Contains(plain(a.groupsPanel(60, 20)), `delete "prod"? y/n`) {
+		t.Fatalf("the panel does not ask:\n%s", plain(a.groupsPanel(60, 20)))
 	}
 
-	model, _ := a.Update(tea.KeyPressMsg{Code: tea.KeyEnter}) // cursor is on all hosts
-	if _, ok := model.(App); !ok {
+	a = pressKey(t, a, "n") // anything but y withdraws the question
+	if a.DeleteGroupPending() != "" {
+		t.Fatal("answering no left the question open")
+	}
+	if !store.Exists("prod") {
+		t.Fatal("answering no still deleted the group")
+	}
+
+	a = pressKey(t, a, "d")
+	model, cmd := a.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
+	a, ok := model.(App)
+	if !ok {
 		t.Fatalf("Update returned a %T", model)
 	}
-	if ws.ActiveName() != "" || ws.Count() != 4 {
-		t.Fatalf("all hosts did not restore the full run: %q, %d hosts",
-			ws.ActiveName(), ws.Count())
+	if store.Exists("prod") {
+		t.Fatal("answering yes did not delete the group")
+	}
+	if cmd == nil {
+		t.Fatal("deleting did not ask the panel to reload")
+	}
+	if _, ok := cmd().(SessionsChangedMsg); !ok {
+		t.Fatalf("deleting produced a %T", cmd())
 	}
 }
 
-// An ad hoc set - typed once, or produced by paging - is listed too, so the
-// panel never hides where the user actually is.
-func TestAdHocSetIsListed(t *testing.T) {
-	a, ws := groupsApp(t)
-	if err := ws.Apply(workingset.Range{From: 3, To: 4}); err != nil {
-		t.Fatalf("Apply: %v", err)
+// Deleting a definition must not tear down live connections: the open session
+// of that group stays.
+func TestDeleteLeavesTheOpenSessionAlone(t *testing.T) {
+	a, store := groupsStoreApp(t, savedGroup("prod", "web-01"))
+
+	model, _ := a.Update(SessionOpenedMsg{Name: "prod", Hosts: []string{"web-01"}})
+	a = model.(App)
+	if a.ActiveSession() != "prod" {
+		t.Fatalf("setup: ActiveSession() = %q", a.ActiveSession())
 	}
 
-	view := plain(a.groupsPanel(40, 20))
-	if !strings.Contains(view, "(unnamed) 3-4") {
-		t.Fatalf("the ad hoc set is not listed:\n%s", view)
-	}
-	if !strings.Contains(activeLine(t, view), "unnamed") {
-		t.Fatalf("the ad hoc set is not marked active:\n%s", view)
-	}
-}
+	a = pressKey(t, a, "2") // back onto the Groups panel
+	a = pressKey(t, a, "d")
+	a = pressKey(t, a, "y")
 
-func TestGroupsPanelShowsTheWorkingSetAndTheWindow(t *testing.T) {
-	a, ws := groupsApp(t)
-	if err := ws.Activate("front"); err != nil {
-		t.Fatalf("Activate: %v", err)
+	if store.Exists("prod") {
+		t.Fatal("the group file survived")
 	}
-
-	view := plain(a.groupsPanel(40, 20))
-	if !strings.Contains(view, "front (2/4 hosts)") {
-		t.Fatalf("the panel does not describe the working set:\n%s", view)
+	if a.ActiveSession() != "prod" {
+		t.Fatalf("deleting the file closed the session: ActiveSession() = %q", a.ActiveSession())
 	}
 }
 
-// The chunk keys page the working set, which is not the same thing as paging
-// the pane window.
-func TestChunkKeysPageTheWorkingSet(t *testing.T) {
-	a, ws := groupsApp(t)
-	if err := ws.Apply(workingset.Range{From: 1, To: 2}); err != nil {
-		t.Fatalf("Apply: %v", err)
+// A group whose session is open is marked, with a character as well as a
+// style, so it survives a terminal without colour.
+func TestOpenGroupIsMarked(t *testing.T) {
+	store, err := sessions.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if err := store.Save(savedGroup("prod", "web-01")); err != nil {
+		t.Fatalf("Save: %v", err)
 	}
 
-	a = pressKey(t, a, "]")
-	if got := strings.Join(ws.Members(), ","); got != "db-01,db-02" {
-		t.Fatalf("members after the next chunk = %q", got)
-	}
+	a := resize(t, NewApp(Config{Sessions: store, Theme: Options{NoColor: true}}), 120, 40)
+	model, _ := a.Update(SessionOpenedMsg{Name: "prod", Hosts: []string{"web-01"}})
+	a = model.(App)
 
-	a = pressKey(t, a, "[")
-	if got := strings.Join(ws.Members(), ","); got != "web-01,web-02" {
-		t.Fatalf("members after the previous chunk = %q", got)
-	}
-	_ = a
-}
-
-func TestGroupCursorMovesAndLeavesThePanelAtTheEnds(t *testing.T) {
-	a, _ := groupsApp(t)
-
-	a = pressKey(t, a, "j")
-	if a.GroupCursor() != 1 {
-		t.Fatalf("GroupCursor() = %d", a.GroupCursor())
-	}
-
-	// Off the top is the panel above.
-	a = pressKey(t, a, "k")
-	a = pressKey(t, a, "k")
-	if a.Panel() != PanelStatus {
-		t.Fatalf("Panel() = %v after moving off the top", a.Panel())
+	if !strings.Contains(plain(a.groupsPanel(60, 20)), "▸ prod") {
+		t.Fatalf("the open group is not marked:\n%s", plain(a.groupsPanel(60, 20)))
 	}
 }
 
-func TestGroupsPanelWithoutAWorkingSet(t *testing.T) {
+func TestGroupsPanelWithoutAStore(t *testing.T) {
 	a := resize(t, NewApp(Config{Hosts: []string{"h1"}, Theme: Options{Dark: true}}), 120, 40)
 	a = pressKey(t, a, "2")
 
-	if got := plain(a.groupsPanel(40, 20)); !strings.Contains(got, "no working sets yet") {
+	if got := plain(a.groupsPanel(60, 20)); !strings.Contains(got, "no group directory") {
 		t.Fatalf("groupsPanel() = %q", got)
 	}
 	if a.SelectedGroup() != "" {
 		t.Fatalf("SelectedGroup() = %q", a.SelectedGroup())
 	}
-	// Enter and the chunk keys must not panic without a model behind them.
-	a = pressKey(t, a, "]")
-	a = pressKey(t, a, "[")
+	// Opening, creating and deleting must not panic without a store.
 	model, _ := a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if _, ok := model.(App); !ok {
+	a, _ = model.(App)
+	a = pressKey(t, a, "n")
+	a = typeInto(t, a, "x")
+	a = pressKey(t, a, "enter")
+	a = typeInto(t, a, "h1")
+	a = pressKey(t, a, "enter")
+	a = pressKey(t, a, "esc")
+	a = pressKey(t, a, "d")
+	_ = a
+}
+
+// One unreadable file is one unreadable row, not an empty panel.
+func TestUnreadableGroupBecomesOneRow(t *testing.T) {
+	a, store := groupsStoreApp(t, savedGroup("prod", "h1"))
+
+	path := filepath.Join(store.Dir(), "broken.yaml")
+	if err := os.WriteFile(path, []byte("version: 1\nname: broken\nhostz: []\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	model, _ := a.Update(SessionsChangedMsg{})
+	a, ok := model.(App)
+	if !ok {
 		t.Fatalf("Update returned a %T", model)
+	}
+
+	view := plain(a.groupsPanel(60, 20))
+	if !strings.Contains(view, "broken (unreadable)") {
+		t.Fatalf("the unreadable group is not listed:\n%s", view)
+	}
+	if !strings.Contains(view, "prod (1 host)") {
+		t.Fatalf("the readable groups vanished:\n%s", view)
+	}
+}
+
+func TestGroupCursorMovesAndLeavesThePanelAtTheEnds(t *testing.T) {
+	a, _ := groupsStoreApp(t, savedGroup("a", "h1"), savedGroup("b", "h2"))
+
+	a = pressKey(t, a, "j")
+	if a.SelectedGroup() != "b" {
+		t.Fatalf("SelectedGroup() = %q", a.SelectedGroup())
+	}
+	a = pressKey(t, a, "j")
+	if a.Panel() != PanelSessions {
+		t.Fatalf("Panel() = %v after moving off the bottom", a.Panel())
+	}
+}
+
+// n outside the Groups panel keeps its global meaning: connect a host.
+func TestNOutsideTheGroupsPanelConnects(t *testing.T) {
+	a, _ := groupsStoreApp(t)
+	a = pressKey(t, a, "1")
+	a = pressKey(t, a, "n")
+
+	if a.GroupDialogOpen() {
+		t.Fatal("n on the Status panel opened the group dialog")
+	}
+	if !a.ConnectPromptOpen() {
+		t.Fatal("n on the Status panel did not open the connect prompt")
 	}
 }

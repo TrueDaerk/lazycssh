@@ -4,7 +4,7 @@ title: Working sets
 description: The current subject of work — which hosts a command is about, defined by count, range, pattern or selection.
 resource: internal/workingset
 tags: [working-set, hosts, broadcast]
-timestamp: 2026-07-29T19:00:00Z
+timestamp: 2026-07-29T21:00:00Z
 ---
 
 # Working sets

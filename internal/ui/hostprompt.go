@@ -27,8 +27,8 @@ func (a App) ConnectPromptValue() string { return a.hostInput.Value() }
 func (a App) aliasHints() []string {
 	typed := strings.ToLower(strings.TrimSpace(a.hostInput.Value()))
 
-	running := make(map[string]bool, len(a.hostIDs()))
-	for _, id := range a.hostIDs() {
+	running := make(map[string]bool, len(a.fleetIDs()))
+	for _, id := range a.fleetIDs() {
 		running[id] = true
 	}
 

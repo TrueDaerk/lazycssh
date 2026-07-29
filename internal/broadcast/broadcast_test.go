@@ -645,3 +645,49 @@ func TestForgetDropsSelectionAndFocus(t *testing.T) {
 		t.Fatal("forgetting an unknown host disturbed the selection")
 	}
 }
+
+// The visibility limit: a keystroke never reaches a pane the user cannot see.
+// It bounds all and selected mode; fleet mode stays the explicit escape hatch.
+func TestLimitBoundsAllAndSelected(t *testing.T) {
+	r, _ := router(t, 4)
+
+	r.SetLimit([]string{"web-01", "web-02"})
+	if got := len(r.Targets()); got != 2 {
+		t.Fatalf("ModeAll reached %d hosts under a limit of 2", got)
+	}
+
+	r.Select("web-01", "web-03")
+	if err := r.SetMode(ModeSelected); err != nil {
+		t.Fatalf("SetMode: %v", err)
+	}
+	if got := r.Targets(); len(got) != 1 || got[0] != "web-01" {
+		t.Fatalf("ModeSelected targets = %v; web-03 is selected but not visible", got)
+	}
+
+	if err := r.SetMode(ModeFleet); err != nil {
+		t.Fatalf("SetMode: %v", err)
+	}
+	if got := len(r.Targets()); got != 4 {
+		t.Fatalf("ModeFleet reached %d hosts; the escape hatch must ignore the limit", got)
+	}
+}
+
+func TestNilLimitLiftsTheLimit(t *testing.T) {
+	r, _ := router(t, 3)
+
+	r.SetLimit([]string{"web-01"})
+	if !r.Limited() || len(r.Targets()) != 1 {
+		t.Fatalf("limit not in force: limited=%v targets=%v", r.Limited(), r.Targets())
+	}
+
+	r.SetLimit(nil)
+	if r.Limited() || len(r.Targets()) != 3 {
+		t.Fatalf("nil did not lift the limit: limited=%v targets=%v", r.Limited(), r.Targets())
+	}
+
+	// An empty, non-nil limit means "nothing is visible", not "no limit".
+	r.SetLimit([]string{})
+	if !r.Limited() || len(r.Targets()) != 0 {
+		t.Fatalf("an empty limit was not enforced: limited=%v targets=%v", r.Limited(), r.Targets())
+	}
+}

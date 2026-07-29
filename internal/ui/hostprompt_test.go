@@ -23,7 +23,9 @@ func promptApp(t *testing.T, aliases []string, hosts ...string) App {
 // prompt there.
 func TestNewHostKeyOpensThePromptInTheStatusPanel(t *testing.T) {
 	a := promptApp(t, nil, "web-01")
-	a = pressKey(t, a, "2") // somewhere else first
+	// Somewhere else first - but not the Groups panel, where n deliberately
+	// means "new group" instead.
+	a = pressKey(t, a, "4")
 
 	a = pressKey(t, a, "n")
 	if a.Panel() != PanelStatus || !a.ConnectPromptOpen() {

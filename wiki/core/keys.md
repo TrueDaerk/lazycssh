@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-07-29T19:00:00Z
+timestamp: 2026-07-29T21:00:00Z
 ---
 
 # Keymap and help
@@ -26,7 +26,10 @@ A key press is dispatched by focus. Each binding belongs to one area:
 
 The sidebar and the grid may reuse a key — they are never focused at the same time — but a
 global binding may not collide with either, because the two are always live together. Both rules
-are tests, not conventions.
+are tests, not conventions. The one sanctioned exception is a **declared panel shadow**: the
+Groups panel keeps `n` and `d` for itself, lazygit style, resolved by routing order before the
+global bindings are consulted; the tests carry the explicit allowlist, so an undeclared
+duplicate still fails.
 
 ## Bindings
 
@@ -49,9 +52,10 @@ are tests, not conventions.
 | `u` | global (app level) | select the hosts that are up |
 | `d` | global (app level) | select the hosts that are down |
 | `↑`/`k`, `↓`/`j` | sidebar | move |
-| `enter` | sidebar | choose the row: activate a group, launch a session, resend a log entry |
-| `space` | sidebar | merge the session under the cursor into the run |
-| `w` | sidebar | save the working set or session |
+| `enter` / `space` | sidebar | choose the row: open a group, foreground a session, resend a log entry |
+| `w` | sidebar | save the run as a group |
+| `n` | Groups panel | new group (shadows the global connect while the panel has focus) |
+| `d` | Groups panel | delete the group under the cursor, after `y/n` (shadows the global select-down) |
 | `[` / `]` | sidebar | previous / next chunk of hosts |
 | any plain key | panes | **forwarded to the focused host** — letters, enter, tab, esc, ctrl+c, arrows, all of it |
 | `ctrl+]` | panes | stop typing: back to the app level, on the Status panel |

@@ -56,6 +56,23 @@ func (a App) withHosts(hosts []string) App {
 	return a
 }
 
+// refocus puts the pane focus back on a host by identity, clamped to the
+// nearest existing pane when the host is no longer visible. The visible list
+// is session-scoped, so this runs after the sessions were pruned - an index
+// restored against the fleet would land on a different machine.
+func (a App) refocus(focused string) App {
+	if focused != "" {
+		for i, id := range a.hostIDs() {
+			if id == focused {
+				a.paneIndex = i
+				return a
+			}
+		}
+	}
+	a.paneIndex = clamp(a.paneIndex, 0, max(0, len(a.hostIDs())-1))
+	return a
+}
+
 // movePane moves the pane focus by delta, stopping at the ends rather than
 // wrapping. Wrapping from the last pane to the first is how a user ends up
 // typing into the machine at the other end of the fleet.

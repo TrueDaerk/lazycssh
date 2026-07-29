@@ -2,6 +2,16 @@
 
 ## 2026-07-29
 
+- Groups and open sessions. The Groups panel now manages the saved session files as **groups**:
+  `n` creates one in a two-question dialog (name, then host patterns), `d` deletes after `y/n`,
+  `enter`/`space` opens one as a session — resolved through `~/.ssh/config` as every connect is.
+  Opening while another session is on screen backgrounds it without dropping connections; the
+  Sessions panel lists the open sessions and `enter`/`space` foregrounds one. The grid and the
+  broadcast scope (`all`/`selected`, via the router's new visibility limit) follow the
+  foreground session; `fleet` mode stays the every-host escape hatch. `w`/`S` save prompt moved
+  to the Groups panel. New `core/groups-and-sessions.md`; `core/tui.md`, `core/keys.md`,
+  `core/broadcast-scope.md`, `core/session-files.md` updated. Version 0.8.2.
+
 - An argumentless start no longer opens the host prompt: it starts on the Status panel with no
   input focused, and the empty-grid hint names the options. Forcing the first action was wrong —
   connect, launch a session or just look around is the user's call. `n` opens the prompt as

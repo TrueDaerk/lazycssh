@@ -12,7 +12,9 @@ func selectionApp(t *testing.T, names ...string) (App, *fakeFleet, Selector) {
 
 	a, fleet, router, _ := statusApp(t, names...)
 	router.Attach(fleet)
-	return pressKey(t, a, "2"), fleet, router
+	// Not the Groups panel: there n and d belong to the groups, deliberately
+	// shadowing the global selection keys.
+	return pressKey(t, a, "1"), fleet, router
 }
 
 // selected returns the toggled hosts, in host order.

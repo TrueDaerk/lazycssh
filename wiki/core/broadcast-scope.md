@@ -4,7 +4,7 @@ title: Broadcast scope
 description: What `BROADCAST all` means when a working set is active, and how the target count is made unmissable.
 resource: internal/broadcast
 tags: [broadcast, working-set, safety]
-timestamp: 2026-07-29T19:00:00Z
+timestamp: 2026-07-29T21:00:00Z
 ---
 
 # Broadcast scope
@@ -81,6 +81,18 @@ Rules the tests enforce:
   than every host is addressed,
 - `fleet` renders as `EVERY HOST` and sets `Router.Warning`, which the status bar draws in the
   warning style.
+
+## The visibility limit
+
+`SetLimit(ids)` restricts `all` and `selected` to the given hosts; `nil` lifts the limit, and
+an empty non-nil limit means "nothing is visible", not "no limit". The UI pushes it — it is the
+only layer that knows which panes are on screen — whenever the foreground
+[session](./groups-and-sessions.md) changes; the router only enforces that a keystroke cannot
+reach past it.
+
+The limit deliberately does **not** bound `fleet` mode: that mode exists as the explicit
+every-host escape hatch, and an escape hatch that can be silently narrowed is not one. `single`
+mode needs no limit — the focused pane is always visible.
 
 ## What the scope does not cover
 

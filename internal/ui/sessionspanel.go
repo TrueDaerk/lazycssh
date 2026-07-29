@@ -9,108 +9,41 @@ import (
 
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 	"github.com/TrueDaerk/lazycssh/internal/sessions"
+	"github.com/TrueDaerk/lazycssh/internal/ssh"
 )
 
-// SessionStore is what the Sessions panel needs from the on-disk session store.
-// It is the subset of [sessions.Store] the interface uses, so the panel can be
+// SessionStore is what the interface needs from the on-disk group store. It is
+// the subset of [sessions.Store] the interface uses, so the panels can be
 // tested against a fake and cannot reach past it.
 type SessionStore interface {
-	// List returns the saved session names in lexical order.
+	// List returns the saved group names in lexical order.
 	List() ([]string, error)
-	// Load reads one session.
+	// Load reads one group.
 	Load(name string) (*sessions.Session, error)
 	// Exists reports whether a name is taken.
 	Exists(name string) bool
-	// SaveRun writes the live run as a named session. overwrite false returns
+	// SaveRun writes the live run as a named group. overwrite false returns
 	// [sessions.ErrExists] rather than replacing.
 	SaveRun(run sessions.Run, overwrite bool) (*sessions.Session, error)
+	// Remove deletes a group file.
+	Remove(name string) error
 }
 
-// SessionsChangedMsg asks the panel to re-read the session directory. It is sent
-// after a save and can be sent by anything that changes the directory.
+// SessionsChangedMsg asks the Groups panel to re-read the group directory. It
+// is sent after a save or a delete and can be sent by anything that changes
+// the directory.
 type SessionsChangedMsg struct{}
-
-// SessionLaunchMsg asks the program to open a saved session. The UI does not
-// dial: it says what the user chose, and the layer that owns the transport acts
-// on it.
-type SessionLaunchMsg struct {
-	// Name is the session to open.
-	Name string
-	// Merge asks for the session's hosts to be added to the current run rather
-	// than replacing it.
-	Merge bool
-}
-
-// sessionRow is one line of the Sessions panel.
-type sessionRow struct {
-	// Name is the session name.
-	Name string
-	// Hosts is how many hosts it opens, or -1 when the file could not be read.
-	Hosts int
-	// Description is the session's free-text note.
-	Description string
-	// Err is why the row could not be read, if it could not.
-	Err error
-}
-
-// Label renders the row.
-func (r sessionRow) Label() string {
-	if r.Err != nil {
-		return fmt.Sprintf("%s (unreadable)", r.Name)
-	}
-	label := fmt.Sprintf("%s (%d host%s)", r.Name, r.Hosts, plural(r.Hosts))
-	if r.Description != "" {
-		label += " — " + r.Description
-	}
-	return label
-}
-
-// loadSessions re-reads the session directory. One unreadable file becomes one
-// unreadable row rather than an empty panel: the other sessions are still
-// usable, and hiding them would make a typo look like data loss.
-func (a App) loadSessions() App {
-	a.sessionRows = nil
-	a.sessionsErr = nil
-
-	if a.cfg.Sessions == nil {
-		return a
-	}
-
-	names, err := a.cfg.Sessions.List()
-	if err != nil {
-		a.sessionsErr = err
-		return a
-	}
-
-	for _, name := range names {
-		sess, err := a.cfg.Sessions.Load(name)
-		if err != nil {
-			a.sessionRows = append(a.sessionRows, sessionRow{Name: name, Hosts: -1, Err: err})
-			continue
-		}
-		count, err := sess.HostCount()
-		if err != nil {
-			a.sessionRows = append(a.sessionRows, sessionRow{Name: name, Hosts: -1, Err: err})
-			continue
-		}
-		a.sessionRows = append(a.sessionRows, sessionRow{
-			Name: name, Hosts: count, Description: sess.Description,
-		})
-	}
-	a.sessionCursor = clamp(a.sessionCursor, 0, max(0, len(a.sessionRows)-1))
-	return a
-}
 
 // SessionCursor is the position of the cursor in the Sessions panel.
 func (a App) SessionCursor() int { return a.sessionCursor }
 
-// SelectedSession is the session under the cursor, or the empty string when none
-// is saved.
-func (a App) SelectedSession() string {
-	if len(a.sessionRows) == 0 {
+// SelectedOpenSession is the open session under the cursor, or the empty
+// string when nothing is open.
+func (a App) SelectedOpenSession() string {
+	if len(a.open) == 0 {
 		return ""
 	}
-	return a.sessionRows[clamp(a.sessionCursor, 0, len(a.sessionRows)-1)].Name
+	return a.open[clamp(a.sessionCursor, 0, len(a.open)-1)].Name
 }
 
 // Saving reports whether the save-as prompt has the keyboard.
@@ -121,24 +54,33 @@ func (a App) SaveError() error { return a.saveErr }
 
 // moveSessionCursor moves the cursor, stopping at the ends.
 func (a App) moveSessionCursor(delta int) App {
-	a.sessionCursor = clamp(a.sessionCursor+delta, 0, max(0, len(a.sessionRows)-1))
+	a.sessionCursor = clamp(a.sessionCursor+delta, 0, max(0, len(a.open)-1))
 	return a
 }
 
-// launchSelectedSession asks the program to open the session under the cursor.
-func (a App) launchSelectedSession(merge bool) (App, tea.Cmd) {
-	name := a.SelectedSession()
-	if name == "" {
+// foregroundSelectedSession brings the open session under the cursor to the
+// foreground. Nothing is dialled: the panes and the broadcast scope change,
+// the connections do not.
+func (a App) foregroundSelectedSession() (App, tea.Cmd) {
+	if len(a.open) == 0 {
 		return a, nil
 	}
-	return a, func() tea.Msg { return SessionLaunchMsg{Name: name, Merge: merge} }
+	index := clamp(a.sessionCursor, 0, len(a.open)-1)
+	if index == a.active {
+		return a, nil
+	}
+	return a.foregroundSession(index), gridChanged()
 }
 
-// beginSave opens the save-as prompt, pre-filled with the session the run was
-// started from, because "save it again under the same name" is the common case.
+// beginSave opens the save-as prompt, pre-filled with the foreground session's
+// name, because "save it again under the same name" is the common case.
 func (a App) beginSave() App {
 	a.saveErr = nil
-	a.saveInput.SetValue(a.cfg.SessionName)
+	name := a.ActiveSession()
+	if name == adHocSessionName {
+		name = ""
+	}
+	a.saveInput.SetValue(name)
 	a.saveInput.CursorEnd()
 	a.saveInput.Focus()
 	return a
@@ -152,8 +94,8 @@ func (a App) cancelSave() App {
 	return a
 }
 
-// commitSave writes the run. An existing name is not replaced until the user has
-// said so: the first attempt asks, the second overwrites.
+// commitSave writes the run as a group. An existing name is not replaced until
+// the user has said so: the first attempt asks, the second overwrites.
 func (a App) commitSave(overwrite bool) (App, tea.Cmd) {
 	name := strings.TrimSpace(a.saveInput.Value())
 	if name == "" || a.cfg.Sessions == nil {
@@ -172,7 +114,7 @@ func (a App) commitSave(overwrite bool) (App, tea.Cmd) {
 	if len(run.Patterns) == 0 {
 		// Nothing was recorded about how the run was started, so the hosts as
 		// they are now is the honest thing to write.
-		run.Patterns = a.hostIDs()
+		run.Patterns = a.fleetIDs()
 	}
 	if len(run.Patterns) == 0 {
 		// An empty run cannot be saved, but the typed name must survive the
@@ -205,60 +147,53 @@ func (a App) broadcastMode() broadcast.Mode {
 	return a.cfg.Targets.Mode()
 }
 
-// sessionsPanel renders the saved sessions, the save prompt and the overwrite
-// question.
+// sessionsPanel renders the open sessions: which exist, which is in the
+// foreground, and how many of each one's hosts are up.
 func (a App) sessionsPanel(width, height int) string {
 	var b strings.Builder
 
-	switch {
-	case a.confirmOverwrite:
-		b.WriteString(a.theme.StatusWarning.Render(
-			fmt.Sprintf("overwrite %q? y/n", strings.TrimSpace(a.saveInput.Value()))))
-		b.WriteString("\n")
-	case a.saveInput.Focused():
-		b.WriteString(a.theme.Base.Render("save as: " + a.saveInput.Value()))
-		b.WriteString("\n")
-	}
-	if a.saveErr != nil {
-		// The error must be visible while the prompt is still open: an empty
-		// run keeps the prompt so the name survives.
-		b.WriteString(a.theme.Failure.Render(a.saveErr.Error()))
-		b.WriteString("\n")
+	if len(a.open) == 0 {
+		b.WriteString(a.theme.Muted.Render("no open sessions — open a group in [2]"))
+		return a.theme.Base.Width(max(0, width)).Render(b.String())
 	}
 
-	switch {
-	case a.cfg.Sessions == nil:
-		b.WriteString(a.theme.Muted.Render("no session directory"))
-	case a.sessionsErr != nil:
-		b.WriteString(a.theme.Failure.Render(a.sessionsErr.Error()))
-	case len(a.sessionRows) == 0:
-		b.WriteString(a.theme.Muted.Render("no saved sessions"))
-	default:
-		cursor := clamp(a.sessionCursor, 0, len(a.sessionRows)-1)
-		first, last := visibleRange(cursor, len(a.sessionRows), max(1, height-1))
-		for i := first; i < last; i++ {
-			if i > first {
-				b.WriteString("\n")
-			}
-			b.WriteString(a.sessionLine(a.sessionRows[i], i == cursor))
-		}
-		if hidden := len(a.sessionRows) - last; hidden > 0 {
+	cursor := clamp(a.sessionCursor, 0, len(a.open)-1)
+	first, last := visibleRange(cursor, len(a.open), max(1, height))
+	for i := first; i < last; i++ {
+		if i > first {
 			b.WriteString("\n")
-			b.WriteString(a.theme.Muted.Render(fmt.Sprintf("+%d more", hidden)))
 		}
+		b.WriteString(a.openSessionLine(a.open[i], i == cursor, i == a.active))
+	}
+	if hidden := len(a.open) - last; hidden > 0 {
+		b.WriteString("\n")
+		b.WriteString(a.theme.Muted.Render(fmt.Sprintf("+%d more", hidden)))
 	}
 
 	return a.theme.Base.Width(max(0, width)).Render(b.String())
 }
 
-// sessionLine renders one saved session.
-func (a App) sessionLine(row sessionRow, underCursor bool) string {
+// openSessionLine renders one open session. The foreground one is marked with
+// a character as well as a style, so it survives a terminal without colour.
+func (a App) openSessionLine(s openSession, underCursor, foreground bool) string {
+	up := 0
+	for _, id := range s.Hosts {
+		if a.state(id) == ssh.StateConnected {
+			up++
+		}
+	}
+
+	marker := "  "
+	if foreground {
+		marker = "▸ "
+	}
+	label := fmt.Sprintf("%s%s (%d/%d up)", marker, s.Name, up, len(s.Hosts))
 	switch {
 	case underCursor:
-		return a.theme.Cursor.Render(row.Label())
-	case row.Err != nil:
-		return a.theme.Failure.Render(row.Label())
+		return a.theme.Cursor.Render(label)
+	case foreground:
+		return a.theme.Selected.Render(label)
 	default:
-		return a.theme.Base.Render(row.Label())
+		return a.theme.Base.Render(label)
 	}
 }
