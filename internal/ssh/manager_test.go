@@ -480,3 +480,49 @@ func TestManagerConnectedAndWriter(t *testing.T) {
 		t.Fatal("a host that is not in the fleet handed out a writer")
 	}
 }
+
+func TestManagerAddDialsOneMoreHost(t *testing.T) {
+	m, _ := newTestManager(t, fakeFleet(2), nil)
+	m.Start(t.Context())
+	m.Wait()
+
+	host := hosts.Host{Alias: "extra", Addr: "extra.example.com", User: "deploy", Port: 22}
+	id := m.Add(t.Context(), host)
+	m.Wait()
+
+	if id != "extra" {
+		t.Errorf("Add() = %q, want %q", id, "extra")
+	}
+	want := []string{"srv1", "srv2", "extra"}
+	got := m.IDs()
+	if len(got) != len(want) {
+		t.Fatalf("IDs() = %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("IDs()[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+	if !m.Connected("extra") {
+		t.Error("the added host did not connect")
+	}
+	if got := m.Counts(); got.Connected != 3 {
+		t.Errorf("Counts() = %+v, want 3 connected", got)
+	}
+}
+
+func TestManagerAddDisambiguatesAgainstTheRun(t *testing.T) {
+	m, _ := newTestManager(t, fakeFleet(1), nil)
+	m.Start(t.Context())
+	m.Wait()
+
+	id := m.Add(t.Context(), fakeFleet(1)[0])
+	m.Wait()
+
+	if id != "srv1#2" {
+		t.Errorf("Add() = %q, want %q", id, "srv1#2")
+	}
+	if !m.Connected(id) {
+		t.Error("the added duplicate did not connect under its own identity")
+	}
+}

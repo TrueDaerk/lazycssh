@@ -577,6 +577,16 @@ func (a App) handleGridKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, a.keys.FullScreen):
 		a.fullScreen = !a.fullScreen
 		return a, nil
+	case key.Matches(msg, a.keys.Reconnect):
+		if id := a.FocusedHost(); id != "" {
+			return a, func() tea.Msg { return ReconnectHostMsg{ID: id} }
+		}
+		return a, nil
+	case key.Matches(msg, a.keys.ClosePane):
+		if id := a.FocusedHost(); id != "" {
+			return a, func() tea.Msg { return CloseHostMsg{ID: id} }
+		}
+		return a, nil
 
 	case key.Matches(msg, a.keys.ScrollUp):
 		return a.scrollBy(+a.scrollPage()), nil

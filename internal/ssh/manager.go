@@ -193,6 +193,22 @@ func (m *Manager) startOne(ctx context.Context, s Session) {
 // a clean shutdown, not for the UI, which must never block.
 func (m *Manager) Wait() { m.wg.Wait() }
 
+// Add appends a session for one more host to a running fleet and dials it.
+// It returns the new session's identifier. Merging a saved session into a run
+// and starting from an empty run both land here; the existing sessions are not
+// touched, so a merge cannot disturb a host that is already connected.
+func (m *Manager) Add(ctx context.Context, host hosts.Host) string {
+	m.mu.Lock()
+	id := m.uniqueID(host)
+	s := m.cfg.NewSession(SessionRequest{ID: id, Host: host, Events: m.events})
+	m.sessions = append(m.sessions, s)
+	m.byID[id] = s
+	m.mu.Unlock()
+
+	m.startOne(ctx, s)
+	return id
+}
+
 // Reconnect replaces one session with a fresh one for the same host and dials
 // it, without touching any other session.
 //

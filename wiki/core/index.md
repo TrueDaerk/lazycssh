@@ -17,5 +17,6 @@ The runtime pieces of lazycssh.
 * [Theme and styles](./theme.md) - the one place styles live, and why colour is never the only carrier of meaning
 * [Keymap and help](./keys.md) - every binding declared once, the help generated from it, and how ambiguity is prevented
 * [TUI shell](./tui.md) - the root model, the layout arithmetic, and why a resize can never panic
+* [Program assembly](./program.md) - the one place every layer meets: building the fleet and running the TUI over it
 
 * [Command log](./command-log.md) - what this run sent, to how many hosts, and what is deliberately never recorded

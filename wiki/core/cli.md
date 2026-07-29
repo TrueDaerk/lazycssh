@@ -4,7 +4,7 @@ title: Command line interface
 description: Flags, arguments and exit codes of the lazycssh binary.
 resource: cmd/lazycssh/main.go
 tags: [cli, flags, exit-codes]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-07-29T00:00:00Z
 ---
 
 # Command line interface
@@ -45,7 +45,7 @@ that is not saved is an error listing the sessions that are.
 
 | Code | Meaning |
 |------|---------|
-| `0` | Success. Currently `--version`, `--help` and `--list-sessions` reach it. |
+| `0` | Success: a clean TUI exit, `--version`, `--help` or `--list-sessions`. |
 | `1` | A failure during the run. |
 | `2` | Usage error: unknown flag, or no host arguments given. |
 
@@ -70,6 +70,8 @@ The revision comes from the build info the Go toolchain embeds, so it is present
 
 ## Current state
 
-Connecting is not implemented yet. An invocation with host arguments reports that and exits
-with code `1` rather than pretending to connect. The SSH transport and the TUI are tracked in
-their own epics.
+An invocation with host arguments starts the TUI over a live fleet — see
+[Program assembly](./program.md). Interactive authentication prompts are not wired into the
+TUI yet: hosts that need a password or an unknown-host-key confirmation fail their pane with a
+clear error (#87 tracks the prompt). Running without host arguments still exits with code `2`
+(#86 tracks the argumentless start).

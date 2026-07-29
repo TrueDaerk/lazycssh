@@ -2,6 +2,14 @@
 
 ## 2026-07-29
 
+- The program runs: `internal/program` assembles the fleet, the working set, the broadcast
+  router, the command log and the TUI, and `lazycssh host...` opens the interface over a live
+  fleet. A wrapper model pumps transport events into the UI and acts on what the UI may only
+  ask for: `r` reconnects, `x` closes, launching a saved session adds its hosts to the run
+  (`Manager.Add` is new), and a terminal resize reaches every remote PTY. Interactive auth
+  prompts are not wired yet — such hosts fail their pane with a clear error (#87). New
+  `core/program.md`; `core/cli.md`, `core/manager.md` and `core/tui.md` updated. Version 0.2.0.
+
 - Scrollback navigation and search: `ctrl+u`/`ctrl+d` scroll the focused pane, `g`/`G` jump to
   the oldest output and back to the tail, and the status bar warns `scrollback +N` while a pane
   is not following. `/` searches the focused pane, `[`/`]` walk the matches, and the command

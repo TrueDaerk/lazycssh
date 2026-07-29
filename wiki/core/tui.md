@@ -370,6 +370,8 @@ one garbled line.
 | `HostsChangedMsg` | replace the host list, keeping the focused host |
 | `SessionsChangedMsg` | re-read the session directory |
 | `SessionLaunchMsg` | emitted, not handled: the program opens or merges a saved session |
+| `ReconnectHostMsg` | emitted, not handled: `r` in the grid asks the program to reconnect the focused host |
+| `CloseHostMsg` | emitted, not handled: `x` in the grid asks the program to close the focused host's session |
 | `CommandResendMsg` | resend a logged command to the current broadcast set |
 | `CommandSentMsg` | emitted after a send, carrying the delivery report |
 
