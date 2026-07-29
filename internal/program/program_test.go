@@ -225,3 +225,31 @@ func TestViewIsFullScreen(t *testing.T) {
 		t.Fatal("the view does not request the alternate screen")
 	}
 }
+
+func TestEmptyRunGrowsBySessionLaunch(t *testing.T) {
+	m, _ := testModel(t)
+	m.Init()
+	m.Manager().Wait()
+
+	if got := m.Manager().Len(); got != 0 {
+		t.Fatalf("Len() = %d, want an empty run", got)
+	}
+
+	if err := m.store.Save(&sessions.Session{
+		Version: sessions.FormatVersion,
+		Name:    "web",
+		Hosts:   []sessions.HostEntry{{Pattern: "web{1..3}"}},
+	}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	drive(t, m, ui.SessionLaunchMsg{Name: "web"})
+	m.Manager().Wait()
+
+	if got := m.Manager().Counts(); got.Connected != 3 {
+		t.Fatalf("Counts() = %+v, want 3 connected after launching into an empty run", got)
+	}
+	if got := m.ws.Total(); got != 3 {
+		t.Errorf("the working set covers %d hosts, want 3", got)
+	}
+}

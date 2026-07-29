@@ -27,11 +27,12 @@ const (
 const usage = `lazycssh - terminal UI for parallel SSH
 
 Usage:
-  lazycssh [flags] <host|@session>...
+  lazycssh [flags] [<host|@session>...]
 
 Hosts may use brace expansion, for example srv1-{01..40}.example.com.
 An argument starting with @ names a saved session; extra hosts on the command
-line are merged into it.
+line are merged into it. Without arguments the interface opens on the saved
+sessions, ready to launch one.
 
 Flags:
 `
@@ -104,13 +105,9 @@ func run(args []string, stdout, stderr io.Writer, launch func(program.Config) er
 		return printSessions(store, stdout, stderr)
 	}
 
-	args = fs.Args()
-	if len(args) == 0 {
-		fs.Usage()
-		return exitUsage
-	}
-
-	resolved, err := resolvePlan(args, store)
+	// No host arguments is not an error: the TUI opens on the saved sessions,
+	// the way lazygit opens on the repository it is standing in.
+	resolved, err := resolvePlan(fs.Args(), store)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitError

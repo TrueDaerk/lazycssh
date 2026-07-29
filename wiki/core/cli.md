@@ -10,8 +10,12 @@ timestamp: 2026-07-29T00:00:00Z
 # Command line interface
 
 ```
-lazycssh [flags] <host|@session>...
+lazycssh [flags] [<host|@session>...]
 ```
+
+Without arguments the TUI opens on an empty run: the Sessions panel is focused, the empty grid
+says what to do, and launching a saved session connects its hosts — the lazygit model, applied
+to cssh.
 
 Host arguments may use brace expansion, for example `srv1-{01..40}.example.com`. Expansion is
 performed by lazycssh itself, so a quoted argument behaves the same as an unquoted one and no
@@ -47,7 +51,7 @@ that is not saved is an error listing the sessions that are.
 |------|---------|
 | `0` | Success: a clean TUI exit, `--version`, `--help` or `--list-sessions`. |
 | `1` | A failure during the run. |
-| `2` | Usage error: unknown flag, or no host arguments given. |
+| `2` | Usage error: an unknown flag. No host arguments is not an error; it opens the TUI. |
 
 ## Output streams
 
@@ -70,8 +74,7 @@ The revision comes from the build info the Go toolchain embeds, so it is present
 
 ## Current state
 
-An invocation with host arguments starts the TUI over a live fleet — see
+An invocation starts the TUI, with hosts or without — see
 [Program assembly](./program.md). Interactive authentication prompts are not wired into the
 TUI yet: hosts that need a password or an unknown-host-key confirmation fail their pane with a
-clear error (#87 tracks the prompt). Running without host arguments still exits with code `2`
-(#86 tracks the argumentless start).
+clear error (#87 tracks the prompt).
