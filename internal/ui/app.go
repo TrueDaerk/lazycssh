@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 	"github.com/TrueDaerk/lazycssh/internal/sessions"
 )
 
@@ -255,6 +256,18 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, a.keys.PrevTab):
 		a.focus = prevArea(a.focus)
 		return a, nil
+
+	case key.Matches(msg, a.keys.BroadcastAll):
+		return a.setBroadcastMode(broadcast.ModeAll), nil
+	case key.Matches(msg, a.keys.BroadcastSelected):
+		return a.setBroadcastMode(broadcast.ModeSelected), nil
+	case key.Matches(msg, a.keys.BroadcastSingle):
+		// Single follows the focused pane, because "this host only" means the
+		// pane the user is looking at.
+		next := a.setBroadcastMode(broadcast.ModeSingle)
+		return next.syncFocusTarget(), nil
+	case key.Matches(msg, a.keys.BroadcastFleet):
+		return a.setBroadcastMode(broadcast.ModeFleet), nil
 	}
 
 	if panel, ok := a.panelForKey(msg); ok {
@@ -748,3 +761,28 @@ func indent(s string) string {
 func panelBodyHeight(sidebar Rect, panels int) int {
 	return max(1, sidebar.Height-2-panels)
 }
+
+// setBroadcastMode switches the broadcast scope. A run with no router yet has
+// no scope to switch, and says nothing rather than pretending.
+func (a App) setBroadcastMode(m broadcast.Mode) App {
+	if a.cfg.Targets == nil {
+		return a
+	}
+	// An invalid mode cannot come from a binding, and a router that refuses one
+	// is a bug in this file rather than something the user can act on.
+	_ = a.cfg.Targets.SetMode(m)
+	return a
+}
+
+// syncFocusTarget tells the router which pane has focus, which is what single
+// mode sends to.
+func (a App) syncFocusTarget() App {
+	if a.cfg.Targets == nil {
+		return a
+	}
+	a.cfg.Targets.SetFocus(a.FocusedHost())
+	return a
+}
+
+// BroadcastMode is the scope the next keystroke goes to.
+func (a App) BroadcastMode() broadcast.Mode { return a.broadcastMode() }

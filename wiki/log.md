@@ -2,6 +2,12 @@
 
 ## 2026-07-28
 
+- Broadcast modes are switchable from anywhere (`b` / `B` / `s` / `ctrl+alt+b`) and the router now
+  knows who is actually up: targets are the scope minus the sessions that cannot take input, the
+  status bar reads `BROADCAST all (7/8 up)`, and `Router.Send` delivers to exactly those hosts and
+  reports how many of the addressed scope received it. `core/broadcast-scope.md` updated.
+  Version 0.1.27.
+
 - Added `internal/commandlog` and the Command log panel: one entry per command with its target
   count and mode, never an entry per host, and never anything typed in `single` mode - that is the
   mode a sudo prompt is answered in. The log is in memory only, bounded, and says so when it drops

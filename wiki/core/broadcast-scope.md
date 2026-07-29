@@ -42,31 +42,76 @@ cycling through the others by accident.
 not quietly widen the blast radius; the excluded hosts stay visibly selected instead, so the
 mismatch is on screen rather than in the wire.
 
+## Scope and targets
+
+Two different questions, deliberately kept apart:
+
+| | Question | Method |
+|---|----------|--------|
+| **Scope** | who is the user addressing? | `Scope()`, `ScopeCount()` |
+| **Targets** | who can actually receive right now? | `Targets()`, `Count()` |
+
+Targets are the scope minus every host whose session cannot take input — dialling, failed,
+closed. `Unreachable()` names those. A host that is down is excluded from the count *and* from
+delivery: a count that included it would promise something the transport cannot do.
+
+The router learns liveness from a `Sessions` interface, satisfied by
+[`ssh.Manager`](./manager.md) via `Connected` and `Writer`. Until a transport is attached the
+router answers about scope only.
+
 ## Rendering
 
-`Router.Describe` is the status bar line. The target count and the fleet total are always shown
-together:
+`Router.Describe` is the status bar line. With a transport it says what will actually happen:
 
 ```
-BROADCAST all (40/40 hosts)
-BROADCAST set:front-half (20/40 hosts)
-BROADCAST set:21-40 (20/40 hosts)
-BROADCAST selected (3/40 hosts)
-BROADCAST single web-01 (1/40 hosts)
-BROADCAST EVERY HOST (40/40 hosts)
+BROADCAST all (7/8 up)
+BROADCAST set:front-half (19/20 up)
+BROADCAST selected (3/3 up)
+BROADCAST single web-01 (1/1 up)
+BROADCAST EVERY HOST (38/40 up)
 ```
+
+Without one there is nothing that could say a host is down, so it reports the scope alone rather
+than claiming everything is up: `BROADCAST all (8 hosts)`.
 
 Rules the tests enforce:
 
-- the rendered count is always `len(Targets())` — the label and the reality cannot drift,
+- the first number is always `len(Targets())` — the label and the reality cannot drift,
 - a narrowed working set is named in the label (`set:...`), so `all` never appears while fewer
-  than every host is targeted,
+  than every host is addressed,
 - `fleet` renders as `EVERY HOST` and sets `Router.Warning`, which the status bar draws in the
   warning style.
 
+## Switching modes
+
+One keystroke each, from anywhere in the interface:
+
+| Key | Mode |
+|-----|------|
+| `b` | `all` |
+| `B` | `selected` |
+| `s` | `single`, and the focused pane becomes the target |
+| `ctrl+alt+b` | `fleet` |
+
+`single` is instant and unmistakable because that is what a `sudo` prompt needs: one key, and the
+status bar names the single host it now sends to.
+
+## Sending
+
+`Router.Send` writes to exactly the targets and returns a `Delivery`: the mode, the scope size,
+how many could receive, how many did, and which hosts did not.
+
+One host that refuses a write does not stop the others — a broken pipe on one machine is one dead
+pane, never a command that half the fleet missed without anyone saying so. `Delivery.String`
+always reports against the **scope**:
+
+```
+sent to 40/40 hosts
+sent to 7/40 hosts (33 did not receive it)
+```
+
 ## What this package does not do
 
-The router answers "who receives this". It holds no sessions and writes nothing. Key bindings,
-the confirmation in front of `fleet`, and the actual fan-out live above it — see
-[Working sets](./working-sets.md) for the set model and [Session manager](./manager.md) for the
-sessions themselves.
+The router does not own sessions, dial, or read output. It resolves scope, filters by liveness
+and writes bytes it is handed — see [Working sets](./working-sets.md) for the set model and
+[Session manager](./manager.md) for the sessions themselves.
