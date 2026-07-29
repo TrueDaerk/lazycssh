@@ -326,3 +326,36 @@ func TestUnknownMessageIsIgnored(t *testing.T) {
 		t.Fatal("an unknown message changed the view")
 	}
 }
+
+func TestArgumentlessStartOpensOnTheSessionsPanel(t *testing.T) {
+	a := NewApp(Config{Theme: Options{Dark: true}})
+	if a.Panel() != PanelSessions {
+		t.Fatalf("Panel() = %v, want the Sessions panel on an empty start", a.Panel())
+	}
+
+	// A run that has hosts keeps the status panel; see TestNewAppDefaults.
+}
+
+func TestEmptyRunRendersAHint(t *testing.T) {
+	a := resize(t, NewApp(Config{Theme: Options{Dark: true}}), 120, 40)
+	view := plain(a.View().Content)
+	for _, want := range []string{"no hosts", "[4] Sessions", "lazycssh <host...>"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the empty grid does not say %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestEmptyRunQuitsCleanly(t *testing.T) {
+	a := resize(t, NewApp(Config{Theme: Options{Dark: true}}), 120, 40)
+	model, cmd := a.Update(tea.KeyPressMsg{Code: 'q', Mod: tea.ModCtrl})
+	if _, ok := model.(App); !ok {
+		t.Fatalf("Update returned a %T, want App", model)
+	}
+	if cmd == nil {
+		t.Fatal("ctrl+q on an empty run produced no command, want quit")
+	}
+	if msg := cmd(); msg != tea.Quit() {
+		t.Fatalf("ctrl+q produced %v, want tea.Quit", msg)
+	}
+}

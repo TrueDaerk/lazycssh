@@ -51,10 +51,10 @@ func TestRun(t *testing.T) {
 			emptyErr:   true,
 		},
 		{
-			name:       "no arguments prints usage and fails with the usage code",
-			args:       nil,
-			wantCode:   exitUsage,
-			wantStderr: []string{"Usage:", "lazycssh"},
+			name:     "no arguments starts the TUI with an empty run",
+			args:     nil,
+			wantCode: exitOK,
+			emptyErr: true,
 		},
 		{
 			name:       "unknown flag fails with the usage code",
@@ -134,6 +134,22 @@ func TestRunLaunchesTheTUIWithTheResolvedPlan(t *testing.T) {
 	}
 }
 
+func TestRunWithoutArgumentsLaunchesAnEmptyRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	var launched program.Config
+	code := run(nil, &stdout, &stderr, captureLaunch(&launched))
+
+	if code != exitOK {
+		t.Fatalf("run = %d, want %d (stderr %q)", code, exitOK, stderr.String())
+	}
+	if got := len(launched.Patterns); got != 0 {
+		t.Errorf("the TUI was launched with %d patterns, want none", got)
+	}
+	if launched.Store == nil {
+		t.Error("an empty run was launched without a session store; there is nothing to pick from")
+	}
+}
+
 func TestRunReportsALaunchFailure(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := run([]string{"a.example.com"}, &stdout, &stderr,
@@ -151,7 +167,7 @@ func TestRunReportsALaunchFailure(t *testing.T) {
 }
 
 func TestRunWritesNothingToStdoutOnFailure(t *testing.T) {
-	for _, args := range [][]string{nil, {"--nope"}} {
+	for _, args := range [][]string{{"--nope"}} {
 		var stdout, stderr bytes.Buffer
 		if code := run(args, &stdout, &stderr, noLaunch(t)); code == exitOK {
 			t.Fatalf("run(%q) unexpectedly succeeded", args)

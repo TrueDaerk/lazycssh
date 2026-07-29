@@ -190,6 +190,11 @@ func NewApp(cfg Config) App {
 		focus:       AreaSidebar,
 		panel:       PanelStatus,
 	}
+	if len(a.hostIDs()) == 0 {
+		// An argumentless start has nothing to show yet; the saved sessions
+		// are the thing the user came to pick from.
+		a.panel = PanelSessions
+	}
 	return a.loadSessions()
 }
 
@@ -719,7 +724,12 @@ func (a App) renderMain() string {
 	focused := a.focus == AreaGrid
 
 	if len(a.hostIDs()) == 0 {
-		return a.frame(a.theme.PaneFrame(focused, false), r, a.theme.Muted.Render("no hosts"))
+		// The empty state says what to do next rather than showing an empty
+		// frame: this is the argumentless start.
+		hint := "no hosts\n\n" +
+			"pick a session in [4] Sessions and press enter,\n" +
+			"or start with hosts: lazycssh <host...>"
+		return a.frame(a.theme.PaneFrame(focused, false), r, a.theme.Muted.Render(hint))
 	}
 
 	// Full screen is one pane in the whole area, which is what reading a stack

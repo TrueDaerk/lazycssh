@@ -2,6 +2,11 @@
 
 ## 2026-07-29
 
+- Argumentless start: `lazycssh` without host arguments opens the TUI on an empty run instead
+  of exiting with a usage error. The Sessions panel has focus, the empty grid renders a hint
+  ("no hosts — pick a session in [4] Sessions …"), and launching a saved session connects its
+  hosts into the run. `core/cli.md` updated. Version 0.2.1.
+
 - The program runs: `internal/program` assembles the fleet, the working set, the broadcast
   router, the command log and the TUI, and `lazycssh host...` opens the interface over a live
   fleet. A wrapper model pumps transport events into the UI and acts on what the UI may only
