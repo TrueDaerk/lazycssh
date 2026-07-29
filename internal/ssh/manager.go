@@ -3,6 +3,7 @@ package ssh
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -275,6 +276,25 @@ func (m *Manager) Resize(width, height int) error {
 		}
 	}
 	return firstErr
+}
+
+// Connected reports whether a host's session can take input right now. It is
+// what the broadcast router asks before counting a host as a target: a session
+// that is dialling, failed or closed has no remote shell to write to.
+func (m *Manager) Connected(id string) bool {
+	s, ok := m.Session(id)
+	return ok && s.State() == StateConnected
+}
+
+// Writer returns a host's stdin, and whether there is one. A session that is not
+// connected is deliberately not a writer: writing into a dead session would
+// report success to a user who is about to assume the command ran.
+func (m *Manager) Writer(id string) (io.Writer, bool) {
+	s, ok := m.Session(id)
+	if !ok || s.State() != StateConnected {
+		return nil, false
+	}
+	return s, true
 }
 
 // Counts summarises the fleet for the status bar.

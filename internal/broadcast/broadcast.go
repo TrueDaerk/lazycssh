@@ -7,7 +7,9 @@
 package broadcast
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"strconv"
 
 	"github.com/TrueDaerk/lazycssh/internal/workingset"
@@ -66,21 +68,46 @@ func ParseMode(s string) (Mode, error) {
 	}
 }
 
-// Router resolves the current mode, working set, selection and focus into the
-// list of hosts a keystroke reaches.
+// Sessions is the live transport as the router sees it: which hosts can take a
+// byte right now, and where to write it.
 //
-// It holds no sessions and sends nothing: it answers "who receives this", and
-// the caller does the writing. That keeps the rule testable without a network
-// and without a UI.
+// It is an interface so this package still needs no network and no UI to be
+// tested. [ssh.Manager] satisfies it.
+type Sessions interface {
+	// Connected reports whether a host's session can take input right now. A
+	// host that is dialling, failed or closed cannot.
+	Connected(id string) bool
+	// Writer returns the host's stdin, and whether there is one.
+	Writer(id string) (io.Writer, bool)
+}
+
+// Router resolves the current mode, working set, selection and focus into the
+// list of hosts a keystroke reaches, and - once a transport is attached -
+// delivers to exactly those hosts.
+//
+// The scope and the targets are deliberately two different questions. The scope
+// is who the user is addressing; the targets are who can actually receive,
+// which is the scope minus the hosts that are down. The status bar shows both,
+// because "sent to 7" and "meant 8" is exactly the difference a user needs to
+// notice.
 //
 // The zero value is not usable; construct one with [NewRouter].
 type Router struct {
-	ws *workingset.Manager
+	ws       *workingset.Manager
+	sessions Sessions
 
 	mode     Mode
 	selected map[string]struct{}
 	focus    string
 }
+
+// Attach connects the router to the live transport. Until it is attached the
+// router answers about scope only, which is what the tests and a run that has
+// not dialled yet need.
+func (r *Router) Attach(s Sessions) { r.sessions = s }
+
+// Attached reports whether a transport is attached.
+func (r *Router) Attached() bool { return r.sessions != nil }
 
 // NewRouter builds a router over a working set, starting in [ModeAll].
 func NewRouter(ws *workingset.Manager) (*Router, error) {
@@ -176,8 +203,44 @@ func (r *Router) SetFocus(id string) { r.focus = id }
 // Focus is the focused host identifier.
 func (r *Router) Focus() string { return r.focus }
 
-// Targets returns the hosts a keystroke reaches right now, in host order.
+// Targets returns the hosts a keystroke actually reaches right now: the scope
+// minus every host whose session cannot take input.
+//
+// Without a transport every host in scope counts as a target, because there is
+// nothing yet that could say otherwise.
 func (r *Router) Targets() []string {
+	scope := r.Scope()
+	if r.sessions == nil {
+		return scope
+	}
+
+	var out []string
+	for _, id := range scope {
+		if r.sessions.Connected(id) {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// Unreachable returns the hosts in scope that will not receive input, because
+// they are dialling, failed or closed.
+func (r *Router) Unreachable() []string {
+	if r.sessions == nil {
+		return nil
+	}
+
+	var out []string
+	for _, id := range r.Scope() {
+		if !r.sessions.Connected(id) {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// Scope returns the hosts the user is addressing, whether or not they are up.
+func (r *Router) Scope() []string {
 	switch r.mode {
 	case ModeFleet:
 		return r.ws.Hosts()
@@ -210,20 +273,95 @@ func (r *Router) Targets() []string {
 // Count is how many hosts a keystroke reaches.
 func (r *Router) Count() int { return len(r.Targets()) }
 
+// ScopeCount is how many hosts the user is addressing, up or not.
+func (r *Router) ScopeCount() int { return len(r.Scope()) }
+
+// Send writes to every target and reports what happened.
+//
+// One host that refuses a write does not stop the others: a broken pipe on one
+// machine is one dead pane, never a command that half the fleet missed without
+// anyone saying so. The report says how many actually received it.
+func (r *Router) Send(p []byte) (Delivery, error) {
+	targets := r.Targets()
+	d := Delivery{Mode: r.mode, Scope: r.ScopeCount(), Targets: len(targets)}
+
+	if r.sessions == nil {
+		return d, fmt.Errorf("broadcast: no transport attached")
+	}
+
+	for _, id := range targets {
+		w, ok := r.sessions.Writer(id)
+		if !ok {
+			d.Failed = append(d.Failed, id)
+			continue
+		}
+		if _, err := w.Write(p); err != nil {
+			d.Failed = append(d.Failed, id)
+			d.Errs = append(d.Errs, fmt.Errorf("write to %s: %w", id, err))
+			continue
+		}
+		d.Delivered++
+	}
+	return d, errors.Join(d.Errs...)
+}
+
+// Delivery is what one [Router.Send] did.
+type Delivery struct {
+	// Mode is the broadcast mode it went out in.
+	Mode Mode
+	// Scope is how many hosts the user was addressing.
+	Scope int
+	// Targets is how many of those could take input.
+	Targets int
+	// Delivered is how many actually took it.
+	Delivered int
+	// Failed lists the hosts that did not, in host order.
+	Failed []string
+	// Errs are the write errors behind Failed.
+	Errs []error
+}
+
+// String renders the report the UI shows after a send. It always says how many
+// hosts were meant, not only how many were reached: a command that quietly went
+// to seven of forty machines is the failure this tool exists to make visible.
+func (d Delivery) String() string {
+	s := fmt.Sprintf("sent to %d/%d host", d.Delivered, d.Scope)
+	if d.Scope != 1 {
+		s += "s"
+	}
+	if missed := d.Scope - d.Delivered; missed > 0 {
+		s += fmt.Sprintf(" (%d did not receive it)", missed)
+	}
+	return s
+}
+
 // Total is the number of hosts in the run.
 func (r *Router) Total() int { return r.ws.Total() }
 
-// Describe renders the status bar label. The target count and the fleet total
-// are always shown together, so the line can never be read as "all forty" while
-// only twenty hosts will receive input.
+// Describe renders the status bar label.
 //
-//	BROADCAST all (40/40 hosts)
-//	BROADCAST set:front-half (20/40 hosts)
-//	BROADCAST selected (3/40 hosts)
-//	BROADCAST single web-01 (1/40 hosts)
-//	BROADCAST EVERY HOST (40/40 hosts)
+// With a transport it reports what will actually happen - how many hosts of the
+// scope can take the next byte:
+//
+//	BROADCAST all (7/8 up)
+//	BROADCAST set:front-half (19/20 up)
+//	BROADCAST single web-01 (1/1 up)
+//	BROADCAST EVERY HOST (38/40 up)
+//
+// Without one there is nothing that could say a host is down, so it reports the
+// scope alone rather than claiming everything is up:
+//
+//	BROADCAST all (8 hosts)
 func (r *Router) Describe() string {
-	return fmt.Sprintf("BROADCAST %s (%d/%d hosts)", r.label(), r.Count(), r.Total())
+	if r.sessions == nil {
+		scope := r.ScopeCount()
+		unit := "hosts"
+		if scope == 1 {
+			unit = "host"
+		}
+		return fmt.Sprintf("BROADCAST %s (%d %s)", r.label(), scope, unit)
+	}
+	return fmt.Sprintf("BROADCAST %s (%d/%d up)", r.label(), r.Count(), r.ScopeCount())
 }
 
 // label names the scope without the counts.

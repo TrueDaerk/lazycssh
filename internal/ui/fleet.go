@@ -22,6 +22,10 @@ type Fleet interface {
 type Targeter interface {
 	// Mode is the current broadcast mode.
 	Mode() broadcast.Mode
+	// SetMode changes the broadcast mode.
+	SetMode(m broadcast.Mode) error
+	// SetFocus records the focused pane, which is what single mode sends to.
+	SetFocus(id string)
 	// Targets are the hosts a keystroke reaches right now.
 	Targets() []string
 	// Count is how many hosts that is.

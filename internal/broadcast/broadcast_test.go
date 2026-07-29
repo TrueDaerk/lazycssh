@@ -1,7 +1,9 @@
 package broadcast
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 
@@ -217,12 +219,12 @@ func TestDescribe(t *testing.T) {
 		{
 			"all hosts, no working set",
 			func(*Router, *workingset.Manager) {},
-			"BROADCAST all (40/40 hosts)",
+			"BROADCAST all (40 hosts)",
 		},
 		{
 			"all, inside an ad hoc working set",
 			func(_ *Router, ws *workingset.Manager) { _ = ws.ApplySpec("first 20", nil) },
-			"BROADCAST set:first-20 (20/40 hosts)",
+			"BROADCAST set:first-20 (20 hosts)",
 		},
 		{
 			"all, inside a named working set",
@@ -230,7 +232,7 @@ func TestDescribe(t *testing.T) {
 				_ = ws.ApplySpec("first 20", nil)
 				_ = ws.Save("front-half")
 			},
-			"BROADCAST set:front-half (20/40 hosts)",
+			"BROADCAST set:front-half (20 hosts)",
 		},
 		{
 			"selected",
@@ -238,7 +240,7 @@ func TestDescribe(t *testing.T) {
 				r.Select("web-01", "web-02", "web-03")
 				_ = r.SetMode(ModeSelected)
 			},
-			"BROADCAST selected (3/40 hosts)",
+			"BROADCAST selected (3 hosts)",
 		},
 		{
 			"single",
@@ -246,12 +248,12 @@ func TestDescribe(t *testing.T) {
 				_ = r.SetMode(ModeSingle)
 				r.SetFocus("web-07")
 			},
-			"BROADCAST single web-07 (1/40 hosts)",
+			"BROADCAST single web-07 (1 host)",
 		},
 		{
 			"single without a pane",
 			func(r *Router, _ *workingset.Manager) { _ = r.SetMode(ModeSingle) },
-			"BROADCAST single (no pane) (0/40 hosts)",
+			"BROADCAST single (no pane) (0 hosts)",
 		},
 		{
 			"fleet",
@@ -259,7 +261,7 @@ func TestDescribe(t *testing.T) {
 				_ = ws.ApplySpec("first 20", nil)
 				_ = r.SetMode(ModeFleet)
 			},
-			"BROADCAST EVERY HOST (40/40 hosts)",
+			"BROADCAST EVERY HOST (40 hosts)",
 		},
 	}
 
@@ -306,9 +308,204 @@ func TestDescribeCountMatchesTargets(t *testing.T) {
 		if err := r.SetMode(m); err != nil {
 			t.Fatalf("SetMode(%v): %v", m, err)
 		}
-		want := fmt.Sprintf("(%d/40 hosts)", len(r.Targets()))
+		want := fmt.Sprintf("(%d host", len(r.Targets()))
 		if !strings.Contains(r.Describe(), want) {
 			t.Fatalf("mode %v: Describe() = %q, targets = %v", m, r.Describe(), r.Targets())
 		}
+	}
+}
+
+// fakeSessions is a transport where each host is up or down and every write is
+// recorded, so delivery can be tested without a network.
+type fakeSessions struct {
+	up      map[string]bool
+	writes  map[string]string
+	failing map[string]bool
+}
+
+func newFakeSessions(ids ...string) *fakeSessions {
+	f := &fakeSessions{
+		up:      make(map[string]bool),
+		writes:  make(map[string]string),
+		failing: make(map[string]bool),
+	}
+	for _, id := range ids {
+		f.up[id] = true
+	}
+	return f
+}
+
+func (f *fakeSessions) Connected(id string) bool { return f.up[id] }
+
+func (f *fakeSessions) Writer(id string) (io.Writer, bool) {
+	if !f.up[id] {
+		return nil, false
+	}
+	return &fakeWriter{sessions: f, id: id}, true
+}
+
+// fakeWriter records what a host received, or fails if the host is marked
+// failing - a broken pipe on a session that still reports as connected.
+type fakeWriter struct {
+	sessions *fakeSessions
+	id       string
+}
+
+func (w *fakeWriter) Write(p []byte) (int, error) {
+	if w.sessions.failing[w.id] {
+		return 0, errors.New("broken pipe")
+	}
+	w.sessions.writes[w.id] += string(p)
+	return len(p), nil
+}
+
+// The acceptance criterion: the count shown always equals the number of
+// sessions that actually receive the next byte.
+func TestTargetsExcludeHostsThatAreDown(t *testing.T) {
+	r, _ := router(t, 8)
+	sessions := newFakeSessions("web-01", "web-02", "web-03", "web-04",
+		"web-05", "web-06", "web-07", "web-08")
+	sessions.up["web-03"] = false
+	r.Attach(sessions)
+
+	if !r.Attached() {
+		t.Fatal("Attached() = false after Attach")
+	}
+	if got := r.ScopeCount(); got != 8 {
+		t.Fatalf("ScopeCount() = %d, want 8", got)
+	}
+	if got := r.Count(); got != 7 {
+		t.Fatalf("Count() = %d, want 7", got)
+	}
+	if got := strings.Join(r.Unreachable(), ","); got != "web-03" {
+		t.Fatalf("Unreachable() = %q", got)
+	}
+	if got := r.Describe(); got != "BROADCAST all (7/8 up)" {
+		t.Fatalf("Describe() = %q", got)
+	}
+}
+
+func TestDescribeWithoutATransportReportsTheScopeOnly(t *testing.T) {
+	r, ws := router(t, 8)
+	if got := r.Describe(); got != "BROADCAST all (8 hosts)" {
+		t.Fatalf("Describe() = %q", got)
+	}
+	if got := r.Unreachable(); got != nil {
+		t.Fatalf("Unreachable() = %v without a transport", got)
+	}
+
+	if err := ws.ApplySpec("first 1", nil); err != nil {
+		t.Fatalf("ApplySpec: %v", err)
+	}
+	if got := r.Describe(); got != "BROADCAST set:first-1 (1 host)" {
+		t.Fatalf("Describe() = %q", got)
+	}
+}
+
+func TestSendReachesExactlyTheTargets(t *testing.T) {
+	r, ws := router(t, 4)
+	sessions := newFakeSessions("web-01", "web-02", "web-03", "web-04")
+	sessions.up["web-04"] = false
+	r.Attach(sessions)
+
+	if err := ws.ApplySpec("first 3", nil); err != nil {
+		t.Fatalf("ApplySpec: %v", err)
+	}
+
+	d, err := r.Send([]byte("uptime\n"))
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if d.Delivered != 3 || d.Targets != 3 || d.Scope != 3 {
+		t.Fatalf("Delivery = %+v", d)
+	}
+	for _, id := range []string{"web-01", "web-02", "web-03"} {
+		if sessions.writes[id] != "uptime\n" {
+			t.Fatalf("%s received %q", id, sessions.writes[id])
+		}
+	}
+	if sessions.writes["web-04"] != "" {
+		t.Fatalf("a host outside the working set received %q", sessions.writes["web-04"])
+	}
+}
+
+// A command that reaches fewer hosts than it addressed says so: quietly
+// reaching seven of forty machines is the failure this tool exists to surface.
+func TestSendReportsWhoMissedIt(t *testing.T) {
+	r, _ := router(t, 3)
+	sessions := newFakeSessions("web-01", "web-02", "web-03")
+	sessions.up["web-02"] = false
+	sessions.failing["web-03"] = true
+	r.Attach(sessions)
+
+	d, err := r.Send([]byte("uptime\n"))
+	if err == nil {
+		t.Fatal("Send hid a write failure")
+	}
+	if d.Scope != 3 || d.Targets != 2 || d.Delivered != 1 {
+		t.Fatalf("Delivery = %+v", d)
+	}
+	if strings.Join(d.Failed, ",") != "web-03" {
+		t.Fatalf("Failed = %v", d.Failed)
+	}
+	if got := d.String(); got != "sent to 1/3 hosts (2 did not receive it)" {
+		t.Fatalf("String() = %q", got)
+	}
+
+	// The one host that was up still got it: a broken pipe on one machine is
+	// one dead pane, not a command the fleet half missed.
+	if sessions.writes["web-01"] != "uptime\n" {
+		t.Fatalf("web-01 received %q", sessions.writes["web-01"])
+	}
+}
+
+func TestSendWithoutATransport(t *testing.T) {
+	r, _ := router(t, 3)
+	d, err := r.Send([]byte("uptime\n"))
+	if err == nil {
+		t.Fatal("Send succeeded with no transport attached")
+	}
+	if d.Delivered != 0 {
+		t.Fatalf("Delivery = %+v", d)
+	}
+}
+
+func TestDeliveryString(t *testing.T) {
+	tests := []struct {
+		d    Delivery
+		want string
+	}{
+		{Delivery{Scope: 40, Delivered: 40}, "sent to 40/40 hosts"},
+		{Delivery{Scope: 1, Delivered: 1}, "sent to 1/1 host"},
+		{Delivery{Scope: 40, Delivered: 7}, "sent to 7/40 hosts (33 did not receive it)"},
+	}
+	for _, tc := range tests {
+		if got := tc.d.String(); got != tc.want {
+			t.Fatalf("String() = %q, want %q", got, tc.want)
+		}
+	}
+}
+
+// Single mode is what a sudo prompt needs: exactly one host, and it is still
+// filtered by whether that host can take input.
+func TestSingleModeRespectsLiveness(t *testing.T) {
+	r, _ := router(t, 3)
+	sessions := newFakeSessions("web-01", "web-02", "web-03")
+	r.Attach(sessions)
+
+	if err := r.SetMode(ModeSingle); err != nil {
+		t.Fatalf("SetMode: %v", err)
+	}
+	r.SetFocus("web-02")
+	if got := r.Describe(); got != "BROADCAST single web-02 (1/1 up)" {
+		t.Fatalf("Describe() = %q", got)
+	}
+
+	sessions.up["web-02"] = false
+	if got := r.Count(); got != 0 {
+		t.Fatalf("Count() = %d for a focused host that is down", got)
+	}
+	if got := r.Describe(); got != "BROADCAST single web-02 (0/1 up)" {
+		t.Fatalf("Describe() = %q", got)
 	}
 }

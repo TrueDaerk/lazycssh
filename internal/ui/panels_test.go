@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 	"github.com/TrueDaerk/lazycssh/internal/hosts"
 	"github.com/TrueDaerk/lazycssh/internal/ssh"
@@ -138,7 +140,7 @@ func TestFleetUpdateRedraws(t *testing.T) {
 func TestStatusPanelShowsTheBroadcastScope(t *testing.T) {
 	a, _, router, ws := statusApp(t, "web-01", "web-02", "web-03", "web-04")
 
-	if got := plain(a.View().Content); !strings.Contains(got, "BROADCAST all (4/4 hosts)") {
+	if got := plain(a.View().Content); !strings.Contains(got, "BROADCAST all (4 hosts)") {
 		t.Fatalf("default scope:\n%s", got)
 	}
 
@@ -146,7 +148,7 @@ func TestStatusPanelShowsTheBroadcastScope(t *testing.T) {
 		t.Fatalf("ApplySpec: %v", err)
 	}
 	view := plain(a.View().Content)
-	if !strings.Contains(view, "BROADCAST set:first-2 (2/4 hosts)") {
+	if !strings.Contains(view, "BROADCAST set:first-2 (2 hosts)") {
 		t.Fatalf("narrowed scope:\n%s", view)
 	}
 	if !strings.Contains(view, "set: first-2 (2/4 hosts)") {
@@ -157,7 +159,7 @@ func TestStatusPanelShowsTheBroadcastScope(t *testing.T) {
 		t.Fatalf("SetMode: %v", err)
 	}
 	view = plain(a.View().Content)
-	if !strings.Contains(view, "BROADCAST EVERY HOST (4/4 hosts)") {
+	if !strings.Contains(view, "BROADCAST EVERY HOST (4 hosts)") {
 		t.Fatalf("fleet scope:\n%s", view)
 	}
 	if !strings.Contains(view, "BROADCASTING TO EVERY HOST") {
@@ -287,5 +289,97 @@ func TestHostListComesFromTheFleet(t *testing.T) {
 	a, _, _, _ := statusApp(t, "web-01", "web-02", "web-03")
 	if got := strings.Join(a.hostIDs(), ","); got != "web-01,web-02,web-03" {
 		t.Fatalf("hostIDs() = %q", got)
+	}
+}
+
+// One keystroke switches the broadcast scope, and the status bar says so
+// immediately - switching to single is what a sudo prompt needs.
+func TestBroadcastModeKeys(t *testing.T) {
+	a, _, router, _ := statusApp(t, "web-01", "web-02", "web-03")
+
+	tests := []struct {
+		key  string
+		want broadcast.Mode
+	}{
+		{"B", broadcast.ModeSelected},
+		{"s", broadcast.ModeSingle},
+		{"b", broadcast.ModeAll},
+	}
+	for _, tc := range tests {
+		a = pressKey(t, a, tc.key)
+		if router.Mode() != tc.want {
+			t.Fatalf("%q switched to %v, want %v", tc.key, router.Mode(), tc.want)
+		}
+		if !strings.Contains(plain(a.View().Content), "BROADCAST "+scopeLabel(tc.want)) {
+			t.Fatalf("%q did not reach the status bar:\n%s", tc.key, plain(a.View().Content))
+		}
+	}
+}
+
+// scopeLabel is how the status bar names a mode.
+func scopeLabel(m broadcast.Mode) string {
+	switch m {
+	case broadcast.ModeSelected:
+		return "selected"
+	case broadcast.ModeSingle:
+		return "single"
+	case broadcast.ModeFleet:
+		return "EVERY HOST"
+	default:
+		return "all"
+	}
+}
+
+// Single mode sends to the pane the user is looking at.
+func TestSingleModeFollowsTheFocusedPane(t *testing.T) {
+	a, _, router, _ := statusApp(t, "web-01", "web-02", "web-03")
+
+	a = pressKey(t, a, "tab") // focus the grid
+	a = pressKey(t, a, "l")   // move to web-02
+	a = pressKey(t, a, "s")
+
+	if router.Mode() != broadcast.ModeSingle {
+		t.Fatalf("Mode() = %v", router.Mode())
+	}
+	if router.Focus() != "web-02" {
+		t.Fatalf("Focus() = %q, want the focused pane", router.Focus())
+	}
+	if got := strings.Join(router.Targets(), ","); got != "web-02" {
+		t.Fatalf("Targets() = %q", got)
+	}
+}
+
+// The mode that ignores the working set is not on a letter, so it cannot be
+// reached by a fumbled keystroke.
+func TestFleetModeNeedsTheChord(t *testing.T) {
+	a, _, router, _ := statusApp(t, "web-01", "web-02")
+
+	for _, k := range []string{"f", "F", "e"} {
+		a = pressKey(t, a, k)
+		if router.Mode() == broadcast.ModeFleet {
+			t.Fatalf("%q reached the fleet mode", k)
+		}
+	}
+
+	model, _ := a.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl | tea.ModAlt})
+	next, ok := model.(App)
+	if !ok {
+		t.Fatalf("Update returned a %T", model)
+	}
+	if router.Mode() != broadcast.ModeFleet {
+		t.Fatalf("the chord did not reach the fleet mode: %v", router.Mode())
+	}
+	if !strings.Contains(plain(next.View().Content), "BROADCASTING TO EVERY HOST") {
+		t.Fatalf("the fleet mode is not flagged:\n%s", plain(next.View().Content))
+	}
+}
+
+func TestBroadcastKeysWithoutARouter(t *testing.T) {
+	a := resize(t, NewApp(Config{Hosts: []string{"h1"}, Theme: Options{Dark: true}}), 120, 40)
+	for _, k := range []string{"b", "B", "s"} {
+		a = pressKey(t, a, k) // must not panic
+	}
+	if a.BroadcastMode() != broadcast.ModeAll {
+		t.Fatalf("BroadcastMode() = %v without a router", a.BroadcastMode())
 	}
 }

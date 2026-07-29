@@ -432,3 +432,51 @@ func TestSortedIDs(t *testing.T) {
 		t.Errorf("IDs() = %q, want the order the user typed", m.IDs())
 	}
 }
+
+// The broadcast router asks the manager who can take a byte. A session that is
+// dialling, failed or closed is not a writer: writing into a dead session would
+// report success to a user who is about to assume the command ran.
+func TestManagerConnectedAndWriter(t *testing.T) {
+	m, lookup := newTestManager(t, fakeFleet(2), nil)
+
+	for _, id := range []string{"srv1", "srv2"} {
+		if m.Connected(id) {
+			t.Fatalf("%s reported as connected before it was started", id)
+		}
+		if _, ok := m.Writer(id); ok {
+			t.Fatalf("%s handed out a writer before it was started", id)
+		}
+	}
+
+	if err := lookup("srv1").Start(t.Context()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if !m.Connected("srv1") {
+		t.Fatal("a connected session is not reported as connected")
+	}
+	w, ok := m.Writer("srv1")
+	if !ok {
+		t.Fatal("a connected session handed out no writer")
+	}
+	if _, err := w.Write([]byte("uptime\n")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if got := lookup("srv1").Written(); got != "uptime\n" {
+		t.Fatalf("the session received %q", got)
+	}
+
+	lookup("srv1").Disconnect(ErrDisconnected())
+	if m.Connected("srv1") {
+		t.Fatal("a failed session is still reported as connected")
+	}
+	if _, ok := m.Writer("srv1"); ok {
+		t.Fatal("a failed session still hands out a writer")
+	}
+
+	if m.Connected("srv99") {
+		t.Fatal("a host that is not in the fleet reported as connected")
+	}
+	if _, ok := m.Writer("srv99"); ok {
+		t.Fatal("a host that is not in the fleet handed out a writer")
+	}
+}
