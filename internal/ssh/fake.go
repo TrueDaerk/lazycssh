@@ -62,6 +62,10 @@ type Fake struct {
 	height  int
 	closed  bool
 	resizes int
+
+	scan     exitScanner
+	lastExit int
+	hasExit  bool
 }
 
 // NewFake returns a fake session for the given host. Events are optional.
@@ -217,10 +221,38 @@ func (f *Fake) Close() error {
 	return nil
 }
 
-// Emit appends output as if the remote host had sent it.
+// Emit appends output as if the remote host had sent it. The output passes
+// through the same exit marker scanner as a real session's stdout, so a test
+// emitting a marker exercises the real parsing.
 func (f *Fake) Emit(output string) {
-	f.Scrollback().Write([]byte(output))
+	f.mu.Lock()
+	if f.scan.onExit == nil {
+		f.scan.onExit = f.recordExit
+	}
+	f.scan.Scan([]byte(output))
+	buf := f.buf
+	f.mu.Unlock()
+
+	buf.Write([]byte(output))
 	f.emit(OutputEvent{ID: f.id})
+}
+
+// recordExit stores the newest exit status. The caller holds f.mu.
+func (f *Fake) recordExit(code int) {
+	f.lastExit = code
+	f.hasExit = true
+}
+
+// LastExit reports the exit status of the last command, if one was reported.
+func (f *Fake) LastExit() (int, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.lastExit, f.hasExit
+}
+
+// ReportExit emits the exit marker a hooked shell prints before its prompt.
+func (f *Fake) ReportExit(code int) {
+	f.Emitf("\x1b]133;D;%d\a", code)
 }
 
 // Emitf is Emit with formatting.

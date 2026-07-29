@@ -2,6 +2,13 @@
 
 ## 2026-07-29
 
+- Exit codes and failure visibility: sessions arm a prompt hook (OSC 133;D with `$?`, bash and
+  zsh) and a scanner on the stdout pump records each command's status, degrading to "unknown" on
+  shells without the hook. A failing pane gets a danger border and `exit N` in its header, the
+  Hosts panel marks failing rows, the status bar counts `3 hosts failed`, and `!` jumps to the
+  next failing host from anywhere, wrapping. `core/session.md`, `core/tui.md` and `core/keys.md`
+  updated. Version 0.1.33.
+
 - Per-pane status header: pane number, host name and connection state, read from live state at
   render time. Too-long host names truncate from the left so the distinguishing suffix survives,
   and at widths that cannot hold both, the state yields to the name. The last exit code joins the

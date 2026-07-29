@@ -7,14 +7,14 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// paneHeader renders the one line that identifies a pane: its number, its host
-// and the connection state, all read from live state at render time so a state
-// change is on screen the moment the redraw happens.
+// paneHeader renders the one line that identifies a pane: its number, its
+// host, the connection state and the last exit code, all read from live state
+// at render time so a change is on screen the moment the redraw happens.
 //
-// When the width cannot hold everything, the state goes first and the host
-// name is truncated from the left: in a fleet of web-01…web-40 the suffix is
-// the distinguishing part, and a header full of identical prefixes says
-// nothing.
+// When the width cannot hold everything, the state goes first and the exit
+// code second - a failure must outlive the state label - and the host name is
+// truncated from the left: in a fleet of web-01…web-40 the suffix is the
+// distinguishing part, and a header full of identical prefixes says nothing.
 func (a App) paneHeader(host, width int, focused bool) string {
 	if host < 0 || host >= len(a.hostIDs()) || width <= 0 {
 		return ""
@@ -23,11 +23,21 @@ func (a App) paneHeader(host, width int, focused bool) string {
 	number := fmt.Sprintf("%d ", host+1)
 
 	state := a.state(id)
-	label := " " + state.String()
+	stateLabel := " " + state.String()
 
-	avail := width - len(number) - len([]rune(label))
+	exitLabel := a.exitLabel(id)
+	exitWidth := 0
+	if exitLabel != "" {
+		exitWidth = 1 + len([]rune(ansi.Strip(exitLabel)))
+	}
+
+	avail := width - len(number) - len([]rune(stateLabel)) - exitWidth
 	if avail < minHeaderName {
-		label = ""
+		stateLabel = ""
+		avail = width - len(number) - exitWidth
+	}
+	if avail < minHeaderName {
+		exitLabel = ""
 		avail = width - len(number)
 	}
 	name := truncateLeft(id, max(0, avail))
@@ -40,8 +50,11 @@ func (a App) paneHeader(host, width int, focused bool) string {
 	}
 
 	line := style.Render(number + name)
-	if label != "" {
-		line += a.theme.State(state).Render(label)
+	if stateLabel != "" {
+		line += a.theme.State(state).Render(stateLabel)
+	}
+	if exitLabel != "" {
+		line += " " + exitLabel
 	}
 	return line
 }

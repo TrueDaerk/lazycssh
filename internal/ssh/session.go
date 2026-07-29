@@ -119,6 +119,10 @@ type Session interface {
 	Err() error
 	// Scrollback holds the output received so far.
 	Scrollback() *scrollback.Buffer
+	// LastExit is the exit status of the last command the remote shell
+	// reported, and whether one has been reported at all. A shell without the
+	// prompt hook never reports; see exit.go.
+	LastExit() (int, bool)
 	// Start dials, authenticates and starts a shell with a PTY. It returns once
 	// the shell is running; the session then reports asynchronously.
 	Start(ctx context.Context) error
@@ -192,6 +196,8 @@ type sshSession struct {
 	session       *ssh.Session
 	stdin         io.WriteCloser
 	droppedEvents int
+	lastExit      int
+	hasExit       bool
 
 	closeOnce sync.Once
 	closed    chan struct{} // closed when the session is shutting down
@@ -355,23 +361,34 @@ func (s *sshSession) startShell(session *ssh.Session) error {
 	s.stdin = stdin
 	s.mu.Unlock()
 
+	// Arm the exit code reporting before anything else is typed. The bytes
+	// queue in the PTY input until the shell reads them; a shell that does not
+	// understand the hook prints an error once and the session still works.
+	if _, err := stdin.Write([]byte(ExitSetupCommand)); err != nil {
+		return fmt.Errorf("arm exit reporting on %s: %w", s.cfg.Host.Alias, err)
+	}
+
 	s.wg.Add(2)
-	go s.pump(stdout)
-	go s.pump(stderr)
+	// Only stdout carries the prompt, so only stdout gets the scanner.
+	go s.pump(stdout, &exitScanner{onExit: s.recordExit})
+	go s.pump(stderr, nil)
 
 	return nil
 }
 
 // pump copies one stream into the scrollback. Both streams land in the same
 // buffer because that is how they appear on a terminal, interleaved in arrival
-// order.
-func (s *sshSession) pump(r io.Reader) {
+// order. The scanner, when given, watches the same bytes for exit markers.
+func (s *sshSession) pump(r io.Reader, scan *exitScanner) {
 	defer s.wg.Done()
 
 	buf := make([]byte, 32<<10)
 	for {
 		n, err := r.Read(buf)
 		if n > 0 {
+			if scan != nil {
+				scan.Scan(buf[:n])
+			}
 			s.buf.Write(buf[:n])
 			s.notifyOutput()
 		}

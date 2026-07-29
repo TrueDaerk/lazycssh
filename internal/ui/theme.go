@@ -105,6 +105,11 @@ type Theme struct {
 	Pane lipgloss.Style
 	// PaneFocused is the frame around the focused host pane.
 	PaneFocused lipgloss.Style
+	// PaneFailed frames a pane whose last command exited non-zero.
+	PaneFailed lipgloss.Style
+	// PaneFocusedFailed frames the focused pane of a failing host: the thick
+	// border keeps saying "focus", the colour keeps saying "failed".
+	PaneFocusedFailed lipgloss.Style
 	// PaneHeader is the per-pane status line.
 	PaneHeader lipgloss.Style
 
@@ -181,6 +186,8 @@ func NewTheme(opts Options) Theme {
 	t.PanelFocused = border(lipgloss.ThickBorder(), palette.Focus)
 	t.Pane = border(lipgloss.NormalBorder(), palette.Border)
 	t.PaneFocused = border(lipgloss.ThickBorder(), palette.Focus)
+	t.PaneFailed = border(lipgloss.NormalBorder(), palette.Danger)
+	t.PaneFocusedFailed = border(lipgloss.ThickBorder(), palette.Danger)
 	t.PaneHeader = fg(palette.Muted).Padding(0, 1)
 
 	t.StatusBar = fg(palette.Text).Padding(0, 1)
@@ -243,12 +250,21 @@ func (t Theme) PanelFrame(focused bool) lipgloss.Style {
 	return t.Panel
 }
 
-// PaneFrame returns the frame for a host pane, focused or not.
-func (t Theme) PaneFrame(focused bool) lipgloss.Style {
-	if focused {
+// PaneFrame returns the frame for a host pane. A failing host's border turns
+// the danger colour so it reads at a glance across a 20-pane grid; the header
+// carries the exit code in text as well, because colour alone is not allowed
+// to carry meaning.
+func (t Theme) PaneFrame(focused, failed bool) lipgloss.Style {
+	switch {
+	case focused && failed:
+		return t.PaneFocusedFailed
+	case focused:
 		return t.PaneFocused
+	case failed:
+		return t.PaneFailed
+	default:
+		return t.Pane
 	}
-	return t.Pane
 }
 
 // PanelTitle returns the heading style for a panel, focused or not.
