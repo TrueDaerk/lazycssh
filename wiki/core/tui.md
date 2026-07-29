@@ -239,6 +239,24 @@ acts on it, which keeps `internal/ui` unable to open a connection.
 Every command sent this run, newest last, each with its target count and mode — see
 [Command log](./command-log.md). `enter` sends an entry again, to the **current** target set.
 
+## The command line
+
+`:` opens a prompt for one command sent to the whole active broadcast set.
+
+- the prompt carries the scope itself — `:systemctl restart nginx → BROADCAST all (7/8 up)` — so
+  the number of machines about to receive it is on screen at the moment of typing, which is why
+  there is no confirmation dialog,
+- while it is open **every** key belongs to it: a command containing `b` does not switch the
+  broadcast mode, a `:` does not open a second prompt, and `ctrl+c` while editing does not reach
+  forty machines,
+- `enter` sends, `esc` abandons, `↑`/`↓` walk the history of this run (repeats are not stored
+  twice, and walking past the newest entry returns to an empty line),
+- after sending, the status bar reports against the **scope**: `sent to 2/3 hosts (1 did not
+  receive it)`.
+
+Typing a command and resending one from the [Command log](./command-log.md) take the same path,
+so a resend goes to the set that is active *now* and leaves the same audit entry.
+
 ## Messages
 
 | Message | Effect |
@@ -250,7 +268,8 @@ Every command sent this run, newest last, each with its target count and mode �
 | `HostsChangedMsg` | replace the host list, keeping the focused host |
 | `SessionsChangedMsg` | re-read the session directory |
 | `SessionLaunchMsg` | emitted, not handled: the program opens or merges a saved session |
-| `CommandResendMsg` | emitted, not handled: the program sends a logged command again |
+| `CommandResendMsg` | resend a logged command to the current broadcast set |
+| `CommandSentMsg` | emitted after a send, carrying the delivery report |
 
 `Init` returns `tea.RequestBackgroundColor`, which is what makes the palette match the terminal
 rather than guessing.
