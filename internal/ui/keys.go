@@ -69,6 +69,7 @@ type KeyMap struct {
 	QuickSave         key.Binding
 	NewHost           key.Binding
 	ConnectedOnly     key.Binding
+	Retile            key.Binding
 	Split             key.Binding
 	NextSplit         key.Binding
 	PrevSplit         key.Binding
@@ -155,7 +156,10 @@ func DefaultKeyMap() KeyMap {
 		ConnectedOnly: key.NewBinding(key.WithKeys("ctrl+a"),
 			key.WithHelp("ctrl+a", "show only the connected hosts")),
 		// Same typing exception as ctrl+a: while a pane or the broadcast bar
-		// has the keyboard, these chords belong to the hosts.
+		// has the keyboard, these chords belong to the hosts (ctrl+r is
+		// readline reverse-search there).
+		Retile: key.NewBinding(key.WithKeys("ctrl+r"),
+			key.WithHelp("ctrl+r", "re-tile the grid for the current hosts")),
 		Split: key.NewBinding(key.WithKeys("ctrl+s"),
 			key.WithHelp("ctrl+s", "split the grid into chunks of N panes")),
 		NextSplit: key.NewBinding(key.WithKeys("ctrl+right"),
@@ -215,7 +219,7 @@ func (k KeyMap) global() []key.Binding {
 		k.Panel1, k.Panel2, k.Panel3, k.Panel4, k.Panel5,
 		k.BroadcastAll, k.BroadcastSelected, k.BroadcastSingle, k.BroadcastFleet,
 		k.CommandLine, k.NextFailure, k.QuickSave, k.NewHost,
-		k.ConnectedOnly, k.Split, k.NextSplit, k.PrevSplit,
+		k.ConnectedOnly, k.Retile, k.Split, k.NextSplit, k.PrevSplit,
 		k.SelectAll, k.Invert, k.ClearSel, k.SelectUp, k.SelectDwn,
 	}
 }

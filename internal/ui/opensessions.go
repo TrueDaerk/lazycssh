@@ -130,7 +130,9 @@ func (a App) foregroundSession(index int) App {
 	a.page = 0
 	a.paneIndex = 0
 	a.fullScreen = false
-	return a.syncBroadcastLimit().syncFocusTarget()
+	// A session switch is an explicit view change: it tiles for what the new
+	// session actually holds, kept shape or not.
+	return a.resetGridSlots().syncBroadcastLimit().syncFocusTarget()
 }
 
 // syncBroadcastLimit pushes the visible host set into the router. With no
@@ -281,6 +283,11 @@ func (a App) reapSessions() (App, tea.Cmd) {
 	}
 	if a.active < 0 && len(a.open) > 0 {
 		a.active = len(a.open) - 1
+	}
+	if a.ActiveSession() != activeName {
+		// The foreground fell back to a different session; a shape kept from
+		// the ended one would be a museum of the wrong view.
+		a = a.resetGridSlots()
 	}
 	a.sessionCursor = clamp(a.sessionCursor, 0, max(0, len(a.open)-1))
 
