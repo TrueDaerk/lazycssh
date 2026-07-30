@@ -403,3 +403,107 @@ func TestClosedPaneShowsNoError(t *testing.T) {
 		t.Fatalf("a closed pane renders a failure mark:\n%s", body)
 	}
 }
+
+// The issue-190 behavior: a connected pane following the tail draws the
+// remote cursor where the scrollback's line discipline says it is - no
+// emulation involved.
+func TestPaneBodyDrawsTheCursor(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.connect(t, "web-01")
+	a = syncFleet(t, a)
+	fleet.sessions["web-01"].Emit("$ ")
+
+	body := a.paneBody("web-01", 40, 5)
+	lines := strings.Split(body, "\n")
+	want := overlayCursor("$ ", 2, a.theme.Cursor)
+	if got := lines[len(lines)-1]; got != want {
+		t.Fatalf("cursor not at the end of the prompt:\ngot  %q\nwant %q", got, want)
+	}
+}
+
+// Right after a line feed the cursor sits on the empty row below the output,
+// exactly like a terminal between the command's output and the next prompt.
+func TestPaneCursorOnTheEmptyRowAfterALineFeed(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.connect(t, "web-01")
+	a = syncFleet(t, a)
+	fleet.sessions["web-01"].Emit("done\n")
+
+	body := a.paneBody("web-01", 40, 5)
+	lines := strings.Split(body, "\n")
+	if len(lines) != 2 || plain(lines[0]) != "done" {
+		t.Fatalf("expected the output plus a cursor row:\n%q", body)
+	}
+	if want := overlayCursor("", 0, a.theme.Cursor); lines[1] != want {
+		t.Fatalf("cursor row = %q, want %q", lines[1], want)
+	}
+}
+
+// A cursor moved into the line - readline editing - is drawn there, not at
+// the end.
+func TestPaneCursorFollowsBackspace(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.connect(t, "web-01")
+	a = syncFleet(t, a)
+	fleet.sessions["web-01"].Emit("$ abc\b\b")
+
+	body := a.paneBody("web-01", 40, 5)
+	lines := strings.Split(body, "\n")
+	if want := overlayCursor("$ abc", 3, a.theme.Cursor); lines[len(lines)-1] != want {
+		t.Fatalf("cursor did not follow the backspaces:\ngot  %q\nwant %q", lines[len(lines)-1], want)
+	}
+}
+
+// A pending line wrapped over several rows places the cursor on its last
+// wrapped row, mapped through the terminal width.
+func TestPaneCursorOnAWrappedPendingLine(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.connect(t, "web-01")
+	a = syncFleet(t, a)
+	if err := fleet.sessions["web-01"].Resize(20, 10); err != nil {
+		t.Fatalf("Resize: %v", err)
+	}
+	fleet.sessions["web-01"].Emit(strings.Repeat("x", 50))
+
+	body := a.paneBody("web-01", 20, 10)
+	lines := strings.Split(body, "\n")
+	if len(lines) != 3 {
+		t.Fatalf("a 50-cell pending line should wrap to 3 rows:\n%q", body)
+	}
+	if want := overlayCursor(strings.Repeat("x", 10), 10, a.theme.Cursor); lines[2] != want {
+		t.Fatalf("cursor not on the last wrapped row:\ngot  %q\nwant %q", lines[2], want)
+	}
+}
+
+// No cursor on a pane that is not connected: a dead pane must not pretend to
+// take input.
+func TestPaneCursorNeedsAConnection(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.sessions["web-01"].Emit("$ ")
+
+	body := a.paneBody("web-01", 40, 5)
+	if body != "$ " {
+		t.Fatalf("a disconnected pane grew a cursor:\n%q", body)
+	}
+}
+
+// No cursor while scrolled back: the window shows history, and a cursor in
+// history would claim input goes somewhere it does not.
+func TestPaneCursorHidesWhileScrolledBack(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.connect(t, "web-01")
+	a = syncFleet(t, a)
+	for i := 0; i < 200; i++ {
+		fleet.sessions["web-01"].Emitf("line-%03d\n", i)
+	}
+	a.paneIndex = 0 // scrolling targets the focused pane
+	a = a.scrollBy(5)
+	if a.scrollOffset("web-01") == 0 {
+		t.Fatal("the pane did not scroll; the test would assert nothing")
+	}
+
+	body := a.paneBody("web-01", 40, 5)
+	if body != plain(body) {
+		t.Fatalf("a scrolled-back pane still styles a cursor:\n%q", body)
+	}
+}

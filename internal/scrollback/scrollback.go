@@ -689,6 +689,34 @@ func (b *Buffer) Lines() []string {
 	return out
 }
 
+// CursorTail reports where the cursor sits relative to the end of the
+// snapshot [Lines] returns: rowsUp is how many wrapped rows of the pending
+// line lie below the cursor's row (0 = the cursor is on the last row), col
+// its column within that row. pendingEmpty reports that there is no pending
+// line at all — the cursor then sits at column zero of the row after the
+// last stored line, which is where a terminal shows it right after a line
+// feed. The pane uses this to draw the cursor without any emulation.
+func (b *Buffer) CursorTail() (rowsUp, col int, pendingEmpty bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if len(b.trimmedPendingLocked()) == 0 {
+		// No visible pending line: Lines() omits it, and the cursor sits on
+		// the row below the last stored line - usually column zero, since a
+		// commit resets it there.
+		return 0, b.cursor, true
+	}
+	if b.width <= 0 {
+		return 0, b.cursor, false
+	}
+	end := b.effectiveCellsLocked()
+	if b.cursor+1 > end {
+		end = b.cursor + 1
+	}
+	rows := (end + b.width - 1) / b.width
+	return rows - 1 - b.cursor/b.width, b.cursor % b.width, false
+}
+
 // String renders the buffer as it would appear on screen.
 func (b *Buffer) String() string {
 	return strings.Join(b.Lines(), "\n")

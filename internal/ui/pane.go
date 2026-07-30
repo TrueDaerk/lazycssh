@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/TrueDaerk/lazycssh/internal/scrollback"
+	"github.com/TrueDaerk/lazycssh/internal/ssh"
 	"github.com/TrueDaerk/lazycssh/internal/term"
 )
 
@@ -240,7 +241,9 @@ func overlayCursor(line string, x int, style lipgloss.Style) string {
 // paneBody renders one host's scrollback into an area of width columns and
 // height rows, following the tail unless the pane is scrolled back, and
 // highlighting the lines the active search matches. A pane whose remote app
-// is on the alternate screen renders the live emulator grid instead.
+// is on the alternate screen renders the live emulator grid instead. A
+// connected pane following the tail draws the remote cursor where the
+// scrollback says it is (issue #190).
 func (a App) paneBody(id string, width, height int) string {
 	if height <= 0 {
 		return ""
@@ -249,6 +252,18 @@ func (a App) paneBody(id string, width, height int) string {
 		return a.terminalGrid(t, width, height)
 	}
 	wrapped, tailStart := a.wrappedLinesTail(id, width)
+
+	cursorLine, cursorCol := -1, 0
+	if a.scrollOffset(id) == 0 {
+		if line, col, ok := a.paneCursorTarget(id, width, wrapped); ok {
+			cursorLine, cursorCol = line, col
+			if cursorLine == len(wrapped) {
+				// The cursor sits on the empty row below the last line - right
+				// after a line feed - so that row must exist to be drawn on.
+				wrapped = append(wrapped, "")
+			}
+		}
+	}
 	if len(wrapped) == 0 {
 		return ""
 	}
@@ -264,19 +279,56 @@ func (a App) paneBody(id string, width, height int) string {
 	}
 	window := wrapped[start:end]
 
-	if a.searchTerm == "" {
-		return strings.Join(window, "\n")
+	if a.searchTerm != "" {
+		out := make([]string, len(window))
+		for i, line := range window {
+			if text := ansi.Strip(line); containsFold(text, a.searchTerm) {
+				// The whole line takes the match style, its own colours
+				// dropped: a highlight fighting the remote's colours would
+				// lose.
+				out[i] = a.theme.Match.Render(text)
+				continue
+			}
+			out[i] = line
+		}
+		window = out
 	}
 
-	out := make([]string, len(window))
-	for i, line := range window {
-		if text := ansi.Strip(line); containsFold(text, a.searchTerm) {
-			// The whole line takes the match style, its own colours dropped:
-			// a highlight fighting the remote's colours would lose.
-			out[i] = a.theme.Match.Render(text)
-			continue
-		}
-		out[i] = line
+	if i := cursorLine - start; i >= 0 && i < len(window) {
+		window[i] = overlayCursor(window[i], cursorCol, a.theme.Cursor)
 	}
-	return strings.Join(out, "\n")
+	return strings.Join(window, "\n")
+}
+
+// paneCursorTarget locates the remote cursor in the wrapped scrollback of a
+// connected host: the wrapped line index (len(wrapped) means the empty row
+// below the last line) and the column. The scrollback's own cursor is the
+// source (issue #178 made it real), so no emulation is involved; while an
+// inline auth answer is echoed, the cursor follows the echo instead, because
+// that is where the typing happens.
+func (a App) paneCursorTarget(id string, width int, wrapped []string) (line, col int, ok bool) {
+	if width <= 0 || a.cfg.Fleet == nil {
+		return 0, 0, false
+	}
+	session, exists := a.cfg.Fleet.Session(id)
+	if !exists || a.state(id) != ssh.StateConnected {
+		return 0, 0, false
+	}
+	if len(wrapped) > 0 {
+		if _, echoing := a.inlineAnswerEcho(id); echoing {
+			last := wrapped[len(wrapped)-1]
+			return len(wrapped) - 1, min(ansi.StringWidth(last), width-1), true
+		}
+	}
+
+	rowsUp, cell, pendingEmpty := session.Scrollback().CursorTail()
+	col = min(cell, width-1)
+	if pendingEmpty {
+		return len(wrapped), col, true
+	}
+	line = len(wrapped) - 1 - rowsUp
+	if line < 0 {
+		return 0, 0, false
+	}
+	return line, col, true
 }
