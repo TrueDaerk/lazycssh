@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-30T18:00:00Z
+timestamp: 2026-07-30T21:00:00Z
 ---
 
 # TUI shell
@@ -278,6 +278,18 @@ bounded buffer drops a line. Scrolling is a render-time window into a snapshot: 
 receiving at full speed, which is the issue's acceptance criterion. A pane that is not following
 its tail says `scrollback +N` in the status bar in the warning style, because fresh output
 landing behind a frozen window must not look like a quiet host.
+
+### Copy
+
+Bubbletea owns the mouse, so the terminal's native selection cannot reach the pane content
+(issue #134). Copying is keyboard-first instead, per the interaction model: `alt+y` puts the
+focused pane's **visible text** into the system clipboard — scroll first to aim the window —
+and `alt+d` takes the **whole retained scrollback**. Both go out over **OSC 52**, so they reach
+the local clipboard even when lazycssh itself runs over SSH; a terminal without OSC 52 support
+ignores the sequence, and the status line reports what was attempted either way. Clipboard text
+is plain: ANSI styling is stripped and clear markers are excluded, because a paste target wants
+the ID or the error message, not the colours around it. Both chords appear in the `?` overlay,
+generated from the keymap as ever.
 
 ### Search
 

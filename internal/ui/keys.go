@@ -116,6 +116,9 @@ type KeyMap struct {
 	NextPage     key.Binding
 	PrevPage     key.Binding
 
+	CopyPane   key.Binding
+	CopyBuffer key.Binding
+
 	ScrollUp     key.Binding
 	ScrollDown   key.Binding
 	ScrollTop    key.Binding
@@ -217,6 +220,15 @@ func DefaultKeyMap() KeyMap {
 		NextPage:   key.NewBinding(key.WithKeys("alt+n"), key.WithHelp("alt+n", "next page of panes")),
 		PrevPage:   key.NewBinding(key.WithKeys("alt+p"), key.WithHelp("alt+p", "previous page of panes")),
 
+		// Copy goes through OSC 52, so it reaches the local clipboard even
+		// when lazycssh itself runs over SSH; a terminal without OSC 52
+		// support ignores the sequence and the status line still says what
+		// was attempted.
+		CopyPane: key.NewBinding(key.WithKeys("alt+y"),
+			key.WithHelp("alt+y", "copy this pane's visible text")),
+		CopyBuffer: key.NewBinding(key.WithKeys("alt+d"),
+			key.WithHelp("alt+d", "copy this pane's whole scrollback")),
+
 		ScrollUp:     key.NewBinding(key.WithKeys("shift+pgup"), key.WithHelp("shift+pgup", "scroll back")),
 		ScrollDown:   key.NewBinding(key.WithKeys("shift+pgdown"), key.WithHelp("shift+pgdn", "scroll forward")),
 		ScrollTop:    key.NewBinding(key.WithKeys("shift+home"), key.WithHelp("shift+home", "oldest retained output")),
@@ -255,6 +267,7 @@ func (k KeyMap) grid() []key.Binding {
 		k.LeaveTyping, k.ToggleSelect,
 		k.PaneLeft, k.PaneRight, k.PaneUp, k.PaneDown,
 		k.FullScreen, k.Reconnect, k.ClosePane, k.NextPage, k.PrevPage,
+		k.CopyPane, k.CopyBuffer,
 		k.ScrollUp, k.ScrollDown, k.ScrollTop, k.ScrollBottom,
 		k.SearchPane, k.NextMatch, k.PrevMatch, k.ClearSearch,
 	}
