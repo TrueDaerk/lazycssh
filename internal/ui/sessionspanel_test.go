@@ -29,6 +29,7 @@ func openTwo(t *testing.T) (App, *fakeFleet) {
 func TestSessionsPanelListsOpenSessions(t *testing.T) {
 	a, fleet := openTwo(t)
 	fleet.connect(t, "web-01")
+	a = syncFleet(t, a)
 
 	view := plain(a.sessionsPanel(60, 20))
 	for _, want := range []string{"front (1/2 up)", "back (0/1 up)"} {

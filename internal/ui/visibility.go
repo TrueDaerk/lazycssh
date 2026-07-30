@@ -14,8 +14,9 @@ import (
 // input right now, ctrl+s splits it into chunks of a chosen size, and the
 // broadcast limit follows both, so a keystroke never reaches a pane the user
 // cannot see. The filters are views, not removals - a host that reconnects
-// reappears without a keypress, because the visible list is computed from
-// live state on every render.
+// reappears without a keypress: its state change is a fleet event, the event
+// refreshes the model's snapshot inside Update, and the redraw recomputes the
+// visible list from it.
 
 // ConnectedOnly reports whether the connected-only filter is on.
 func (a App) ConnectedOnly() bool { return a.connectedOnly }

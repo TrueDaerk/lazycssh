@@ -46,8 +46,9 @@ type Targeter interface {
 }
 
 // FleetUpdatedMsg says the fleet changed: a session connected, failed, was
-// closed or reconnected. It carries nothing, because the model reads the live
-// state rather than reconstructing it from a stream of events - the transport
+// closed or reconnected. It carries nothing, because Update re-reads the whole
+// fleet into the model's snapshot when it arrives (see App.snapshotFleet)
+// rather than reconstructing state from a stream of events - the transport
 // drops event hints when the UI is behind, and a status bar built from dropped
 // hints would be wrong exactly when it matters.
 type FleetUpdatedMsg struct{}
@@ -100,11 +101,69 @@ type ConnectErrorMsg struct {
 	Err string
 }
 
-// fleetIDs returns every host in the run: the fleet's when there is one, the
-// configured list otherwise, so views can be tested without a transport.
+// hostState is the model's copy of one session's cross-goroutine state. It is
+// written only by [App.snapshotFleet], inside Update, so render helpers read
+// model fields instead of racing the session goroutines.
+type hostState struct {
+	state        ssh.State
+	exit         int
+	exitReported bool
+}
+
+// snapshotFleet re-reads the fleet into the model: the host list, every
+// session's state and last exit, and the counts derived from that one pass -
+// one consistent view, taken inside Update, which is the only place the model
+// changes. Everything below the sessions' own locks stays out of View: the
+// render helpers read these fields, never the fleet.
+//
+// Called on every message that says the fleet changed ([FleetUpdatedMsg],
+// [HostsChangedMsg], [SessionOpenedMsg]) and once at construction. The
+// snapshot is what preserves the connected-only filter's "live view": a host
+// flipping state emits a fleet event, the event refreshes the snapshot, and
+// the redraw shows the new list - no keypress involved.
+func (a App) snapshotFleet() App {
+	if a.cfg.Fleet == nil {
+		a.fleetHosts = nil
+		a.hostStates = nil
+		a.fleetCounts = ssh.Counts{Total: len(a.cfg.Hosts)}
+		return a
+	}
+	ids := a.cfg.Fleet.IDs()
+	states := make(map[string]hostState, len(ids))
+	var counts ssh.Counts
+	for _, id := range ids {
+		counts.Total++
+		session, ok := a.cfg.Fleet.Session(id)
+		if !ok {
+			counts.Pending++
+			continue
+		}
+		st := session.State()
+		code, reported := session.LastExit()
+		states[id] = hostState{state: st, exit: code, exitReported: reported}
+		switch st {
+		case ssh.StateConnected:
+			counts.Connected++
+		case ssh.StateFailed:
+			counts.Failed++
+		case ssh.StateClosed:
+			counts.Closed++
+		default:
+			counts.Pending++
+		}
+	}
+	a.fleetHosts = ids
+	a.hostStates = states
+	a.fleetCounts = counts
+	return a
+}
+
+// fleetIDs returns every host in the run: the snapshot's when there is a
+// transport, the configured list otherwise, so views can be tested without
+// one.
 func (a App) fleetIDs() []string {
 	if a.cfg.Fleet != nil {
-		return a.cfg.Fleet.IDs()
+		return a.fleetHosts
 	}
 	return a.cfg.Hosts
 }
@@ -114,35 +173,26 @@ func (a App) fleetIDs() []string {
 // Everything pane-shaped - the grid, the focus, paging, hit-testing - indexes
 // into this list.
 //
-// Inside View the list is a per-frame snapshot (see App.frameHosts): the
-// filters read live session state, and two computations inside one render
-// must not disagree. Callers that index into the result must still fetch it
-// once and use that one slice - a second call outside View recomputes.
+// The list is a pure function of model fields - the filters read the fleet
+// snapshot, never live session state - so every computation inside one frame
+// agrees (issue #135, #136). Callers that index into the result should still
+// fetch it once and use that one slice.
 func (a App) hostIDs() []string {
-	if a.frameHosts != nil {
-		return a.frameHosts
-	}
 	return a.visibleHosts()
 }
 
-// counts summarises the fleet for the status panel. Without a transport only
-// the total is known, and it says so by leaving the rest at zero.
+// counts summarises the fleet for the status panel, from the snapshot. Without
+// a transport only the total is known, and it says so by leaving the rest at
+// zero.
 func (a App) counts() ssh.Counts {
-	if a.cfg.Fleet != nil {
-		return a.cfg.Fleet.Counts()
-	}
-	return ssh.Counts{Total: len(a.cfg.Hosts)}
+	return a.fleetCounts
 }
 
-// state returns a host's connection state, or [ssh.StatePending] when there is
-// no transport to ask.
+// state returns a host's connection state from the snapshot, or
+// [ssh.StatePending] when there is no transport to ask.
 func (a App) state(id string) ssh.State {
-	if a.cfg.Fleet == nil {
-		return ssh.StatePending
+	if st, ok := a.hostStates[id]; ok {
+		return st.state
 	}
-	session, ok := a.cfg.Fleet.Session(id)
-	if !ok {
-		return ssh.StatePending
-	}
-	return session.State()
+	return ssh.StatePending
 }

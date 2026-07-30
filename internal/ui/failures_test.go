@@ -16,11 +16,13 @@ func TestPaneHeaderShowsTheExitCode(t *testing.T) {
 	}
 
 	fleet.sessions["web-01"].ReportExit(0)
+	a = syncFleet(t, a)
 	if got := plain(a.paneHeader(0, 40, false)); !strings.Contains(got, " ok") {
 		t.Fatalf("a success is not shown: %q", got)
 	}
 
 	fleet.sessions["web-01"].ReportExit(2)
+	a = syncFleet(t, a)
 	if got := plain(a.paneHeader(0, 40, false)); !strings.Contains(got, " exit 2") {
 		t.Fatalf("a failure is not shown: %q", got)
 	}
@@ -32,6 +34,7 @@ func TestPaneHeaderKeepsTheFailureOverTheState(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-production-01")
 	fleet.connect(t, "web-production-01")
 	fleet.sessions["web-production-01"].ReportExit(1)
+	a = syncFleet(t, a)
 
 	// A width the header cannot fit everything into: the old pane floor,
 	// narrower than any pane the grid tiles today.
@@ -52,6 +55,7 @@ func TestFailingPaneIsVisuallyDistinct(t *testing.T) {
 	// Two panes at the 45x16 floor need more room than statusApp's default.
 	a = resize(t, a, 200, 60)
 	fleet.sessions["web-02"].ReportExit(1)
+	a = syncFleet(t, a)
 
 	healthy := a.theme.PaneFrame(false, false).GetBorderTopForeground()
 	failing := a.theme.PaneFrame(false, true).GetBorderTopForeground()
@@ -80,6 +84,7 @@ func TestStatusBarCountsFailedHosts(t *testing.T) {
 	for _, id := range []string{"web-05", "web-12", "web-17"} {
 		fleet.sessions[id].ReportExit(1)
 	}
+	a = syncFleet(t, a)
 	if view := plain(a.View().Content); !strings.Contains(view, "3 hosts failed") {
 		t.Fatalf("the status bar does not count the failures:\n%s", view)
 	}
@@ -96,6 +101,7 @@ func TestJumpToNextFailure(t *testing.T) {
 	for _, id := range []string{"web-05", "web-12", "web-17"} {
 		fleet.sessions[id].ReportExit(1)
 	}
+	a = syncFleet(t, a)
 
 	for _, want := range []int{4, 11, 16, 4} {
 		// The jump lands in the pane's terminal; ! is an app-level command,

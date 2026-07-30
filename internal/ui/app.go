@@ -13,6 +13,7 @@ import (
 
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 	"github.com/TrueDaerk/lazycssh/internal/sessions"
+	"github.com/TrueDaerk/lazycssh/internal/ssh"
 )
 
 // Panel is one of the numbered panels down the left, in the order the number
@@ -171,13 +172,14 @@ type App struct {
 	// Status panel until the fleet changes.
 	connectErr string
 
-	// frameHosts is the host list frozen for the duration of one View call.
-	// The visible list is otherwise recomputed from live session state on
-	// every hostIDs() call, and a session goroutine flipping a state between
-	// two calls inside the same frame shrinks the list under an index that
-	// was guarded against the longer one (issue #135). View sets it, every
-	// render helper reads it through hostIDs(); outside View it is nil.
-	frameHosts []string
+	// The fleet snapshot: the host list, per-session state and the counts,
+	// re-read from the transport only inside Update (see snapshotFleet).
+	// Render helpers read these fields; View never touches the fleet, so a
+	// session goroutine flipping a state mid-render cannot shrink the host
+	// list under an index (issue #135) or race the renderer (issue #136).
+	fleetHosts  []string
+	hostStates  map[string]hostState
+	fleetCounts ssh.Counts
 
 	// scroll is each pane's scrollback offset in wrapped lines from the
 	// bottom; a missing entry is the tail. searchTerm is the one term every
@@ -263,7 +265,7 @@ func NewApp(cfg Config) App {
 	}
 	// A run that starts with hosts starts with a session holding them: the
 	// CLI arguments are a workspace like any opened group.
-	a = a.adoptNewHosts().keepGridSlots()
+	a = a.snapshotFleet().adoptNewHosts().keepGridSlots()
 	// An argumentless start opens with nothing focused: the empty grid says
 	// what the options are, and which of them comes first - connect, launch a
 	// session, read the help - is the user's call, not the program's.
@@ -318,15 +320,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.cfg.RunPatterns = msg.Patterns
 		}
 		a.connectErr = ""
-		next := a.openSessionAt(msg.Name, msg.Hosts)
+		next := a.snapshotFleet().openSessionAt(msg.Name, msg.Hosts)
 		return next, gridChanged()
 
 	case FleetUpdatedMsg:
-		// Nothing to store: the panels read the fleet's live state when they
-		// render. Redrawing is (almost) the whole effect - under the
-		// connected-only filter the visible set follows liveness, so the
-		// broadcast limit must follow too, and a session whose last host
-		// closed is over.
+		// Re-read the fleet into the model; the panels render from that
+		// snapshot. Under the connected-only filter the visible set follows
+		// liveness, so the broadcast limit must follow too, and a session
+		// whose last host closed is over.
+		a = a.snapshotFleet()
 		if a.connectedOnly || a.splitSize > 0 {
 			a = a.syncBroadcastLimit()
 		}
@@ -334,14 +336,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return next.followFocus(), cmd
 
 	case SessionOutputMsg:
-		// Nothing to store here either: the pane reads the scrollback when it
-		// renders. Redrawing is the whole effect.
+		// Nothing to store: the pane reads the scrollback - which is
+		// internally synchronized - when it renders. Redrawing is the whole
+		// effect.
 		return a, nil
 
 	case HostsChangedMsg:
 		focused := a.FocusedHost()
-		next := a.withHosts(msg.Hosts).pruneSessions().adoptNewHosts().
-			keepGridSlots().refocus(focused).followFocus()
+		next := a.withHosts(msg.Hosts).snapshotFleet().pruneSessions().
+			adoptNewHosts().keepGridSlots().refocus(focused).followFocus()
 		// The fleet changed, so whatever a connect complained about is stale.
 		next.connectErr = ""
 		if msg.Patterns != nil {
@@ -816,13 +819,6 @@ func (a App) View() tea.View {
 		// first resize message is on its way.
 		return tea.NewView("")
 	}
-
-	// One consistent host list per frame: every hostIDs() call below reads
-	// this snapshot instead of recomputing from live session state, so a
-	// mid-render disconnect cannot shrink the list between a bounds check
-	// and the index it guarded. The copy is never nil, so an empty list is
-	// still a frozen one.
-	a.frameHosts = append([]string{}, a.visibleHosts()...)
 
 	body := a.renderMain()
 	if a.layout.SidebarVisible() {

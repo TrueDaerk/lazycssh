@@ -7,18 +7,16 @@ import "fmt"
 // internal/ssh/exit.go); this file is everything the interface does with them:
 // the label, the count, and the jump.
 
-// lastExit reads a host's last reported exit status from live state. Without a
-// transport, or on a shell that never ran the hook, nothing was reported and
-// the second value is false - the honest answer, never a made-up zero.
+// lastExit reads a host's last reported exit status from the fleet snapshot.
+// Without a transport, or on a shell that never ran the hook, nothing was
+// reported and the second value is false - the honest answer, never a made-up
+// zero.
 func (a App) lastExit(id string) (int, bool) {
-	if a.cfg.Fleet == nil {
-		return 0, false
-	}
-	session, ok := a.cfg.Fleet.Session(id)
+	st, ok := a.hostStates[id]
 	if !ok {
 		return 0, false
 	}
-	return session.LastExit()
+	return st.exit, st.exitReported
 }
 
 // commandFailed reports whether a host's last command exited non-zero.

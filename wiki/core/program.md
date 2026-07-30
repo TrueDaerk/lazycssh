@@ -4,7 +4,7 @@ title: Program assembly
 description: The one place every layer meets - building the fleet, wiring the router and the UI together, and the wrapper model that acts on what the UI may only ask for.
 resource: internal/program/program.go
 tags: [program, wiring, bubbletea, transport]
-timestamp: 2026-07-29T17:00:00Z
+timestamp: 2026-07-30T23:00:00Z
 ---
 
 # Program assembly
@@ -19,8 +19,8 @@ The layering rules this preserves:
 
 - `internal/ui` cannot dial. It reads the fleet through the `Fleet` interface and *asks* for
   transport actions by emitting messages;
-- `internal/ssh` knows nothing about rendering. It reports through one event channel and is
-  read through live state.
+- `internal/ssh` knows nothing about rendering. It reports through one event channel; the UI's
+  `Update` re-reads the fleet into its model snapshot when an event arrives.
 
 ## The wrapper model
 
@@ -50,8 +50,9 @@ becomes visible.
 The transport's event channel is drained by a self-re-arming `tea.Cmd`: it blocks on one event,
 converts it (`OutputEvent` → `SessionOutputMsg`, everything else → `FleetUpdatedMsg`) and the
 `Update` that receives the converted message immediately returns the next pump command. Events
-carry no payload and may be dropped by the transport under load; that is fine, because the UI
-reads live state on every redraw — see [TUI shell](./tui.md).
+carry no payload and may be dropped by the transport under load; that is fine, because every
+`FleetUpdatedMsg` makes the UI's `Update` re-read the whole fleet into its model snapshot — one
+surviving event carries everything the dropped ones hinted at — see [TUI shell](./tui.md).
 
 ## Authentication, for now
 

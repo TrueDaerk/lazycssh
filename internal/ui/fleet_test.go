@@ -1,9 +1,14 @@
 package ui
 
 import (
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/TrueDaerk/lazycssh/internal/ssh"
 )
 
 // gridApp is a sized app with the grid focused on its first pane.
@@ -61,6 +66,7 @@ func TestReconnectKeyWithoutHostsEmitsNothing(t *testing.T) {
 func TestCloseKeyOnADeadHostEmitsRemove(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01")
 	fleet.fail(t, "web-01")
+	a = syncFleet(t, a)
 	a = focusGrid(t, a)
 
 	got := keyMsgResult(t, a, "alt+x")
@@ -96,4 +102,125 @@ func TestRemovedHostScrollOffsetIsPruned(t *testing.T) {
 	if len(next.scroll) != 0 {
 		t.Fatalf("scroll offsets survived the host leaving: %v", next.scroll)
 	}
+}
+
+// spyFleet counts every read that touches cross-goroutine session state -
+// IDs, Counts, State, Err, LastExit. Session lookups themselves are free:
+// the render path may still fetch a session to reach its internally
+// synchronized scrollback.
+type spyFleet struct {
+	*fakeFleet
+	reads atomic.Int64
+}
+
+func (f *spyFleet) IDs() []string {
+	f.reads.Add(1)
+	return f.fakeFleet.IDs()
+}
+
+func (f *spyFleet) Counts() ssh.Counts {
+	f.reads.Add(1)
+	return f.fakeFleet.Counts()
+}
+
+func (f *spyFleet) Session(id string) (ssh.Session, bool) {
+	s, ok := f.fakeFleet.Session(id)
+	if !ok {
+		return nil, false
+	}
+	return spySession{Session: s, reads: &f.reads}, true
+}
+
+type spySession struct {
+	ssh.Session
+	reads *atomic.Int64
+}
+
+func (s spySession) State() ssh.State {
+	s.reads.Add(1)
+	return s.Session.State()
+}
+
+func (s spySession) Err() error {
+	s.reads.Add(1)
+	return s.Session.Err()
+}
+
+func (s spySession) LastExit() (int, bool) {
+	s.reads.Add(1)
+	return s.Session.LastExit()
+}
+
+// The acceptance criterion of issue #136: no live session-state read is
+// reachable from View. State renders from the model's snapshot, which only
+// Update refreshes - so rendering any number of frames after one Update
+// touches the fleet's state exactly zero times.
+func TestViewReadsNoLiveSessionState(t *testing.T) {
+	fleet := newFakeFleet("web-01", "web-02", "web-03")
+	spy := &spyFleet{fakeFleet: fleet}
+	a := resize(t, NewApp(Config{Fleet: spy, Theme: Options{Dark: true}}), 200, 60)
+
+	fleet.connect(t, "web-01")
+	fleet.sessions["web-01"].Emit("hello\n")
+	fleet.sessions["web-01"].ReportExit(1)
+	fleet.fail(t, "web-02")
+	a = syncFleet(t, a)
+
+	before := spy.reads.Load()
+	for range 5 {
+		if a.View().Content == "" {
+			t.Fatal("View rendered nothing")
+		}
+	}
+	if got := spy.reads.Load(); got != before {
+		t.Fatalf("View performed %d live fleet reads", got-before)
+	}
+
+	// And the snapshot it rendered from was correct.
+	view := plain(a.View().Content)
+	for _, want := range []string{"web-01 connected", "exit 1", "web-02 failed", "hello"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("the snapshot missed %q:\n%s", want, view)
+		}
+	}
+}
+
+// The other acceptance criterion: sessions flipping state and writing output
+// at full speed while frames render must not race the model. Run under
+// -race, which CI does; the filter is on so the visible list follows the
+// flips through the snapshot.
+func TestRenderSurvivesConcurrentStateFlips(t *testing.T) {
+	a, fleet, router, _ := statusApp(t, "web-01", "web-02", "web-03")
+	router.Attach(fleetSessions{fleet})
+	a = pressKey(t, a, "ctrl+a")
+
+	ctx := t.Context()
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	for _, s := range fleet.sessions {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; ; i++ {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				_ = s.Start(ctx)
+				s.Emit("tick\n")
+				s.ReportExit(i % 2)
+				s.Disconnect(ssh.ErrDisconnected())
+			}
+		}()
+	}
+
+	for range 500 {
+		a = syncFleet(t, a)
+		if a.View().Content == "" {
+			t.Fatal("View rendered nothing")
+		}
+	}
+	close(stop)
+	wg.Wait()
 }

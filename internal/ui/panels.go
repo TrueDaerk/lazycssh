@@ -27,9 +27,10 @@ func (a App) panelBody(panel Panel, width, height int) string {
 // statusPanel answers the question the whole panel exists for: what happens if
 // I type right now.
 //
-// Every number here is read from live state at render time. A cached target
-// count is a lie waiting to be told - the fleet changes under the user, and the
-// one moment the count matters is the moment it changed.
+// Every number here is read from the model's fleet snapshot, which the fleet
+// event that changed it refreshed inside Update - so the count is as fresh as
+// the redraw showing it. A count that could go stale silently is a lie waiting
+// to be told, and the one moment it matters is the moment it changed.
 func (a App) statusPanel(width int) string {
 	var lines []string
 
