@@ -4,7 +4,7 @@ title: Authentication
 description: The order authentication methods are tried in, how secrets are cached across hosts, and the rules that keep them out of logs.
 resource: internal/ssh/auth.go
 tags: [ssh, auth, security, credentials]
-timestamp: 2026-07-30T15:00:00Z
+timestamp: 2026-07-30T18:00:00Z
 ---
 
 # Authentication
@@ -32,7 +32,7 @@ that:
 | Secret | Cache key | Rationale |
 |--------|-----------|-----------|
 | Passphrase | the key file path | one key, however many hosts use it |
-| Password | the **login user** | the same account exists on every machine — that is the premise of the tool |
+| Password | **user@addr:port** — the machine | hosts may hold different passwords (issue #182); a docker cluster on one address and ten ports is ten machines. A uniform cluster is still one typing action: every pane prompts, and the broadcast line answers all of them at once |
 
 A wrong answer is recoverable. A passphrase that fails to decrypt its key is forgotten
 immediately, so the next attempt asks again instead of failing every remaining host with the
@@ -41,8 +41,8 @@ same typo. `ForgetPassword` does the same for a password.
 ## Secrets never leave memory
 
 - Nothing is written to disk. A `Credentials` value holds secrets for the lifetime of the run.
-- A `Prompter` implementation must never log, wrap or store what it receives; the UI reads into
-  a masked text input.
+- A `Prompter` implementation must never log, wrap or store what it receives; the UI reads a
+  masked answer into an in-memory buffer that echoes nothing.
 - No secret appears in an error string. `TestNoSecretEverAppearsInAnError` drives every failure
   path that has handled a secret — wrong passphrase, missing key, a real failed handshake — and
   asserts the values appear in none of the resulting messages, nor in the session scrollback.
@@ -55,17 +55,27 @@ When no prompter is available — a non-interactive run — a method that needs 
 Live since issue #175, over the same channel bridge as the [host key
 question](./host-keys.md): the dialling session blocks in `secretPrompter`
 (`internal/program/secretprompt.go`), the question crosses into the event loop, and the pane
-behaves like a plain terminal running `ssh` (issues #177, #180). The prompt is written into the
-blocked host's scrollback in ssh's own wording — `test@db1's password: `, `Enter passphrase for
-key '~/.ssh/id_ed25519': `, or the server's keyboard-interactive text — the pane is focused,
-and the answer is typed inline after it: a masked answer echoes nothing, an echoing
-keyboard-interactive answer shows as typed, and the answer line is finished in the history
-(never the secret itself — a masked answer writes only the newline). The status bar says
-`AUTH <host>` while the prompt is open; the Status panel, with its masked `textinput`, is the
-fallback for a host without a visible pane. `enter` submits, `esc` cancels and fails that
-attempt with `cancelled at the prompt`, `ctrl+q` still quits. One question at a time; the
-caches above keep it to one password per user and one passphrase per key across the whole
-fleet.
+behaves like a plain terminal running `ssh` (issues #177, #180, #182). The prompt is written
+into the blocked session's own scrollback — by **session id**, exact, because ten dials of one
+alias are ten panes — in ssh's own wording: `test@db1's password: `, `Enter passphrase for key
+'~/.ssh/id_ed25519': `, or the server's keyboard-interactive text.
+
+**Every session may prompt at once.** The pump re-arms the moment a question arrives, so a
+group of ten hosts shows ten prompts, each in its own pane. The answer is typed where a
+terminal would take it:
+
+- **into the focused pane** — answers that host only, which is how per-host passwords work;
+- **into the broadcast line** — mirrors every keystroke into every prompting target pane and
+  submits them all on enter: one typing action logs a uniform cluster in. A line no live host
+  received is never recorded in the command log — it may be a password.
+
+A masked answer echoes nothing (a cursor block marks the waiting prompt), an echoing
+keyboard-interactive answer shows as typed, and the answer line is finished in the history —
+never the secret itself; a masked answer writes only the newline. `enter` submits, `esc` and
+`ctrl+c` cancel and fail that attempt with `cancelled at the prompt`, `ctrl+q` still quits.
+The status bar says `AUTH <host>` (or `AUTH n hosts`) while prompts are open, and the Status
+panel lists the prompting hosts. A question whose session fails or leaves mid-prompt is
+withdrawn with it.
 
 ## keyboard-interactive
 

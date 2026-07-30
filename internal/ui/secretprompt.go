@@ -1,26 +1,24 @@
 package ui
 
-import (
-	"charm.land/bubbles/v2/textinput"
-	tea "charm.land/bubbletea/v2"
-)
-
 // The secret prompt (issue #175): a dialling session that needs a password, a
 // key passphrase or a keyboard-interactive answer blocks while the user types
-// it into a masked input in the Status panel - one question at a time, the
-// same channel bridge the host key question uses. The value goes back to the
-// program and from there into the transport's in-memory cache; it is never
-// rendered, logged or written to disk.
+// it into its own pane - the prompt text is in that session's scrollback, the
+// answer is typed inline like a terminal takes it, and a masked value is
+// never rendered, logged or written to disk. Every session may prompt at
+// once (issue #182); the broadcast line answers all of them together. The
+// typed-answer plumbing is shared with the host key question; see
+// internal/ui/authpane.go.
 
 // SecretQuestionMsg asks the user for one secret. The program emits it when a
 // dialling session needs a credential; the session stays blocked until
 // [SecretAnswerMsg] comes back.
 type SecretQuestionMsg struct {
-	// Host is the alias of the host whose dial is blocked on the answer; its
-	// pane is where the prompt renders. Empty means no pane, and the Status
-	// panel is the fallback.
+	// SessionID names the pane whose dial is blocked - exact, because ten
+	// dials of the same alias are ten panes (issue #182).
+	SessionID string
+	// Host is the alias, for display.
 	Host string
-	// Prompt says what is being asked for, e.g. "password for test@db1".
+	// Prompt says what is being asked for, e.g. "test@db1's password: ".
 	Prompt string
 	// Echo reports whether the answer may be shown while it is typed. It is
 	// false for passwords and passphrases, and comes from the server for
@@ -31,69 +29,18 @@ type SecretQuestionMsg struct {
 // SecretAnswerMsg carries the user's answer back to the program. A cancelled
 // prompt (Ok false) fails that authentication attempt rather than hanging it.
 type SecretAnswerMsg struct {
+	// SessionID names the question being answered.
+	SessionID string
 	// Value is the typed secret, empty when cancelled.
 	Value string
 	// Ok distinguishes an entered (possibly empty) secret from a cancel.
 	Ok bool
 }
 
-// SecretPromptOpen reports whether the secret prompt has the keyboard.
-func (a App) SecretPromptOpen() bool { return a.secretQuestion != nil }
-
-// showSecretQuestion opens the prompt in the host's own pane, which is
-// focused for the user; a host without a visible pane is asked in the Status
-// panel instead.
+// showSecretQuestion opens the prompt in its pane. The prompt text is in the
+// session's scrollback already; the pane takes typed input for it from here
+// on.
 func (a App) showSecretQuestion(msg SecretQuestionMsg) App {
 	q := msg
-	a.secretQuestion = &q
-	a = a.focusQuestionPane(msg.Host)
-	a.secretInput.SetValue("")
-	if msg.Echo {
-		a.secretInput.EchoMode = textinput.EchoNormal
-	} else {
-		a.secretInput.EchoMode = textinput.EchoPassword
-	}
-	a.secretInput.Focus()
-	return a
-}
-
-// closeSecretQuestion closes the prompt and wipes the typed value from the
-// input's buffer.
-func (a App) closeSecretQuestion() App {
-	a.secretQuestion = nil
-	a.questionPaneID = ""
-	a.secretInput.SetValue("")
-	a.secretInput.Blur()
-	return a
-}
-
-// handleSecretPromptKey drives the prompt: enter submits, esc cancels and
-// fails that authentication attempt. Everything else edits the masked input.
-func (a App) handleSecretPromptKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "enter":
-		value := a.secretInput.Value()
-		a = a.closeSecretQuestion()
-		return a, func() tea.Msg { return SecretAnswerMsg{Value: value, Ok: true} }
-	case "esc":
-		a = a.closeSecretQuestion()
-		return a, func() tea.Msg { return SecretAnswerMsg{} }
-	}
-
-	var cmd tea.Cmd
-	a.secretInput, cmd = a.secretInput.Update(msg)
-	return a, cmd
-}
-
-// secretPromptLines renders the open prompt - in the host's pane, or in the
-// Status panel when the pane is not visible.
-func (a App) secretPromptLines() []string {
-	if a.secretQuestion == nil {
-		return nil
-	}
-	return []string{
-		a.theme.StatusWarning.Render(a.secretQuestion.Prompt),
-		a.theme.Base.Render(a.secretInput.View()),
-		a.theme.Muted.Render("enter sends it · esc cancels and fails the attempt"),
-	}
+	return a.addAuth(msg.SessionID, paneAuth{secret: &q})
 }

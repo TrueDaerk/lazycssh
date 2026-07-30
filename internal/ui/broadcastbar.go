@@ -48,9 +48,16 @@ func (a App) handleBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	a = a.trackBroadcastLine(msg)
 
+	// Prompting targets take the keystroke as their answer (issue #182): the
+	// broadcast line is how one typing action fills every pane's password
+	// prompt at once.
+	a, authCmds, fed := a.feedAuthBroadcast(msg)
+
 	if a.cfg.Sender == nil {
-		a.lastDelivery = "no transport: nothing was sent"
-		return a, nil
+		if fed == 0 {
+			a.lastDelivery = "no transport: nothing was sent"
+		}
+		return a, tea.Batch(authCmds...)
 	}
 	// Individual keystrokes are never recorded — this is where a password may
 	// be typed. The assembled line is recorded on enter instead, because a
@@ -59,7 +66,7 @@ func (a App) handleBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case err != nil:
 		a.lastDelivery = delivery.String() + ": " + err.Error()
-	case delivery.Delivered == 0:
+	case delivery.Delivered == 0 && fed == 0:
 		// The keystroke reached nobody and nothing errored: the scope is
 		// empty or every host in it is down. Typing into the void must not
 		// look like typing (issue #133).
@@ -68,12 +75,14 @@ func (a App) handleBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if msg.Code == tea.KeyEnter && msg.Mod == 0 {
 		line := strings.TrimSpace(string(a.broadcastLine))
-		if line != "" && a.cfg.Recorder != nil {
+		// A line no live host received was an answer to prompts, not a
+		// command: it may be a password, and the audit trail must not hold it.
+		if line != "" && a.cfg.Recorder != nil && delivery.Delivered > 0 {
 			a.cfg.Recorder.Record(line, delivery.Mode, delivery.Delivered)
 		}
 		a.broadcastLine = nil
 	}
-	return a, nil
+	return a, tea.Batch(authCmds...)
 }
 
 // handleBroadcastViewKey is the bar in view mode: every key is an app-level

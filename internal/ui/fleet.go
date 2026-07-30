@@ -169,7 +169,9 @@ func (a App) snapshotFleet() App {
 	if len(ids) > 0 {
 		a.hadHosts = true
 	}
-	return a
+	// A question whose session failed or left was withdrawn on the program
+	// side; its answer buffer must not keep swallowing keystrokes.
+	return a.pruneAuth()
 }
 
 // fleetIDs returns every host in the run: the snapshot's when there is a

@@ -141,7 +141,7 @@ func TestReconnectDoesNotRePromptForCredentials(t *testing.T) {
 	creds := &Credentials{
 		DisableAgent: true,
 		Prompter: FuncPrompter{
-			PasswordFunc: func(context.Context, hosts.Host) (string, error) {
+			PasswordFunc: func(context.Context, string, hosts.Host) (string, error) {
 				prompts.Add(1)
 				return srv.Password, nil
 			},

@@ -7,66 +7,86 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-func secretApp(t *testing.T, echo bool) App {
+// secretApp opens a run with a password prompt in one pane's scrollback, the
+// way the program layer writes it, and delivers the question. The pane is
+// focused, so typing answers it.
+func secretApp(t *testing.T, echo bool) (App, *fakeFleet) {
 	t.Helper()
-	a := resize(t, testApp(), 120, 40)
-	model, _ := a.Update(SecretQuestionMsg{Prompt: "password for test@db1", Echo: echo})
-	return model.(App)
+	fleet := newFakeFleet("web-01", "web-02")
+	a := resize(t, NewApp(Config{Fleet: fleet, Theme: Options{Dark: true}}), 200, 60)
+	fleet.sessions["web-02"].Emit("test@web-02's password: ")
+	model, _ := a.Update(SecretQuestionMsg{SessionID: "web-02", Host: "web-02", Prompt: "test@web-02's password: ", Echo: echo})
+	a = model.(App)
+	a.focus = AreaGrid
+	a.paneIndex = 1
+	return a, fleet
 }
 
-// The prompt renders in the Status panel and the typed value never does.
+// A masked answer echoes nothing in the pane - all a terminal shows of a
+// typed password - and the typed value appears nowhere in the frame.
 func TestSecretPromptMasksTheValue(t *testing.T) {
-	a := secretApp(t, false)
-
-	if a.Panel() != PanelStatus {
-		t.Fatalf("Panel() = %v, want the Status panel", a.Panel())
+	a, _ := secretApp(t, false)
+	for _, k := range []string{"h", "u", "n", "t"} {
+		a = pressKey(t, a, k)
 	}
-	a = pressKey(t, a, "h")
-	a = pressKey(t, a, "u")
-	a = pressKey(t, a, "n")
-	a = pressKey(t, a, "t")
 
-	squeezed := strings.NewReplacer(" ", "", "\n", "").Replace(plain(a.statusPanel(40)))
-	if !strings.Contains(squeezed, "passwordfortest@db1") {
-		t.Fatalf("the prompt label is missing:\n%s", plain(a.statusPanel(40)))
+	body := plain(a.paneBody("web-02", 80, 10))
+	if !strings.Contains(body, "password: ") {
+		t.Fatalf("the pane is missing the prompt:\n%s", body)
 	}
-	if strings.Contains(squeezed, "hunt") {
-		t.Fatalf("the typed secret is rendered:\n%s", plain(a.statusPanel(40)))
+	if strings.Contains(body, "hunt") {
+		t.Fatalf("the typed secret is rendered in the pane:\n%s", body)
+	}
+	if view := plain(a.View().Content); strings.Contains(view, "hunt") {
+		t.Fatalf("the typed secret is rendered somewhere in the frame:\n%s", view)
+	}
+	if bar := plain(a.renderStatusBar()); !strings.Contains(bar, "AUTH web-02") {
+		t.Fatalf("the status bar is missing AUTH web-02:\n%s", bar)
 	}
 }
 
-// enter submits what was typed; the input is wiped.
+// An echoing keyboard-interactive answer shows inline as it is typed.
+func TestSecretPromptEchoesInThePane(t *testing.T) {
+	a, fleet := secretApp(t, true)
+	fleet.sessions["web-02"].Emit("\r\nVerification code: ")
+	for _, k := range []string{"o", "t", "p"} {
+		a = pressKey(t, a, k)
+	}
+	if body := plain(a.paneBody("web-02", 80, 10)); !strings.Contains(body, "Verification code: otp") {
+		t.Fatalf("the echoing answer does not echo inline:\n%s", body)
+	}
+}
+
+// enter submits what was typed; the answer names the session and the buffer
+// is gone with the question.
 func TestSecretPromptSubmits(t *testing.T) {
-	a := secretApp(t, false)
+	a, _ := secretApp(t, false)
 	for _, k := range []string{"h", "u", "n", "t"} {
 		a = pressKey(t, a, k)
 	}
 
 	model, cmd := a.Update(keyMsgFor(t, "enter"))
 	a = model.(App)
-	if a.SecretPromptOpen() {
+	if a.AuthPending() != 0 {
 		t.Fatal("the prompt is still open after enter")
 	}
 	if cmd == nil {
 		t.Fatal("enter produced no answer")
 	}
 	answer, ok := cmd().(SecretAnswerMsg)
-	if !ok || !answer.Ok || answer.Value != "hunt" {
+	if !ok || !answer.Ok || answer.Value != "hunt" || answer.SessionID != "web-02" {
 		t.Fatalf("enter produced %#v", cmd())
-	}
-	if a.secretInput.Value() != "" {
-		t.Fatal("the typed secret survived in the input buffer")
 	}
 }
 
 // esc cancels: the attempt fails rather than hanging, and nothing is sent.
 func TestSecretPromptCancels(t *testing.T) {
-	a := secretApp(t, false)
+	a, _ := secretApp(t, false)
 	a = pressKey(t, a, "x")
 
 	model, cmd := a.Update(keyMsgFor(t, "esc"))
 	a = model.(App)
-	if a.SecretPromptOpen() {
+	if a.AuthPending() != 0 {
 		t.Fatal("the prompt is still open after esc")
 	}
 	if cmd == nil {
@@ -78,74 +98,9 @@ func TestSecretPromptCancels(t *testing.T) {
 	}
 }
 
-// A keyboard-interactive question with echo shows what is typed.
-func TestSecretPromptHonoursEcho(t *testing.T) {
-	a := secretApp(t, true)
-	for _, k := range []string{"o", "t", "p"} {
-		a = pressKey(t, a, k)
-	}
-	if !strings.Contains(plain(a.statusPanel(60)), "otp") {
-		t.Fatalf("an echoing question hides its answer:\n%s", plain(a.statusPanel(60)))
-	}
-}
-
-// A prompt naming a host focuses that host's pane, where the prompt sits in
-// the scrollback (written by the program layer, issue #180): a masked answer
-// echoes nothing there - all a terminal shows of a typed password - and the
-// Status panel does not repeat the question.
-func TestSecretPromptMasksInThePane(t *testing.T) {
-	fleet := newFakeFleet("web-01", "web-02")
-	a := resize(t, NewApp(Config{Hosts: fleet.IDs(), Fleet: fleet, Theme: Options{Dark: true}}), 200, 60)
-	fleet.sessions["web-02"].Emit("test@web-02's password: ")
-
-	model, _ := a.Update(SecretQuestionMsg{Host: "web-02", Prompt: "test@web-02's password: ", Echo: false})
-	a = model.(App)
-
-	if a.Focus() != AreaGrid {
-		t.Fatalf("Focus() = %v, want the grid", a.Focus())
-	}
-	if got := a.FocusedHost(); got != "web-02" {
-		t.Fatalf("FocusedHost() = %q, want web-02", got)
-	}
-	for _, k := range []string{"h", "u", "n", "t"} {
-		a = pressKey(t, a, k)
-	}
-	body := plain(a.paneBody("web-02", 80, 10))
-	if !strings.Contains(body, "password: ") {
-		t.Fatalf("the pane is missing the prompt:\n%s", body)
-	}
-	if strings.Contains(body, "hunt") {
-		t.Fatalf("the typed secret is rendered in the pane:\n%s", body)
-	}
-	squeezed := strings.NewReplacer(" ", "", "\n", "").Replace(plain(a.statusPanel(40)))
-	if strings.Contains(squeezed, "password") {
-		t.Fatalf("the Status panel repeats the in-pane prompt:\n%s", plain(a.statusPanel(40)))
-	}
-	if bar := plain(a.renderStatusBar()); !strings.Contains(bar, "AUTH web-02") {
-		t.Fatalf("the status bar is missing AUTH web-02:\n%s", bar)
-	}
-}
-
-// An echoing keyboard-interactive answer shows inline in the pane as it is
-// typed, the way a terminal echoes it.
-func TestSecretPromptEchoesInThePane(t *testing.T) {
-	fleet := newFakeFleet("web-01")
-	a := resize(t, NewApp(Config{Hosts: fleet.IDs(), Fleet: fleet, Theme: Options{Dark: true}}), 200, 60)
-	fleet.sessions["web-01"].Emit("Verification code: ")
-
-	model, _ := a.Update(SecretQuestionMsg{Host: "web-01", Prompt: "Verification code: ", Echo: true})
-	a = model.(App)
-	for _, k := range []string{"o", "t", "p"} {
-		a = pressKey(t, a, k)
-	}
-	if body := plain(a.paneBody("web-01", 80, 10)); !strings.Contains(body, "Verification code: otp") {
-		t.Fatalf("the echoing answer does not echo inline:\n%s", body)
-	}
-}
-
 // ctrl+q still quits: the prompt must not be able to trap the user.
 func TestSecretPromptCannotTrapTheUser(t *testing.T) {
-	a := secretApp(t, false)
+	a, _ := secretApp(t, false)
 	_, cmd := a.Update(keyMsgFor(t, "ctrl+q"))
 	if cmd == nil || cmd() != tea.Quit() {
 		t.Fatal("ctrl+q did not quit while the prompt was open")

@@ -2,6 +2,16 @@
 
 ## 2026-07-30
 
+- Auth prompts are concurrent and per pane (issue #182): every dialling session shows its own
+  question in its own scrollback at once — routed by session id, exact, so ten dials of
+  `test@localhost` on ten ports prompt ten panes instead of piling onto the first alias match.
+  The answer is typed into the focused pane (per-host passwords) or into the broadcast line,
+  which mirrors keystrokes into every prompting target and submits them all on enter; a line
+  no live host received is never recorded in the command log. `ssh.Prompter` and
+  `ssh.HostKeyPrompter` carry the session id; the password cache is keyed per machine
+  (user@addr:port) instead of per login user. The modal question keyboard is gone.
+  `core/authentication.md` and `core/host-keys.md` updated. Version 0.9.30.
+
 - Auth prompts and connect errors behave like a plain terminal (issue #180): the question is
   written into the blocked host's scrollback in ssh's own wording — `test@db1's password: `,
   `Enter passphrase for key '…': `, the known-hosts block ending in `(yes/no)? ` — and the

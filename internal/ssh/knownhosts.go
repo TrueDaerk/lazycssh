@@ -23,8 +23,9 @@ import (
 // different is never a question - see [HostKeyChangedError].
 type HostKeyPrompter interface {
 	// ConfirmHostKey reports whether the key should be accepted and remembered.
-	// The fingerprint is the SHA256 form ssh itself prints.
-	ConfirmHostKey(ctx context.Context, host hosts.Host, keyType, fingerprint string) (bool, error)
+	// The fingerprint is the SHA256 form ssh itself prints. The session id
+	// names the dialling pane the question belongs to (issue #182).
+	ConfirmHostKey(ctx context.Context, sessionID string, host hosts.Host, keyType, fingerprint string) (bool, error)
 }
 
 // ErrHostKeyRejected is returned when the user declines an unknown host key.
@@ -142,8 +143,8 @@ func (k *KnownHosts) reload() error {
 
 // Callback returns the [ssh.HostKeyCallback] for one session. The context is the
 // one the prompt runs under, so a session being cancelled also cancels its
-// question.
-func (k *KnownHosts) Callback(ctx context.Context, host hosts.Host) ssh.HostKeyCallback {
+// question; the session id names the pane the question belongs to.
+func (k *KnownHosts) Callback(ctx context.Context, sessionID string, host hosts.Host) ssh.HostKeyCallback {
 	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		k.mu.Lock()
 		verify := k.verify
@@ -176,18 +177,18 @@ func (k *KnownHosts) Callback(ctx context.Context, host hosts.Host) ssh.HostKeyC
 			}
 		}
 
-		return k.confirm(ctx, host, hostname, key)
+		return k.confirm(ctx, sessionID, host, hostname, key)
 	}
 }
 
 // confirm asks about an unknown key and remembers it if the user accepts.
-func (k *KnownHosts) confirm(ctx context.Context, host hosts.Host, hostname string, key ssh.PublicKey) error {
+func (k *KnownHosts) confirm(ctx context.Context, sessionID string, host hosts.Host, hostname string, key ssh.PublicKey) error {
 	if k.Prompter == nil {
 		return fmt.Errorf("%s offered an unknown %s key with fingerprint %s: %w",
 			host.Alias, key.Type(), ssh.FingerprintSHA256(key), ErrNoHostKeyPrompter)
 	}
 
-	accept, err := k.Prompter.ConfirmHostKey(ctx, host, key.Type(), ssh.FingerprintSHA256(key))
+	accept, err := k.Prompter.ConfirmHostKey(ctx, sessionID, host, key.Type(), ssh.FingerprintSHA256(key))
 	if err != nil {
 		return fmt.Errorf("confirm host key for %s: %w", host.Alias, err)
 	}

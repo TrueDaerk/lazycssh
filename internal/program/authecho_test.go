@@ -38,7 +38,8 @@ func scrollbackOf(t *testing.T, m *Model, id string) string {
 func TestHostKeyQuestionEchoesLikeATerminal(t *testing.T) {
 	m := echoModel(t, "db1")
 	q := &keyQuestion{
-		host: hosts.Host{Alias: "db1", Addr: "10.0.0.1"}, keyType: "ssh-ed25519",
+		sessionID: "db1",
+		host:      hosts.Host{Alias: "db1", Addr: "10.0.0.1"}, keyType: "ssh-ed25519",
 		fingerprint: "SHA256:x", answer: make(chan bool, 1),
 	}
 	m.askHostKey(keyQuestionMsg{q: q})
@@ -54,7 +55,7 @@ func TestHostKeyQuestionEchoesLikeATerminal(t *testing.T) {
 		}
 	}
 
-	m.answerHostKey(ui.HostKeyAnswerMsg{Host: "db1", Accept: true})
+	m.answerHostKey(ui.HostKeyAnswerMsg{SessionID: "db1", Accept: true})
 	if got := scrollbackOf(t, m, "db1"); !strings.Contains(got, "(yes/no)? yes") {
 		t.Fatalf("the answer is not echoed:\n%s", got)
 	}
@@ -64,42 +65,46 @@ func TestHostKeyQuestionEchoesLikeATerminal(t *testing.T) {
 // the typed value must never reach the scrollback. An echoing answer is shown.
 func TestSecretPromptEchoesLikeATerminal(t *testing.T) {
 	m := echoModel(t, "db1")
-	q := &secretQuestion{host: "db1", prompt: "test@db1's password: ", answer: make(chan secretAnswer, 1)}
+	q := &secretQuestion{sessionID: "db1", host: "db1", prompt: "test@db1's password: ", answer: make(chan secretAnswer, 1)}
 	m.askSecret(secretQuestionMsg{q: q})
 
 	if got := scrollbackOf(t, m, "db1"); !strings.Contains(got, "test@db1's password: ") {
 		t.Fatalf("the prompt is not in the scrollback:\n%s", got)
 	}
-	m.answerSecret(ui.SecretAnswerMsg{Value: "hunt", Ok: true})
+	m.answerSecret(ui.SecretAnswerMsg{SessionID: "db1", Value: "hunt", Ok: true})
 	if got := scrollbackOf(t, m, "db1"); strings.Contains(got, "hunt") {
 		t.Fatalf("the masked secret reached the scrollback:\n%s", got)
 	}
 
 	m = echoModel(t, "db1")
-	q = &secretQuestion{host: "db1", prompt: "Verification code: ", echo: true, answer: make(chan secretAnswer, 1)}
+	q = &secretQuestion{sessionID: "db1", host: "db1", prompt: "Verification code: ", echo: true, answer: make(chan secretAnswer, 1)}
 	m.askSecret(secretQuestionMsg{q: q})
-	m.answerSecret(ui.SecretAnswerMsg{Value: "otp", Ok: true})
+	m.answerSecret(ui.SecretAnswerMsg{SessionID: "db1", Value: "otp", Ok: true})
 	if got := scrollbackOf(t, m, "db1"); !strings.Contains(got, "Verification code: otp") {
 		t.Fatalf("the echoing answer is not shown:\n%s", got)
 	}
 }
 
-// The alias finds its session even when a duplicate dial suffixed the id, and
-// a question no session matches writes nowhere instead of panicking.
-func TestPromptScrollbackMatchesAliases(t *testing.T) {
+// Two dials of the same alias are two sessions with two scrollbacks: each
+// question echoes into exactly its own (issue #182), and a question no
+// session matches writes nowhere instead of panicking.
+func TestPromptScrollbackIsPerSession(t *testing.T) {
 	m := echoModel(t, "db1", "db1")
 
-	if buf := m.promptScrollback("db1"); buf == nil {
-		t.Fatal("the plain alias found no session")
+	q := &secretQuestion{sessionID: "db1#2", host: "db1", prompt: "test@db1's password: ", answer: make(chan secretAnswer, 1)}
+	m.askSecret(secretQuestionMsg{q: q})
+
+	if got := scrollbackOf(t, m, "db1#2"); !strings.Contains(got, "password: ") {
+		t.Fatalf("the prompt is missing from its own pane:\n%s", got)
 	}
-	if s, ok := m.mgr.Session("db1#2"); !ok || s == nil {
-		t.Fatal("the duplicate session is missing from the fixture")
+	if got := scrollbackOf(t, m, "db1"); strings.Contains(got, "password") {
+		t.Fatalf("the prompt leaked into the first alias pane:\n%s", got)
 	}
 	if buf := m.promptScrollback("gone"); buf != nil {
-		t.Fatal("an unknown alias found a session")
+		t.Fatal("an unknown session id found a scrollback")
 	}
 	if buf := m.promptScrollback(""); buf != nil {
-		t.Fatal("an empty alias found a session")
+		t.Fatal("an empty session id found a scrollback")
 	}
 	echoPrompt(nil, "x") // must not panic
 	echoAnswer(nil, "x")
