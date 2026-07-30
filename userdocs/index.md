@@ -24,7 +24,7 @@ lazycssh is a single Go binary. You need [Go 1.26+](https://go.dev/dl/).
 ```sh
 git clone https://github.com/TrueDaerk/lazycssh.git
 cd lazycssh
-make install          # go install ./cmd/lazycssh
+make install          # installs to ~/.local/bin/lazycssh
 ```
 
 Then start it with hosts, with a saved group, or with nothing:

@@ -11,8 +11,12 @@ You need [Go 1.26+](https://go.dev/dl/).
 ```sh
 git clone https://github.com/TrueDaerk/lazycssh.git
 cd lazycssh
-make install          # go install ./cmd/lazycssh — lands in $(go env GOPATH)/bin
+make install                        # installs to ~/.local/bin/lazycssh
+make install BINDIR=/usr/local/bin  # or pick another directory
 ```
+
+`BINDIR` is created when it does not exist. `make uninstall` (with the same
+`BINDIR`) removes the binary again.
 
 Or build without installing:
 
@@ -24,7 +28,7 @@ go build ./cmd/lazycssh
 Make sure the install directory is on your `PATH`:
 
 ```sh
-export PATH="$PATH:$(go env GOPATH)/bin"
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 ## Check what you built
