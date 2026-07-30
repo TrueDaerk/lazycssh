@@ -80,7 +80,7 @@ func TestSidebarPanelAt(t *testing.T) {
 }
 
 func TestPaneAt(t *testing.T) {
-	main := Rect{X: 30, Y: 0, Width: 90, Height: 36}
+	main := Rect{X: 30, Y: 0, Width: 2 * MinPaneWidth, Height: 2 * MinPaneHeight}
 	g := TileGrid(main, 4) // 2x2
 
 	if index, ok := paneAt(g, main, 0, 4, 0, false, g.Cells[3].X+1, g.Cells[3].Y+1); !ok || index != 3 {

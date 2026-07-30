@@ -74,6 +74,18 @@ func TestTileGridPagesRatherThanShrinking(t *testing.T) {
 	}
 }
 
+// The floor is set on the terminal the host sees (issue #139): a cell at the
+// floor still holds the guideline's 45x16 of content once the border and the
+// header line are taken off - the same arithmetic resizePTYs applies.
+func TestPaneFloorHoldsTheMinimumTerminal(t *testing.T) {
+	if got := MinPaneWidth - 2; got != MinPaneContentWidth || got < 45 {
+		t.Fatalf("a floor-sized cell holds %d columns of content, want %d", got, MinPaneContentWidth)
+	}
+	if got := MinPaneHeight - 3; got != MinPaneContentHeight || got < 16 {
+		t.Fatalf("a floor-sized cell holds %d rows of content, want %d", got, MinPaneContentHeight)
+	}
+}
+
 func TestTileGridNeverGoesBelowTheFloorUntilItHasTo(t *testing.T) {
 	for width := MinPaneWidth; width < 200; width += 7 {
 		for height := MinPaneHeight; height < 80; height += 5 {

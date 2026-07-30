@@ -51,8 +51,8 @@ func TestCursorEscapesCannotCorruptTheLayout(t *testing.T) {
 
 	view := plain(a.View().Content)
 	for i, line := range strings.Split(view, "\n") {
-		if got := len([]rune(line)); got != 120 {
-			t.Fatalf("line %d is %d columns wide, want 120:\n%s", i, got, view)
+		if got := len([]rune(line)); got != 200 {
+			t.Fatalf("line %d is %d columns wide, want 200:\n%s", i, got, view)
 		}
 	}
 	if !strings.Contains(view, "boom") || !strings.Contains(view, "calm") {

@@ -15,7 +15,7 @@ func fleetApp(t *testing.T, n int) App {
 	for i := 1; i <= n; i++ {
 		hosts = append(hosts, fmt.Sprintf("web-%02d", i))
 	}
-	a := resize(t, NewApp(Config{Hosts: hosts, Theme: Options{Dark: true}}), 120, 40)
+	a := resize(t, NewApp(Config{Hosts: hosts, Theme: Options{Dark: true}}), 200, 60)
 	return focusGrid(t, a)
 }
 
