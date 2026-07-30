@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-29T23:00:00Z
+timestamp: 2026-07-30T09:00:00Z
 ---
 
 # TUI shell
@@ -365,7 +365,9 @@ an unnamed run — each with its up count, the foreground one marked with `▸`.
 
 - `enter`/`space` bring the session under the cursor to the foreground: its panes replace the
   grid, the broadcast scope follows, and nothing is dialled or torn down — a background
-  session keeps every connection.
+  session keeps every connection,
+- `x` ends the session under the cursor after `y/n`, and a session whose hosts all closed ends
+  by itself — see [Groups and open sessions](./groups-and-sessions.md).
 
 ### [4] Command log
 

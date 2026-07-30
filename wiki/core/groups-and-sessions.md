@@ -4,7 +4,7 @@ title: Groups and open sessions
 description: Persisted host groups, the open sessions they become, and how the foreground session scopes the grid and the broadcast.
 resource: internal/ui/opensessions.go
 tags: [groups, sessions, workspace, broadcast]
-timestamp: 2026-07-29T21:00:00Z
+timestamp: 2026-07-30T09:00:00Z
 ---
 
 # Groups and open sessions
@@ -53,6 +53,22 @@ size.
 - A host removed from the run leaves every session; a session that loses its last host closes.
   Deleting a group's *file* does none of this — definitions and live sessions have separate
   lifetimes.
+
+## Ending a session
+
+`x` on a row in the Sessions panel asks `end "name"? y/n`. On `y`, every **connected** terminal
+of the session receives `ctrl+c` then `ctrl+d` — interrupt the foreground process, log the
+shell out — via the pane write path, so it targets exactly the session's hosts whatever the
+broadcast mode is, and nothing lands in the command log. The session is marked `(ending)` and
+leaves the list once its hosts are done; a shell that swallows the keystrokes keeps it listed,
+and `x` asks again and resends.
+
+A session ends by itself when **all** of its hosts reach `closed` — which is what `ctrl+d`
+typed in broadcast mode across the whole session produces. Its hosts then leave the run, unless
+another open session still contains them. A session marked as ending also accepts `failed` as
+done — a host that died mid-shutdown must not keep a zombie session listed — but a session
+whose hosts merely all failed, never asked to end, stays: that is an outage to look at and
+reconnect, not a completed shutdown.
 
 ## What this deliberately is not
 

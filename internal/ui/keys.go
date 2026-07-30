@@ -91,6 +91,7 @@ type KeyMap struct {
 	PrevChunk   key.Binding
 	GroupNew    key.Binding
 	GroupDelete key.Binding
+	SessionEnd  key.Binding
 
 	// Grid. A focused pane is a terminal: plain keys are forwarded to the
 	// host, so everything lazycssh keeps for itself here is an alt or shift
@@ -179,6 +180,8 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("n", "new group (in the Groups panel)")),
 		GroupDelete: key.NewBinding(key.WithKeys("d"),
 			key.WithHelp("d", "delete this group (in the Groups panel)")),
+		SessionEnd: key.NewBinding(key.WithKeys("x"),
+			key.WithHelp("x", "end this session (in the Sessions panel)")),
 
 		LeaveTyping: key.NewBinding(key.WithKeys("ctrl+]"),
 			key.WithHelp("ctrl+]", "stop typing to the host")),
@@ -222,7 +225,7 @@ func (k KeyMap) sidebar() []key.Binding {
 	return []key.Binding{
 		k.Up, k.Down, k.Choose, k.Toggle,
 		k.SaveSet, k.NextChunk, k.PrevChunk,
-		k.GroupNew, k.GroupDelete,
+		k.GroupNew, k.GroupDelete, k.SessionEnd,
 	}
 }
 

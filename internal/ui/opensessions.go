@@ -2,6 +2,8 @@ package ui
 
 import (
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/TrueDaerk/lazycssh/internal/ssh"
 )
 
 // An **open session** is a named set of hosts that is on screen together: the
@@ -21,6 +23,11 @@ type openSession struct {
 	Name string
 	// Hosts are the session's host identifiers, in the order they joined.
 	Hosts []string
+	// Ending marks a session the user asked to end with x: its terminals
+	// were sent ctrl+c and ctrl+d, and the session leaves the list as soon
+	// as every host is done - closed or failed - rather than waiting for a
+	// host that died mid-shutdown.
+	Ending bool
 }
 
 // GroupOpenMsg asks the program to open a saved group as a session. The UI
@@ -217,4 +224,91 @@ func (a App) adoptNewHosts() App {
 // remote PTYs can be resized to match what is drawn.
 func gridChanged() tea.Cmd {
 	return func() tea.Msg { return GridChangedMsg{} }
+}
+
+// sessionOver reports whether an open session has run its course: every host
+// deliberately closed, or - for a session the user asked to end - every host
+// done one way or the other. A session whose hosts merely all *failed* is not
+// over: that is an outage to look at and reconnect, not a completed shutdown.
+func (a App) sessionOver(s openSession) bool {
+	if len(s.Hosts) == 0 {
+		return true
+	}
+	closedAll, doneAll := true, true
+	for _, id := range s.Hosts {
+		st := a.state(id)
+		if st != ssh.StateClosed {
+			closedAll = false
+		}
+		if !st.Done() {
+			doneAll = false
+		}
+	}
+	return closedAll || (s.Ending && doneAll)
+}
+
+// reapSessions ends every session that is over: it leaves the list, and its
+// hosts leave the run - unless another open session still contains them, in
+// which case they stay untouched. Called on every fleet event, which is how
+// "ctrl+d broadcast to the whole session" ends the session without another
+// keypress.
+func (a App) reapSessions() (App, tea.Cmd) {
+	var ended []openSession
+	activeName := a.ActiveSession()
+	focused := a.FocusedHost()
+	kept := a.open[:0]
+	for _, s := range a.open {
+		if a.sessionOver(s) {
+			ended = append(ended, s)
+			continue
+		}
+		kept = append(kept, s)
+	}
+	if len(ended) == 0 {
+		a.open = kept
+		return a, nil
+	}
+	a.open = kept
+
+	// The foreground is kept by identity; losing it falls back to what is
+	// still open, the way pruning does.
+	a.active = -1
+	for i, s := range a.open {
+		if s.Name == activeName {
+			a.active = i
+			break
+		}
+	}
+	if a.active < 0 && len(a.open) > 0 {
+		a.active = len(a.open) - 1
+	}
+	a.sessionCursor = clamp(a.sessionCursor, 0, max(0, len(a.open)-1))
+
+	// An ended session's hosts leave the run, deduplicated, unless a
+	// surviving session still holds them.
+	surviving := make(map[string]bool)
+	for _, s := range a.open {
+		for _, id := range s.Hosts {
+			surviving[id] = true
+		}
+	}
+	fleet := make(map[string]bool)
+	for _, id := range a.fleetIDs() {
+		fleet[id] = true
+	}
+	removed := make(map[string]bool)
+	cmds := []tea.Cmd{gridChanged()}
+	for _, s := range ended {
+		for _, id := range s.Hosts {
+			if surviving[id] || removed[id] || !fleet[id] {
+				continue
+			}
+			removed[id] = true
+			host := id
+			cmds = append(cmds, func() tea.Msg { return RemoveHostMsg{ID: host} })
+		}
+	}
+
+	a = a.syncBroadcastLimit().refocus(focused).followFocus()
+	return a, tea.Batch(cmds...)
 }

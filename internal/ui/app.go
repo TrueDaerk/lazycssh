@@ -136,6 +136,8 @@ type App struct {
 	// deleteGroup is the group the d key asked about; the panel shows the
 	// question until y answers it or anything else withdraws it.
 	deleteGroup string
+	// endSession is the open session the x key asked about, same shape.
+	endSession string
 
 	// open are the open sessions, in open order; active is the foreground
 	// one, -1 when nothing is open.
@@ -305,11 +307,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Nothing to store: the panels read the fleet's live state when they
 		// render. Redrawing is (almost) the whole effect - under the
 		// connected-only filter the visible set follows liveness, so the
-		// broadcast limit must follow too.
+		// broadcast limit must follow too, and a session whose last host
+		// closed is over.
 		if a.connectedOnly || a.splitSize > 0 {
 			a = a.syncBroadcastLimit()
 		}
-		return a.followFocus(), nil
+		next, cmd := a.reapSessions()
+		return next.followFocus(), cmd
 
 	case SessionOutputMsg:
 		// Nothing to store here either: the pane reads the scrollback when it
@@ -359,7 +363,7 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "ctrl+q" &&
 		(a.cmdInput.Focused() || a.hostInput.Focused() ||
 			a.searchInput.Focused() || a.Saving() || a.splitInput.Focused() ||
-			a.GroupDialogOpen() || a.deleteGroup != "") {
+			a.GroupDialogOpen() || a.deleteGroup != "" || a.endSession != "") {
 		return a, tea.Quit
 	}
 
@@ -385,6 +389,12 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// So does the delete question: it is answered, never typed past.
 	if a.deleteGroup != "" {
 		return a.handleGroupDeleteKey(msg)
+	}
+
+	// And the end-session question, for the same reason: ctrl+c on N
+	// machines is not something a stray keystroke may confirm.
+	if a.endSession != "" {
+		return a.handleSessionEndKey(msg)
 	}
 
 	// The new-host prompt has the keyboard while it is open: a pattern
@@ -652,6 +662,8 @@ func (a App) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.moveSessionCursor(+1), nil
 	case key.Matches(msg, a.keys.Choose), key.Matches(msg, a.keys.Toggle):
 		return a.foregroundSelectedSession()
+	case key.Matches(msg, a.keys.SessionEnd):
+		return a.beginEndSession(), nil
 	}
 	return a, nil
 }
