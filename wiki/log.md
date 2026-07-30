@@ -2,6 +2,15 @@
 
 ## 2026-07-30
 
+- Arrow-key history navigation no longer corrupts the scrollback (issue #178): the pending
+  line carries a cursor mapped through the remote terminal's width, printable runes overwrite
+  instead of append, cursor movement (`ESC[A/B/C/D/G`) and per-row erase (`ESC[K`) are
+  honoured, and `\n` on an upper row of a multi-row edit moves the cursor down instead of
+  committing — so a recalled command that wraps over several screen rows redraws cleanly
+  instead of leaving its intermediate states behind. OSC sequences (including the exit-marker
+  hook) are consumed, never flushed into the line as text. Verified against a captured bash
+  PTY byte stream of the exact repro. `core/scrollback.md` updated. Version 0.9.33.
+
 - Unselected sidebar panels preview their content (issue #186): every panel renders its body
   into the height it was dealt instead of collapsing to an empty box, and on a roomy sidebar
   `SidebarHeights` grows the unselected boxes with half the surplus, capped at 8 rows. Tight

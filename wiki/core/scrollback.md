@@ -4,7 +4,7 @@ title: Scrollback buffer
 description: The bounded per-session ring buffer that keeps a chatty host from stalling the UI.
 resource: internal/scrollback/scrollback.go
 tags: [backpressure, concurrency, output]
-timestamp: 2026-07-30T19:00:00Z
+timestamp: 2026-07-30T22:00:00Z
 ---
 
 # Scrollback buffer
@@ -33,21 +33,34 @@ all output.
 
 ## Line handling
 
-- `\n` ends a line; a preceding `\r` is removed, so CRLF is one ending.
-- A **bare `\r`** discards the line assembled so far. This is how progress bars and spinners
-  redraw; keeping every frame would fill the scrollback with intermediate states of one line.
-- An unterminated line is returned by `Lines()` as the last element. A shell prompt has no
-  trailing newline, and it must appear the moment it arrives rather than when the next line
-  completes.
+- The line being assembled is a **logical line with a cursor** (issue #178). On the remote
+  terminal it occupies `len/width` screen rows — the session keeps the buffer's width in
+  lockstep with the PTY via `SetWidth` — and printable runes **overwrite** the cell under the
+  cursor, exactly as a terminal would.
+- `\n` commits the line when the cursor is on its last screen row. On an upper row it only
+  moves the cursor down one row: that is readline stepping through a multi-row edit, not
+  output. An unterminated line is returned by `Lines()` as the last element — a shell prompt
+  has no trailing newline, and it must appear the moment it arrives.
+- A **bare `\r`** returns the cursor to column zero of its current screen row; the following
+  output overwrites in place. Progress bars and spinners redraw over themselves instead of
+  filling the scrollback with intermediate frames.
 - A single line is capped at 64 KiB and committed as if a newline had arrived. A binary catted
   by accident would otherwise grow one string without limit.
-- A minimal **line discipline** applies inside the line being assembled, with the cursor always
-  assumed at its end — exactly enough for a remote readline to redraw its line (recalling a
-  command with arrow-up must replace the visible line, not append to it), and no more:
-  - **backspace** removes the last rune; at an empty line it is a no-op, and it never reaches a
-    committed line,
-  - **`ESC[K`** / `ESC[0K` (erase right of the cursor) is consumed silently — nothing sits right
-    of the cursor in this model — while `ESC[1K` / `ESC[2K` discard the line.
+- The **line discipline** honours exactly what a remote readline needs to redraw a recalled
+  command — including one that wraps over several screen rows — without leaving its
+  intermediate states behind:
+  - **backspace** moves the cursor one cell left (it erases nothing; the following overwrite
+    or erase sequence does that), and it never reaches a committed line,
+  - **cursor movement** — `ESC[A`/`ESC[B` (up/down, mapped through the width), `ESC[C`/`ESC[D`
+    (forward/back, clamped to the row) and `ESC[G` (column) — repositions the cursor on the
+    pending line; without a known width the vertical forms are dropped,
+  - **`ESC[K`** erases within the cursor's screen row (`0` right of the cursor, `1` left of
+    it, `2` the whole row); blanked trailing cells stop counting as content unless the cursor
+    stays among them, which is what separates erase debris from spaces the host printed,
+  - **`ESC[J`** with `0` erases the pending line past the cursor (the display below it).
+- **OSC and the other string sequences** (title changes, the shell-integration exit markers)
+  are consumed and dropped — they carry metadata, never text, and flushing their payload into
+  the line is how it would corrupt the scrollback.
 - **Clear-screen sequences plant a marker** (issue #131). `ESC[2J` / `ESC[3J` (erase display),
   `ESC[1J` (erase above) and the alternate-screen switches `ESC[?1049h/l`, `ESC[?1047h/l`,
   `ESC[?47h/l` store a `ClearMark` line where the visible area restarted; the whole-screen
@@ -58,8 +71,9 @@ all output.
   emulation. The pane renders the marker as `~ screen cleared ~`; while following the tail it
   shows only what came after the last marker, so `clear` (or entering `screen`/`vim`) leaves
   an apparently empty pane, and scrolling up still reaches everything before it.
-- Every other ANSI escape sequence is stored verbatim, including sequences split across writes.
-  Interpreting them is the renderer's job; full emulation is a separate idea (issue #44).
+- SGR and every unrecognized CSI sequence are stored verbatim at the cursor's position, zero
+  cells wide, including sequences split across writes. Interpreting them is the renderer's
+  job; full emulation is a separate idea (issue #44).
 
 Chunk boundaries are handled: a line split across writes, a CRLF split between two writes, an
 escape sequence split anywhere, and a UTF-8 rune split mid-sequence all reassemble correctly.
