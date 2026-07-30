@@ -2,6 +2,14 @@
 
 ## 2026-07-31
 
+- Closed two silent-drop holes in the broadcast path (issue #133): a target whose writer
+  vanished between target resolution and the write now fails the delivery with an error instead
+  of being skipped quietly, and the broadcast bar reports zero-delivery keystrokes
+  ("no host can take input right now") instead of accepting typing that reaches nobody. No
+  reproduction of the original observation existed; these are the two code paths where typed
+  input could vanish while looking accepted, and both now surface in the status line.
+  `core/broadcast-scope.md` updated. Version 0.9.13.
+
 - Failed panes no longer block shutdown, closed panes close themselves (issue #146): a clean
   shell logout removes its own pane from the run (grid shape kept — no retile), the owning
   sessions remember the logout (`SawClose`), and a session is over once every host is done and

@@ -4,7 +4,7 @@ title: Broadcast scope
 description: What `BROADCAST all` means when a working set is active, and how the target count is made unmissable.
 resource: internal/broadcast
 tags: [broadcast, working-set, safety]
-timestamp: 2026-07-29T21:00:00Z
+timestamp: 2026-07-31T13:00:00Z
 ---
 
 # Broadcast scope
@@ -166,6 +166,22 @@ always reports against the **scope**:
 sent to 40/40 hosts
 sent to 7/40 hosts (33 did not receive it)
 ```
+
+Two silences were closed for issue #133 — a broadcast that intermittently wrote nothing while
+looking accepted:
+
+- A target whose writer vanished between `Targets()` and the write (the session dropped in
+  between) is a **failed delivery with an error**, not a skipped host: `Send` records
+  `write to <host>: session lost its writer` in `Delivery.Errs`, so the caller cannot read the
+  send as a success.
+- The broadcast bar reports **zero-delivery** even without an error: a keystroke whose
+  `Delivered` is 0 — empty scope, every host down — sets the status line to
+  `sent to 0/N hosts … — no host can take input right now` instead of staying quiet. Typing
+  into the void must not look like typing.
+
+The count in the bar's title, the targets `Send` resolves and the delivered count all come from
+the same `Router` inside the same `Update` pass; the status line after each keystroke is what
+makes a mismatch visible the moment it happens.
 
 ## What this package does not do
 

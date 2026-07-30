@@ -56,8 +56,14 @@ func (a App) handleBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// be typed. The assembled line is recorded on enter instead, because a
 	// whole command is what the audit trail is for.
 	delivery, err := a.cfg.Sender.Send(raw)
-	if err != nil {
+	switch {
+	case err != nil:
 		a.lastDelivery = delivery.String() + ": " + err.Error()
+	case delivery.Delivered == 0:
+		// The keystroke reached nobody and nothing errored: the scope is
+		// empty or every host in it is down. Typing into the void must not
+		// look like typing (issue #133).
+		a.lastDelivery = delivery.String() + " — no host can take input right now"
 	}
 
 	if msg.Code == tea.KeyEnter && msg.Mod == 0 {
@@ -105,8 +111,12 @@ func (a App) sendBroadcastRaw(raw []byte) (tea.Model, tea.Cmd) {
 		a.lastDelivery = "no transport: nothing was sent"
 		return a, nil
 	}
-	if delivery, err := a.cfg.Sender.Send(raw); err != nil {
+	delivery, err := a.cfg.Sender.Send(raw)
+	switch {
+	case err != nil:
 		a.lastDelivery = delivery.String() + ": " + err.Error()
+	case delivery.Delivered == 0:
+		a.lastDelivery = delivery.String() + " — no host can take input right now"
 	}
 	return a, nil
 }
