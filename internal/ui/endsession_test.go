@@ -174,8 +174,10 @@ func TestEndingSessionEndsOnFailedHostsToo(t *testing.T) {
 	}
 }
 
-// A host shared with a surviving session is not removed by the ended one.
-func TestSharedHostSurvivesTheEndedSession(t *testing.T) {
+// A cleanly closed shell leaves the run even when another open session still
+// lists the host: the shell is just as gone there (issue #146). The surviving
+// sessions themselves stay open for their live hosts.
+func TestClosedSharedHostLeavesEverySession(t *testing.T) {
 	a, fleet := openTwo(t) // prod-web holds all three hosts, front web-01/02, back db-01
 	fleet.connect(t, "db-01")
 
@@ -187,8 +189,8 @@ func TestSharedHostSurvivesTheEndedSession(t *testing.T) {
 	if got := strings.Join(a.OpenSessionNames(), ","); got != "prod-web,back" {
 		t.Fatalf("open sessions = %q; only front is fully closed", got)
 	}
-	if got := removedHosts(msgsFrom(t, cmd)); len(got) != 0 {
-		t.Fatalf("hosts still held by prod-web were removed: %v", got)
+	if got := strings.Join(removedHosts(msgsFrom(t, cmd)), ","); got != "web-01,web-02" {
+		t.Fatalf("removed hosts = %q, want the closed shells to leave the run", got)
 	}
 }
 
@@ -230,5 +232,104 @@ func TestEndingTheForegroundFallsBack(t *testing.T) {
 
 	if a.ActiveSession() == "back" || a.ActiveSession() == "" {
 		t.Fatalf("ActiveSession() = %q after back ended", a.ActiveSession())
+	}
+}
+
+// The bug of issue #146: a host that failed from the start must not keep the
+// session - and with it the program - alive once every other host was logged
+// out. One clean logout plus everything done ends the session, failed
+// remainder included.
+func TestMixedClosedAndFailedSessionEnds(t *testing.T) {
+	a, fleet := soloApp(t)
+
+	fleet.sessions["web-01"].Disconnect(nil)
+	fleet.sessions["web-02"].Disconnect(ssh.ErrDisconnected())
+	model, cmd := a.Update(FleetUpdatedMsg{})
+	a = model.(App)
+
+	if len(a.OpenSessionNames()) != 0 {
+		t.Fatalf("open sessions = %v; a failed host kept the session alive", a.OpenSessionNames())
+	}
+	if got := strings.Join(removedHosts(msgsFrom(t, cmd)), ","); got != "web-01,web-02" {
+		t.Fatalf("removed hosts = %q, want both", got)
+	}
+}
+
+// A clean logout auto-closes its pane: the host leaves the run on its own,
+// no x required, while the rest of the session stays untouched.
+func TestCleanLogoutClosesItsPane(t *testing.T) {
+	a, fleet := soloApp(t)
+
+	fleet.sessions["web-01"].Disconnect(nil)
+	model, cmd := a.Update(FleetUpdatedMsg{})
+	a = model.(App)
+
+	if got := strings.Join(removedHosts(msgsFrom(t, cmd)), ","); got != "web-01" {
+		t.Fatalf("removed hosts = %q, want just the logged-out one", got)
+	}
+	if got := strings.Join(a.OpenSessionNames(), ","); got != "solo" {
+		t.Fatalf("open sessions = %q; the session still has a live host", got)
+	}
+}
+
+// The logout is remembered after the closed pane left: when the remaining
+// host later fails, the session ends instead of lingering as a fake outage.
+func TestRememberedLogoutEndsAFailedRemainder(t *testing.T) {
+	a, fleet := soloApp(t)
+
+	// web-01 logs out; its pane auto-closes and the program removes it.
+	fleet.sessions["web-01"].Disconnect(nil)
+	model, _ := a.Update(FleetUpdatedMsg{})
+	a = model.(App)
+	fleet.ids = []string{"web-02"}
+	delete(fleet.sessions, "web-01")
+	model, _ = a.Update(HostsChangedMsg{Hosts: fleet.IDs()})
+	a = model.(App)
+
+	// Now the survivor dies. No closed host is visible any more, but the
+	// session saw a logout, so it is over - not an outage.
+	fleet.sessions["web-02"].Disconnect(ssh.ErrDisconnected())
+	model, cmd := a.Update(FleetUpdatedMsg{})
+	a = model.(App)
+
+	if len(a.OpenSessionNames()) != 0 {
+		t.Fatalf("open sessions = %v; the remembered logout must end the session", a.OpenSessionNames())
+	}
+	if got := strings.Join(removedHosts(msgsFrom(t, cmd)), ","); got != "web-02" {
+		t.Fatalf("removed hosts = %q, want the failed remainder", got)
+	}
+}
+
+// A run that held hosts and lost the last one quits: the program's work is
+// done. This is what lets a session full of ctrl+d logouts end the program.
+func TestRunThatEmptiedQuits(t *testing.T) {
+	a, fleet := soloApp(t)
+
+	fleet.sessions["web-01"].Disconnect(nil)
+	fleet.sessions["web-02"].Disconnect(nil)
+	model, _ := a.Update(FleetUpdatedMsg{})
+	a = model.(App)
+
+	fleet.ids = nil
+	fleet.sessions = map[string]*ssh.Fake{}
+	_, cmd := a.Update(HostsChangedMsg{Hosts: nil})
+	if cmd == nil {
+		t.Fatal("the emptied run produced no command, want quit")
+	}
+	if msg := cmd(); msg != tea.Quit() {
+		t.Fatalf("the emptied run produced %v, want tea.Quit", msg)
+	}
+}
+
+// A run that starts empty is waiting on the sessions picker, not done: no
+// quit.
+func TestEmptyStartDoesNotQuit(t *testing.T) {
+	a := resize(t, NewApp(Config{Theme: Options{Dark: true}}), 120, 40)
+
+	_, cmd := a.Update(HostsChangedMsg{Hosts: nil})
+	for _, msg := range msgsFrom(t, cmd) {
+		if msg == tea.Quit() {
+			t.Fatal("an empty start quit the program")
+		}
 	}
 }

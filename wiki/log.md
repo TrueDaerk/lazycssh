@@ -2,6 +2,16 @@
 
 ## 2026-07-31
 
+- Failed panes no longer block shutdown, closed panes close themselves (issue #146): a clean
+  shell logout removes its own pane from the run (grid shape kept — no retile), the owning
+  sessions remember the logout (`SawClose`), and a session is over once every host is done and
+  a logout was seen — so a dead-on-arrival host cannot keep the run alive after everyone else
+  logged out. An all-failed session with no logout still stays listed as an outage. A run that
+  held hosts and emptied quits the program; a run that started empty keeps waiting on the
+  picker. `core/groups-and-sessions.md` updated. Version 0.9.12.
+
+## 2026-07-31
+
 - Deduplicated `core/tui.md` (issue #144): the "Pane grid" and "The window" sections existed
   twice — a nested copy under Focus and a second window section without the overflow-footer
   material. One copy of each remains, the fuller one; no content was unique to the deleted
