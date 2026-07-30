@@ -181,6 +181,9 @@ type App struct {
 	hostStates  map[string]hostState
 	fleetCounts ssh.Counts
 
+	// textSel is the mouse text selection inside a pane; see textselect.go.
+	textSel textSelection
+
 	// hadHosts records that the run held at least one host at some point.
 	// It is what separates a run that emptied - every session logged out or
 	// removed, the program's work is done, quit (issue #146) - from a run
@@ -380,6 +383,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	case tea.MouseMotionMsg:
+		return a.handleMouseMotion(msg), nil
+
+	case tea.MouseReleaseMsg:
+		return a.handleMouseRelease(msg), nil
+
 	case tea.MouseWheelMsg:
 		return a.handleWheel(msg), nil
 	}
@@ -462,6 +471,19 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		a.showHelp = false
 		return a, nil
+	}
+
+	// A live mouse selection takes ctrl+c: it copies and clears, and no
+	// interrupt goes out - the status line says why (issue #149). Without a
+	// selection ctrl+c stays what it always was, a keystroke for the hosts.
+	// esc clears the selection and still does whatever it did before.
+	if a.textSelectionValid() {
+		if msg.String() == "ctrl+c" {
+			return a.copyTextSelection()
+		}
+		if msg.String() == "esc" {
+			a = a.clearTextSelection()
+		}
 	}
 
 	// A focused pane is a terminal: everything below this line is app-level
@@ -984,7 +1006,7 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 	// remains.
 	content := a.paneHeader(host, cell.Width-2, focused)
 	if body := a.paneBody(id, cell.Width-2, cell.Height-3); body != "" {
-		content = content + "\n" + body
+		content = content + "\n" + a.highlightSelection(id, cell.Width-2, body)
 	}
 
 	return a.frame(a.theme.PaneFrame(focused, a.commandFailed(id)), cell, content)

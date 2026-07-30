@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-07-31T15:00:00Z
+timestamp: 2026-07-31T16:00:00Z
 ---
 
 # Keymap and help
@@ -72,6 +72,7 @@ duplicate still fails.
 | `alt+r` | panes (and app level) | reconnect this host |
 | `alt+x` | panes (and app level) | close this host; on a dead host, remove its pane |
 | `alt+y` | panes (and app level) | copy this pane's visible text to the clipboard (OSC 52) |
+| `ctrl+c` | with a live mouse selection | copy the selection (OSC 52) and clear it — no interrupt is sent; without a selection it stays a keystroke for the hosts |
 | `alt+d` | panes (and app level) | copy this pane's whole scrollback to the clipboard (OSC 52) |
 | `shift+pgup` / `shift+pgdn` | panes (and app level) | scroll the focused pane back / forward |
 | `shift+home` / `shift+end` | panes (and app level) | oldest retained output / back to the tail |

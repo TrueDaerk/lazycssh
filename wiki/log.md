@@ -2,6 +2,14 @@
 
 ## 2026-07-31
 
+- Mouse text selection in panes (issue #149): drag with the left button highlights pane text
+  (reverse video, stream-shaped, clamped to the owning pane's body), and `ctrl+c` copies it
+  over OSC 52 - ANSI stripped, trailing whitespace trimmed - clears it and sends no interrupt,
+  with the status line saying so; without a selection `ctrl+c` is unchanged. The selection is
+  screen-cell anchored and clears on click-without-drag, esc, focus/grid/page/chunk changes and
+  scrolling; new output redraws beneath it. `core/tui.md` and `core/keys.md` updated.
+  Version 0.9.16.
+
 - The broadcast bar's `ctrl+a` prefix hands the next key to lazycssh (issue #148):
   `resolveBroadcastEscape` dispatches any key other than `a`/`esc` through the app keymap as a
   one-shot command - `ctrl+a ctrl+a` toggles connected-only, `ctrl+a ?` opens help - instead of

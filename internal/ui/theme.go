@@ -166,6 +166,9 @@ type Theme struct {
 	// Match highlights a scrollback line the active search matches.
 	Match lipgloss.Style
 
+	// Selection highlights mouse-selected pane text (issue #149).
+	Selection lipgloss.Style
+
 	// Failure highlights a pane or row whose host failed, or whose last
 	// command exited non-zero.
 	Failure lipgloss.Style
@@ -255,6 +258,10 @@ func NewTheme(opts Options) Theme {
 	// Bold and underlined as well as coloured, so a match survives a terminal
 	// without colour.
 	t.Match = fg(palette.Warning).Bold(true).Underline(true)
+
+	// Reverse video, like a terminal's own selection: it works over any
+	// remote colours and survives a terminal without colour.
+	t.Selection = lipgloss.NewStyle().Reverse(true)
 
 	t.Failure = fg(palette.Danger).Bold(true)
 	t.ExitOK = fg(palette.Success)
