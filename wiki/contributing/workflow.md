@@ -3,7 +3,7 @@ type: guide
 title: Development workflow
 description: Issue-driven development — how work is created, branched, reviewed, merged and cleaned up.
 tags: [workflow, github, git, process]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-07-31T21:00:00Z
 ---
 
 # Development workflow
@@ -45,7 +45,8 @@ gh issue create --label enhancement --title "..." --body "..."
 When an issue is done, the full closing sequence runs — none of these steps are optional:
 
 1. **Docs** — update the wiki concept document(s) the change touches, refresh their `timestamp`,
-   add a `log.md` entry. Update `README.md` if user-facing behavior or flags changed.
+   add a `log.md` entry. Update `userdocs/` if a user can see the change, and `README.md` if
+   user-facing behavior or flags changed — see [Documentation layers](./documentation.md).
 2. **Version bump** — see [Versioning](./versioning.md). Commit it with the rest of the work.
 3. **PR** — `gh pr create` against `main`. The body references the issue with `Closes #<n>`
    so it auto-closes on merge.

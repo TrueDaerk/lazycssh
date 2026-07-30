@@ -1,0 +1,99 @@
+# MkDocs configuration for the lazycssh user documentation site (issue #195).
+#
+# The site documents *using* lazycssh. The architecture knowledge base in
+# `wiki/` is a separate, contributor-facing bundle (OKF v0.1) and is
+# deliberately not built into this site.
+site_name: lazycssh
+site_description: A terminal UI for parallel SSH — broadcast to many hosts, watch every one of them.
+site_url: https://truedaerk.github.io/lazycssh/
+repo_url: https://github.com/TrueDaerk/lazycssh
+repo_name: TrueDaerk/lazycssh
+edit_uri: edit/main/userdocs/
+copyright: Documentation for lazycssh — a terminal UI for parallel SSH.
+
+docs_dir: userdocs
+
+# Fail the build on broken links and other warnings; CI relies on it.
+strict: true
+
+theme:
+  name: material
+  icon:
+    logo: material/console-network
+    repo: fontawesome/brands/github
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+    - search.highlight
+    - search.suggest
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.superfences
+  - pymdownx.keys
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Overview: getting-started/index.md
+      - Installation: getting-started/installation.md
+      - Your first run: getting-started/first-run.md
+      - Command line: getting-started/command-line.md
+  - Concepts:
+      - Overview: concepts/index.md
+      - The grid and the window: concepts/grid-and-window.md
+      - Broadcast scope: concepts/broadcast.md
+      - Groups, sessions and working sets: concepts/groups-and-sessions.md
+      - Security model: concepts/security.md
+  - Guides:
+      - Overview: guides/index.md
+      - Connecting to hosts: guides/connecting.md
+      - Typing and broadcasting: guides/broadcasting.md
+      - Selecting hosts: guides/selecting.md
+      - Reading output: guides/output.md
+      - Full-screen apps: guides/full-screen-apps.md
+      - Saving groups and sessions: guides/saving.md
+  - Reference:
+      - Overview: reference/index.md
+      - Keybindings: reference/keybindings.md
+      - Command line: reference/cli.md
+      - Session files: reference/session-files.md
+  - Troubleshooting: troubleshooting.md
+  - About & contributing: contributing.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/TrueDaerk/lazycssh
+      name: lazycssh on GitHub

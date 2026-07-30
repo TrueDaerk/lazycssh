@@ -1,5 +1,17 @@
 # Log
 
+## 2026-07-31
+
+- User documentation layer (issue #195): an MkDocs Material site under `userdocs/`
+  (`mkdocs.yml`, `strict: true`, built and deployed by `.github/workflows/docs.yml`), plus
+  `README.md`, `CONTRIBUTING.md` and `SECURITY.md` at the repository root. The site documents
+  *using* lazycssh — getting started, the concepts that must not be confused (window vs working
+  set, scope vs targets), one guide per task, a keybinding/CLI/session-file reference and
+  troubleshooting — and links to this wiki for internals instead of restating it. All three
+  entry points state that the project is built with heavy AI assistance and carries no support
+  promise. New `contributing/documentation.md` records which layer a change belongs in;
+  `contributing/workflow.md` and `contributing/index.md` updated. Version 0.9.37.
+
 ## 2026-07-30
 
 - Broadcast drives full-screen apps when every target is one (issue #191): the alt-screen

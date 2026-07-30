@@ -1,2 +1,4 @@
 /.ike
 /lazycssh
+# MkDocs build output (mkdocs build)
+/site
