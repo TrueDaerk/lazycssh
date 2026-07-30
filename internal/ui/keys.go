@@ -7,6 +7,7 @@ import (
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 )
 
 // Area is the part of the interface a key press is dispatched to. Every binding
@@ -200,7 +201,7 @@ func DefaultKeyMap() KeyMap {
 		// start-of-line the bar used to forward; ctrl+a a sends the literal.
 		// From view mode the plain ctrl+a reaches the global toggle again.
 		BroadcastEscape: key.NewBinding(key.WithKeys("ctrl+a"),
-			key.WithHelp("ctrl+a", "prefix: esc = view mode, a = literal ctrl+a")),
+			key.WithHelp("ctrl+a", "prefix: next key is a lazycssh command; a = literal ctrl+a, esc = view mode")),
 		BroadcastEdit: key.NewBinding(key.WithKeys("enter"),
 			key.WithHelp("enter", "back to edit mode (from view mode)")),
 
@@ -287,6 +288,20 @@ func (k KeyMap) Bindings(area Area) []key.Binding {
 	default:
 		return k.global()
 	}
+}
+
+// matchesAppBinding reports whether a key means something at the app level
+// from anywhere - the global bindings, which is what handleAppKey dispatches
+// without a sidebar panel focused. The broadcast bar's ctrl+a prefix asks
+// before forwarding, so an unbound second key can say so instead of vanishing
+// (issue #148).
+func (k KeyMap) matchesAppBinding(msg tea.KeyPressMsg) bool {
+	for _, b := range k.global() {
+		if key.Matches(msg, b) {
+			return true
+		}
+	}
+	return false
 }
 
 // All returns every binding, in area order.

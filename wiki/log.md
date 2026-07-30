@@ -2,6 +2,13 @@
 
 ## 2026-07-31
 
+- The broadcast bar's `ctrl+a` prefix hands the next key to lazycssh (issue #148):
+  `resolveBroadcastEscape` dispatches any key other than `a`/`esc` through the app keymap as a
+  one-shot command - `ctrl+a ctrl+a` toggles connected-only, `ctrl+a ?` opens help - instead of
+  cancelling with an error. An unbound key is a named no-op; `ctrl+a a` still sends exactly the
+  literal 0x01 and the prefix never chains. Status-bar hint and help text updated.
+  `core/tui.md` and `core/keys.md` updated. Version 0.9.15.
+
 - One navigator for "the next screenful" (issue #147): `ctrl+→`/`ctrl+←` now step pages inside
   the current split chunk, then the chunk, wrapping at both ends; with the split off they are
   plain page navigation with wrap. `alt+n`/`alt+p` are removed from the keymap and the overflow
