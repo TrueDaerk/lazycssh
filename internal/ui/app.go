@@ -1016,7 +1016,9 @@ func (a App) renderMain() string {
 // the session's scrollback following its tail.
 func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 	ids := a.hostIDs()
-	if host < 0 || host >= len(ids) {
+	if host < 0 || host >= len(ids) || ids[host] == "" {
+		// Beyond the list or a hole a closed host left behind (issue #169):
+		// an empty frame holding the position until an explicit retile.
 		return a.frame(a.theme.Pane, cell, "")
 	}
 	id := ids[host]

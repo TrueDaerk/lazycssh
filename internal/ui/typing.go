@@ -137,7 +137,7 @@ func (a App) handlePaneKey(msg tea.KeyPressMsg) (App, tea.Cmd, bool) {
 
 // enterPane puts the keyboard into the focused pane's terminal.
 func (a App) enterPane() App {
-	if len(a.hostIDs()) > 0 {
+	if a.FocusedHost() != "" {
 		a.focus = AreaGrid
 	}
 	return a

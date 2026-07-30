@@ -4,7 +4,7 @@ title: Groups and open sessions
 description: Persisted host groups, the open sessions they become, and how the foreground session scopes the grid and the broadcast.
 resource: internal/ui/opensessions.go
 tags: [groups, sessions, workspace, broadcast]
-timestamp: 2026-07-31T18:00:00Z
+timestamp: 2026-07-31T19:00:00Z
 ---
 
 # Groups and open sessions
@@ -65,8 +65,9 @@ and `x` asks again and resends.
 
 A shell that logs out cleanly (`ctrl+d`, `exit`) closes its own pane: the host reaches
 `closed` and leaves the run on its own, whichever open sessions still list it — the shell is
-just as gone in all of them (issue #146). The departure keeps the grid shape; retiling stays an
-explicit act (`ctrl+r`, split).
+just as gone in all of them (issue #146). The departure leaves a hole in the departed pane's
+slot — the survivors keep their positions (issue #169) — and retiling stays an explicit act
+(`ctrl+r`, session switch, split).
 
 A session ends by itself once every host is **done** (`closed` or `failed`) and at least one of
 them ended in a clean logout — seen live, or remembered (`SawClose`) after that pane already

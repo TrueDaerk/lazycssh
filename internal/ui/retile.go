@@ -34,9 +34,21 @@ func (a App) resetGridSlots() App {
 	return a
 }
 
-// retile is ctrl+r: recompute the squarest shape for the current count and
-// tell the program to resize the PTYs to the new cells.
+// compactHoles removes the foreground session's holes: the departed hosts'
+// slots close up and the survivors move together. It is what every explicit
+// view change does before tiling (issue #169).
+func (a App) compactHoles() App {
+	if a.active < 0 || a.active >= len(a.open) {
+		return a
+	}
+	focused := a.FocusedHost()
+	a.open[a.active].Hosts = nonHoles(a.open[a.active].Hosts)
+	return a.refocus(focused)
+}
+
+// retile is ctrl+r: close up the holes, recompute the squarest shape for the
+// current count and tell the program to resize the PTYs to the new cells.
 func (a App) retile() (App, tea.Cmd) {
-	a = a.resetGridSlots().followFocus()
+	a = a.compactHoles().resetGridSlots().followFocus()
 	return a, gridChanged()
 }

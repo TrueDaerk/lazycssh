@@ -40,7 +40,12 @@ func TestGridKeepsItsShapeWhenAHostLeaves(t *testing.T) {
 			before.Columns, before.Rows, before.PerPage,
 			after.Columns, after.Rows, after.PerPage)
 	}
-	if got := len(a.hostIDs()); got != 5 {
+	// The departed host's slot is still there - as a hole - so the positions
+	// of the survivors cannot move (issue #169).
+	if got := len(a.hostIDs()); got != 6 {
+		t.Fatalf("%d slots visible, want 6 (5 hosts and a hole)", got)
+	}
+	if got := len(nonHoles(a.hostIDs())); got != 5 {
 		t.Fatalf("%d hosts visible, want 5", got)
 	}
 }
@@ -133,5 +138,102 @@ func TestCtrlRIsForwardedWhileTyping(t *testing.T) {
 
 	if got := fleet.sessions["web-01"].Written(); got != "\x12" {
 		t.Fatalf("the host received %q, want the raw ctrl+r byte", got)
+	}
+}
+
+// The acceptance criterion of issue #169: a host leaving the middle of the
+// grid leaves a hole in its slot; every other pane keeps its position.
+func TestClosedHostLeavesAHole(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01", "web-02", "web-03", "web-04")
+
+	a = shrinkFleet(t, a, fleet, "web-01", "web-03", "web-04")
+	want := []string{"web-01", "", "web-03", "web-04"}
+	got := a.hostIDs()
+	if len(got) != len(want) {
+		t.Fatalf("hostIDs() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("hostIDs() = %v, want %v", got, want)
+		}
+	}
+}
+
+// ctrl+r closes the holes: the survivors move together and the grid tiles for
+// what is actually there.
+func TestCtrlRCompactsHoles(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01", "web-02", "web-03", "web-04")
+
+	a = shrinkFleet(t, a, fleet, "web-01", "web-03", "web-04")
+	model, _ := a.Update(keyMsgFor(t, "ctrl+r"))
+	a = model.(App)
+
+	want := []string{"web-01", "web-03", "web-04"}
+	got := a.hostIDs()
+	if len(got) != len(want) {
+		t.Fatalf("hostIDs() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("hostIDs() = %v, want %v", got, want)
+		}
+	}
+}
+
+// A hole is a grid position, not a host: pane movement steps over it and the
+// focus can never rest on it.
+func TestPaneFocusSkipsHoles(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01", "web-02", "web-03")
+	a = pressKey(t, a, "enter") // sidebar -> grid, pane 0
+
+	a = shrinkFleet(t, a, fleet, "web-01", "web-03")
+	if a.FocusedHost() != "web-01" {
+		t.Fatalf("setup: FocusedHost() = %q", a.FocusedHost())
+	}
+
+	a = pressKey(t, a, "alt+right")
+	if a.FocusedHost() != "web-03" {
+		t.Fatalf("FocusedHost() = %q, want web-03 (the hole skipped)", a.FocusedHost())
+	}
+	if a.PaneIndex() != 2 {
+		t.Fatalf("PaneIndex() = %d, want 2", a.PaneIndex())
+	}
+
+	a = pressKey(t, a, "alt+left")
+	if a.FocusedHost() != "web-01" {
+		t.Fatalf("FocusedHost() = %q, want web-01 (the hole skipped going back)", a.FocusedHost())
+	}
+}
+
+// Closing the focused host moves the focus to the nearest real pane, never
+// onto the hole it left.
+func TestFocusLeavesTheDepartedHostsHole(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01", "web-02", "web-03")
+	a = pressKey(t, a, "enter")
+	a = pressKey(t, a, "alt+right") // focus web-02
+	if a.FocusedHost() != "web-02" {
+		t.Fatalf("setup: FocusedHost() = %q", a.FocusedHost())
+	}
+
+	a = shrinkFleet(t, a, fleet, "web-01", "web-03")
+	if got := a.FocusedHost(); got == "" || got == "web-02" {
+		t.Fatalf("FocusedHost() = %q after closing the focused host", got)
+	}
+}
+
+// Foregrounding a session is an explicit view change: its holes close up.
+func TestSessionSwitchCompactsHoles(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01", "web-02", "web-03")
+	a = shrinkFleet(t, a, fleet, "web-01", "web-03")
+	if len(a.hostIDs()) != 3 {
+		t.Fatalf("setup: hostIDs() = %v", a.hostIDs())
+	}
+
+	model, _ := a.Update(SessionOpenedMsg{Name: "prod-web", Hosts: nil})
+	a = model.(App)
+	want := []string{"web-01", "web-03"}
+	got := a.hostIDs()
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("hostIDs() = %v, want %v", got, want)
 	}
 }

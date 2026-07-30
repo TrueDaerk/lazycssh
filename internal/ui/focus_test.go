@@ -150,7 +150,9 @@ func TestFocusSurvivesAChangedHostList(t *testing.T) {
 	if a.FocusedHost() != "web-03" {
 		t.Fatalf("FocusedHost() = %q after the list changed", a.FocusedHost())
 	}
-	if a.PaneIndex() != 1 {
+	// The departed host leaves a hole, not a shift (issue #169): web-03 keeps
+	// its slot, so the focus keeps its position too.
+	if a.PaneIndex() != 2 {
 		t.Fatalf("PaneIndex() = %d", a.PaneIndex())
 	}
 	if a.Focus() != AreaGrid {

@@ -2,6 +2,12 @@
 
 ## 2026-07-31
 
+- A closed host leaves a hole, not a reflow (issue #169): the departed pane's slot renders as
+  an empty frame exactly where it was — held as a `""` marker in the session's host list — and
+  the survivors keep their positions. Focus, clicks and broadcast skip holes (`nonHoles`);
+  `ctrl+r` and every explicit view change (session switch, filter, split) compact them.
+  `core/tui.md` and `core/groups-and-sessions.md` updated. Version 0.9.25.
+
 - Failed panes say why (issue #167): a pane whose connection failed renders the session's
   error — DNS, refused, auth, host key — at the bottom of its body in the failure style,
   wrapped and capped at half the pane height. The error is snapshotted into the model

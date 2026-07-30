@@ -75,7 +75,7 @@ func (a App) toggleConnectedOnly() (App, tea.Cmd) {
 	focused := a.FocusedHost()
 	a.connectedOnly = !a.connectedOnly
 	a.page = 0
-	a = a.resetGridSlots().refocus(focused).followFocus().syncBroadcastLimit()
+	a = a.compactHoles().resetGridSlots().refocus(focused).followFocus().syncBroadcastLimit()
 	return a, gridChanged()
 }
 
@@ -126,7 +126,7 @@ func (a App) applySplit(size int) (App, tea.Cmd) {
 	a.splitChunk = 0
 	a.page = 0
 	a.paneIndex = 0
-	a = a.resetGridSlots().syncBroadcastLimit().syncFocusTarget()
+	a = a.compactHoles().resetGridSlots().syncBroadcastLimit().syncFocusTarget()
 	return a, gridChanged()
 }
 
@@ -190,7 +190,7 @@ func (a App) splitLabel() string {
 	if a.splitSize <= 0 {
 		return ""
 	}
-	visible := len(a.visibleHosts())
+	visible := len(nonHoles(a.visibleHosts()))
 	return fmt.Sprintf("SPLIT %d/%d (%d host%s)",
 		clamp(a.splitChunk, 0, a.splitChunks()-1)+1, a.splitChunks(), visible, plural(visible))
 }
