@@ -2,6 +2,14 @@
 
 ## 2026-07-31
 
+- Unknown host keys are asked about in the TUI (issue #173): a dialling session that meets a
+  key not in known_hosts blocks while the Status panel shows the alias, key type and SHA256
+  fingerprint — `y` accepts and appends to `~/.ssh/known_hosts`, `n`/`esc` rejects and fails
+  that pane, one question at a time per host. A changed key stays a hard refusal. The transport
+  side (`HostKeyPrompter`) existed; this adds the `keyPrompter` channel bridge in
+  internal/program and the question modal in internal/ui. `core/host-keys.md` updated.
+  Version 0.9.26.
+
 - A closed host leaves a hole, not a reflow (issue #169): the departed pane's slot renders as
   an empty frame exactly where it was — held as a `""` marker in the session's host list — and
   the survivors keep their positions. Focus, clicks and broadcast skip holes (`nonHoles`);
