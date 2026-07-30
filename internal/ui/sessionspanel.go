@@ -58,6 +58,66 @@ func (a App) moveSessionCursor(delta int) App {
 	return a
 }
 
+// EndSessionPending is the session the end question is about, empty when
+// none is being asked.
+func (a App) EndSessionPending() string { return a.endSession }
+
+// beginEndSession opens the end question for the session under the cursor.
+// ctrl+c on N machines is not sent without the user answering for it.
+func (a App) beginEndSession() App {
+	a.endSession = a.SelectedOpenSession()
+	return a
+}
+
+// handleSessionEndKey answers the end question: y sends the shutdown
+// keystrokes, anything else withdraws the question.
+func (a App) handleSessionEndKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	name := a.endSession
+	a.endSession = ""
+	switch msg.String() {
+	case "y", "Y":
+		return a.endSessionNow(name)
+	default:
+		return a, nil
+	}
+}
+
+// endSessionNow marks a session as ending and sends every connected terminal
+// ctrl+c then ctrl+d: interrupt the foreground process, then log the shell
+// out. The session leaves the list once its hosts are done - the remote
+// shells exit on their own time, and the fleet events drive the reaping. A
+// shell that swallows the keystrokes keeps its session listed as ending;
+// x asks again and resends.
+//
+// The bytes travel the pane path, not the broadcast router: this targets the
+// session's hosts exactly, whatever the broadcast mode is, and keystrokes are
+// never recorded.
+func (a App) endSessionNow(name string) (App, tea.Cmd) {
+	for i := range a.open {
+		if a.open[i].Name != name {
+			continue
+		}
+		a.open[i].Ending = true
+		if a.cfg.Panes == nil {
+			break
+		}
+		for _, id := range a.open[i].Hosts {
+			w, ok := a.cfg.Panes.Writer(id)
+			if !ok {
+				continue
+			}
+			// Two writes, interrupt first: a foreground process dies on the
+			// ctrl+c, and the ctrl+d reaches the prompt that follows.
+			_, _ = w.Write([]byte{0x03})
+			_, _ = w.Write([]byte{0x04})
+		}
+		break
+	}
+	// Hosts that are already done end the session right here rather than
+	// waiting for a fleet event that will never come.
+	return a.reapSessions()
+}
+
 // foregroundSelectedSession brings the open session under the cursor to the
 // foreground. Nothing is dialled: the panes and the broadcast scope change,
 // the connections do not.
@@ -152,6 +212,12 @@ func (a App) broadcastMode() broadcast.Mode {
 func (a App) sessionsPanel(width, height int) string {
 	var b strings.Builder
 
+	if a.endSession != "" {
+		b.WriteString(a.theme.StatusWarning.Render(
+			fmt.Sprintf("end %q? y/n — ctrl+c and ctrl+d go to its hosts", a.endSession)))
+		b.WriteString("\n")
+	}
+
 	if len(a.open) == 0 {
 		b.WriteString(a.theme.Muted.Render("no open sessions — open a group in [2]"))
 		return a.theme.Base.Width(max(0, width)).Render(b.String())
@@ -188,6 +254,9 @@ func (a App) openSessionLine(s openSession, underCursor, foreground bool) string
 		marker = "▸ "
 	}
 	label := fmt.Sprintf("%s%s (%d/%d up)", marker, s.Name, up, len(s.Hosts))
+	if s.Ending {
+		label += " (ending)"
+	}
 	switch {
 	case underCursor:
 		return a.theme.Cursor.Render(label)

@@ -1,5 +1,14 @@
 # Log
 
+## 2026-07-30
+
+- `x` in the Sessions panel ends a session after `end "name"? y/n`: every connected terminal
+  receives `ctrl+c` then `ctrl+d` via the pane path (never logged), the row shows `(ending)`,
+  and the session leaves the list once its hosts are done. A session whose hosts all reach
+  `closed` — `ctrl+d` broadcast, say — ends by itself, its hosts leaving the run unless another
+  open session holds them; an all-failed session stays listed. `core/groups-and-sessions.md`,
+  `core/tui.md`, `core/keys.md` updated. Version 0.9.1.
+
 ## 2026-07-29
 
 - `ctrl+s` splits the grid into chunks of a chosen size — ten hosts split by five shows the
