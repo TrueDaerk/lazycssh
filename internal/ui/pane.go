@@ -6,6 +6,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/TrueDaerk/lazycssh/internal/scrollback"
 )
 
 // paneCloseButton is the clickable close control at the right end of a pane
@@ -102,18 +104,27 @@ func truncateLeft(s string, width int) string {
 // the buffer's current content, so two renders of the same state cannot
 // disagree and the tests need no terminal.
 func (a App) wrappedLines(id string, width int) []string {
+	lines, _ := a.wrappedLinesTail(id, width)
+	return lines
+}
+
+// wrappedLinesTail is wrappedLines plus where the tail view begins: the first
+// wrapped line after the last clear-screen marker, 0 when the host never
+// cleared. A pane following the tail starts there, so "clear" leaves an
+// apparently empty pane while the history above it stays scrollable.
+func (a App) wrappedLinesTail(id string, width int) ([]string, int) {
 	if width <= 0 || a.cfg.Fleet == nil {
-		return nil
+		return nil, 0
 	}
 	session, ok := a.cfg.Fleet.Session(id)
 	if !ok {
-		return nil
+		return nil, 0
 	}
 
 	buf := session.Scrollback()
 	raw := buf.Lines()
 	if len(raw) == 0 && buf.Dropped() == 0 {
-		return nil
+		return nil, 0
 	}
 
 	lines := make([]string, 0, len(raw)+1)
@@ -123,13 +134,29 @@ func (a App) wrappedLines(id string, width int) []string {
 		lines = append(lines, a.theme.Muted.Render(
 			fmt.Sprintf("~ %d line%s dropped ~", dropped, plural(dropped))))
 	}
+	cleared := -1 // index in lines of the last clear marker
 	for _, line := range raw {
+		if line == scrollback.ClearMark {
+			cleared = len(lines)
+			lines = append(lines, a.theme.Muted.Render("~ screen cleared ~"))
+			continue
+		}
 		lines = append(lines, sanitizeLine(line))
 	}
 
 	// Hardwrap keeps ANSI colours intact across the break and counts wide
-	// characters correctly, which a naive byte slice would not.
-	return strings.Split(ansi.Hardwrap(strings.Join(lines, "\n"), width, true), "\n")
+	// characters correctly, which a naive byte slice would not. Wrapping the
+	// two halves separately keeps the marker's wrapped position known; each
+	// line wraps independently, so the split changes nothing else.
+	if cleared < 0 {
+		return strings.Split(ansi.Hardwrap(strings.Join(lines, "\n"), width, true), "\n"), 0
+	}
+	head := strings.Split(ansi.Hardwrap(strings.Join(lines[:cleared+1], "\n"), width, true), "\n")
+	if cleared+1 == len(lines) {
+		return head, len(head)
+	}
+	tail := strings.Split(ansi.Hardwrap(strings.Join(lines[cleared+1:], "\n"), width, true), "\n")
+	return append(head, tail...), len(head)
 }
 
 // paneBody renders one host's scrollback into an area of width columns and
@@ -139,7 +166,7 @@ func (a App) paneBody(id string, width, height int) string {
 	if height <= 0 {
 		return ""
 	}
-	wrapped := a.wrappedLines(id, width)
+	wrapped, tailStart := a.wrappedLinesTail(id, width)
 	if len(wrapped) == 0 {
 		return ""
 	}
@@ -147,6 +174,12 @@ func (a App) paneBody(id string, width, height int) string {
 	offset := clamp(a.scrollOffset(id), 0, max(0, len(wrapped)-height))
 	end := len(wrapped) - offset
 	start := max(0, end-height)
+	if offset == 0 {
+		// Following the tail after a clear shows only what came after it -
+		// the cleared pane a terminal would show - while scrolling up still
+		// reaches the history and the marker where the clear happened.
+		start = max(start, tailStart)
+	}
 	window := wrapped[start:end]
 
 	if a.searchTerm == "" {
