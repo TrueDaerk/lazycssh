@@ -281,6 +281,26 @@ func NewApp(cfg Config) App {
 	return a.loadGroups()
 }
 
+// resetToStart returns the model to the neutral argumentless start after the
+// run emptied (issue #168): no pane focus, no kept grid shape, no filters. The
+// sidebar gets the keyboard, because that is where the next action - open a
+// group, connect a host - begins. Saved groups and the command log survive; a
+// run's *view* state does not outlive its hosts.
+func (a App) resetToStart() App {
+	a.hadHosts = false
+	a.fullScreen = false
+	a.paneIndex = 0
+	a.page = 0
+	a.splitSize = 0
+	a.splitChunk = 0
+	a.connectedOnly = false
+	a.scroll = make(map[string]int)
+	if a.focus == AreaGrid {
+		a.focus = AreaSidebar
+	}
+	return a.resetGridSlots().syncBroadcastLimit()
+}
+
 // Init asks the terminal for its background colour so the palette can match it.
 func (a App) Init() tea.Cmd { return tea.RequestBackgroundColor }
 
@@ -363,10 +383,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if next.hadHosts && len(next.fleetIDs()) == 0 {
 			// The run had hosts and now has none: every session was logged
-			// out or removed, so the program's work is done (issue #146). A
-			// run that *started* empty is different - it is waiting on the
-			// sessions picker and hadHosts is still false.
-			return next, tea.Quit
+			// out or removed. The TUI stays open and falls back to the
+			// neutral argumentless start (issue #168) - quitting is what q
+			// and ctrl+q are for, and the user may well open the next group
+			// from here.
+			return next.resetToStart(), nil
 		}
 		return next, nil
 

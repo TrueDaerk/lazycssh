@@ -4,7 +4,7 @@ title: Groups and open sessions
 description: Persisted host groups, the open sessions they become, and how the foreground session scopes the grid and the broadcast.
 resource: internal/ui/opensessions.go
 tags: [groups, sessions, workspace, broadcast]
-timestamp: 2026-07-31T12:00:00Z
+timestamp: 2026-07-31T18:00:00Z
 ---
 
 # Groups and open sessions
@@ -78,8 +78,9 @@ but a session whose hosts merely all failed, never any logout and never asked to
 that is an outage to look at and reconnect, not a completed shutdown.
 
 When the run held hosts and loses the last one — the final session logged out, the last pane
-removed — the program quits: its work is done. A run that *started* empty is different; it is
-waiting on the sessions picker and stays.
+removed — the TUI stays open and falls back to the neutral argumentless start (issue #168): no
+pane focus, no kept grid shape, no filters, the sidebar has the keyboard. It is the hub the
+next group is opened from; quitting stays what `q` and `ctrl+q` are for.
 
 ## What this deliberately is not
 

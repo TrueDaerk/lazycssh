@@ -2,6 +2,11 @@
 
 ## 2026-07-31
 
+- The emptied run stays open (issue #168): losing the last host no longer quits the program —
+  the TUI falls back to the neutral argumentless start (sidebar focus, no kept grid shape, no
+  filters) and waits for the next group or connect. Quitting stays what `q`/`ctrl+q` are for.
+  `core/groups-and-sessions.md` updated. Version 0.9.23.
+
 - Broadcast bar declutters (issue #164): the bar no longer mirrors typed text — the panes carry
   each host's own echo, and the line is still assembled internally for the command log — and it
   no longer stretches under the sidebar: the panel column runs down to the status bar and the
