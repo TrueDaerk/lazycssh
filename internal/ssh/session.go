@@ -219,6 +219,9 @@ func New(id string, cfg Config, events chan<- Event) Session {
 	if buf == nil {
 		buf = scrollback.New(cfg.ScrollbackLines)
 	}
+	// The scrollback's line discipline maps cursor movement through the remote
+	// terminal's width; keep it in lockstep with the PTY, like the emulator.
+	buf.SetWidth(cfg.Width)
 
 	s := &sshSession{
 		id:     id,
@@ -470,6 +473,7 @@ func (s *sshSession) Resize(width, height int) error {
 	s.mu.Unlock()
 
 	s.emu.Resize(width, height)
+	s.buf.SetWidth(width)
 
 	if session == nil {
 		// Not connected yet: the size is remembered and requested at start.

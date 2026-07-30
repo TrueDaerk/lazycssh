@@ -212,6 +212,7 @@ func (f *Fake) Resize(width, height int) error {
 	f.mu.Unlock()
 
 	f.emu.Resize(width, height)
+	f.buf.SetWidth(width)
 	return nil
 }
 

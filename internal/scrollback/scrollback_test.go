@@ -103,9 +103,10 @@ func TestWriteSplitsLines(t *testing.T) {
 	}
 }
 
-// The minimal line discipline: exactly enough for a remote readline to redraw
-// its line — backspace and erase-line — with the cursor assumed at the end.
-// Anything else passes through for the render-time sanitizer.
+// The line discipline: a cursor on the pending logical line, with overwrite
+// semantics — exactly what a remote readline needs to redraw a recalled
+// command, single- or multi-row (issue #178). What it does not interpret
+// passes through for the render-time sanitizer.
 func TestLineDiscipline(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -113,9 +114,9 @@ func TestLineDiscipline(t *testing.T) {
 		want   []string
 	}{
 		{
-			name:   "backspace removes the last rune",
+			name:   "backspace moves the cursor left and the next rune overwrites",
 			writes: []string{"abc\b\bX\n"},
-			want:   []string{"aX"},
+			want:   []string{"aXc"},
 		},
 		{
 			name:   "backspace on an empty line does nothing",
@@ -128,12 +129,12 @@ func TestLineDiscipline(t *testing.T) {
 			want:   []string{"a", "b"},
 		},
 		{
-			name:   "backspace removes a multi-byte rune whole",
+			name:   "overwriting a multi-byte rune replaces it whole",
 			writes: []string{"ä\bx\n"},
 			want:   []string{"x"},
 		},
 		{
-			name:   "erase right of the cursor is a silent no-op",
+			name:   "erase right of the cursor at the end is a no-op",
 			writes: []string{"hi\x1b[K!\n"},
 			want:   []string{"hi!"},
 		},
@@ -143,14 +144,19 @@ func TestLineDiscipline(t *testing.T) {
 			want:   []string{"hi!"},
 		},
 		{
-			name:   "erase the whole line discards it",
-			writes: []string{"secret\x1b[2Knew\n"},
-			want:   []string{"new"},
+			name:   "erase right truncates at the cursor",
+			writes: []string{"$ ls -la", "\b\b\b\b\b\b\x1b[K\n"},
+			want:   []string{"$ "},
 		},
 		{
-			name:   "erase left of the cursor discards the line",
+			name:   "erase the whole line blanks it but keeps the cursor column",
+			writes: []string{"secret\x1b[2Knew\n"},
+			want:   []string{"      new"},
+		},
+		{
+			name:   "erase left of the cursor blanks what was there",
 			writes: []string{"old\x1b[1Knew\n"},
-			want:   []string{"new"},
+			want:   []string{"   new"},
 		},
 		{
 			name:   "a readline history recall replaces the line",
@@ -159,12 +165,12 @@ func TestLineDiscipline(t *testing.T) {
 		},
 		{
 			name:   "an escape sequence split across writes",
-			writes: []string{"gone\x1b", "[2Kkept\n"},
+			writes: []string{"gone\x1b", "[2K\rkept\n"},
 			want:   []string{"kept"},
 		},
 		{
 			name:   "an escape sequence split inside its parameters",
-			writes: []string{"gone\x1b[2", "Kkept\n"},
+			writes: []string{"gone\x1b[2", "K\rkept\n"},
 			want:   []string{"kept"},
 		},
 		{
@@ -173,14 +179,44 @@ func TestLineDiscipline(t *testing.T) {
 			want:   []string{"\x1b[31mred"},
 		},
 		{
-			name:   "other csi sequences pass through verbatim",
+			name:   "cursor movement without a known width is dropped, not text",
 			writes: []string{"a\x1b[Ab\n"},
-			want:   []string{"a\x1b[Ab"},
+			want:   []string{"ab"},
+		},
+		{
+			name:   "cursor forward pads and cursor back overwrites",
+			writes: []string{"ab\x1b[3Cx\x1b[4Dy\n"},
+			want:   []string{"aby  x"},
+		},
+		{
+			name:   "cursor to column overwrites in place",
+			writes: []string{"hello\x1b[1GJ\n"},
+			want:   []string{"Jello"},
+		},
+		{
+			name:   "a multi-parameter movement sequence is not half-understood",
+			writes: []string{"a\x1b[1;2Cb\n"},
+			want:   []string{"a\x1b[1;2Cb"},
 		},
 		{
 			name:   "non-csi escapes pass through verbatim",
 			writes: []string{"\x1bMx\n"},
 			want:   []string{"\x1bMx"},
+		},
+		{
+			name:   "an osc sequence is consumed, its payload never becomes text",
+			writes: []string{"\x1b]133;D;0\aok\n"},
+			want:   []string{"ok"},
+		},
+		{
+			name:   "an osc sequence terminated by ST is consumed too",
+			writes: []string{"\x1b]0;title\x1b\\ok\n"},
+			want:   []string{"ok"},
+		},
+		{
+			name:   "an osc sequence split across writes stays invisible",
+			writes: []string{"\x1b]133;D", ";0\aok\n"},
+			want:   []string{"ok"},
 		},
 		{
 			name:   "a line break aborts an unfinished sequence",
@@ -190,12 +226,22 @@ func TestLineDiscipline(t *testing.T) {
 		{
 			name:   "a carriage return aborts an unfinished sequence and redraws",
 			writes: []string{"a\x1b[\rb\n"},
-			want:   []string{"b"},
+			want:   []string{"b\x1b["},
 		},
 		{
 			name:   "erase interacts with the bare carriage return reset",
 			writes: []string{"10%\r\x1b[K100%\n"},
 			want:   []string{"100%"},
+		},
+		{
+			name:   "a progress bar leaves only its last frame",
+			writes: []string{"10%\r20%\r100%\n"},
+			want:   []string{"100%"},
+		},
+		{
+			name:   "a shorter redraw leaves the stale tail a terminal would show",
+			writes: []string{"100%\r5%\n"},
+			want:   []string{"5%0%"},
 		},
 	}
 
@@ -214,6 +260,65 @@ func TestLineDiscipline(t *testing.T) {
 			assertLines(t, b.Lines(), tt.want)
 		})
 	}
+}
+
+// The issue-178 regression: recalling a history entry that wraps over several
+// screen rows, then stepping past it, must not leave the redraw's intermediate
+// states in the scrollback. The byte streams are what bash 3.2 actually emits
+// on a 51-column PTY, captured for the issue's repro (arrow-up to the recalled
+// multi-row entry, arrow-down to a shorter one, enter).
+func TestMultiRowReadlineRedraw(t *testing.T) {
+	const width = 51
+	const hook = ` PROMPT_COMMAND='printf "\033]133;D;%d\007"`             // wraps after this
+	const hookRest = `" "$?"'; precmd() { printf "\033]133;D;%d\007" "$?"` // wraps again
+	const hookEnd = `; }`
+
+	b := New(100)
+	b.SetWidth(width)
+
+	// The prompt, a recalled `ls -lh`, then arrow-up to the multi-row entry:
+	// readline backspaces over the old text and echoes the long entry, with a
+	// bare "\r" at each row boundary after the forced wrap.
+	b.Write([]byte("ssh06:~$ ls -lh"))
+	b.Write([]byte("\b\b\b\b\b\b" + hook + "\r" + hookRest + "\r" + hookEnd))
+
+	// Arrow-down: readline repositions to the first row, types the shorter
+	// entry over it, erases the rest of that row, walks down clearing the two
+	// rows below, and parks the cursor back after the new text.
+	b.Write([]byte("\x1b[A\x1b[A\x1b[C\x1b[C\x1b[C\x1b[C\x1b[C\x1b[Cls -lh\x1b[K"))
+	b.Write([]byte("\r\n\r\x1b[K\r\n\r\x1b[K"))
+	b.Write([]byte("\x1b[A\x1b[A" + strings.Repeat("\x1b[C", 15)))
+
+	// The pending line is the redrawn command and nothing else.
+	assertLines(t, b.Lines(), []string{"ssh06:~$ ls -lh"})
+
+	// Enter: the command commits once, and its output follows.
+	b.Write([]byte("\r\ntotal 8\r\n"))
+	assertLines(t, b.Lines(), []string{"ssh06:~$ ls -lh", "total 8"})
+}
+
+// The same dance without the bare "\r" at the wrap boundaries — the variant
+// where the terminal's auto-wrap does the wrapping. The whole recalled entry
+// is then one logical pending line spanning three screen rows.
+func TestMultiRowRedrawWithAutoWrap(t *testing.T) {
+	const width = 20
+	b := New(100)
+	b.SetWidth(width)
+
+	// A 50-cell recalled entry on a 20-column terminal: rows are
+	// "$ 123456789012345678", "90123456789012345678", "9012345678".
+	b.Write([]byte("$ " + "123456789012345678901234567890123456789012345678"))
+
+	// Arrow-down to "ls": cursor to row 0 column 3, overwrite, erase right,
+	// then clear the two rows below and come back.
+	b.Write([]byte("\x1b[A\x1b[A\x1b[3Gls\x1b[K"))
+	b.Write([]byte("\r\n\r\x1b[K\r\n\r\x1b[K"))
+	b.Write([]byte("\x1b[A\x1b[A\x1b[4C"))
+
+	assertLines(t, b.Lines(), []string{"$ ls"})
+
+	b.Write([]byte("\r\nfile\r\n"))
+	assertLines(t, b.Lines(), []string{"$ ls", "file"})
 }
 
 // An escape sequence longer than the interpreter's bound is handed to the line
