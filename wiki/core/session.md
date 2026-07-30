@@ -4,13 +4,16 @@ title: SSH session lifecycle
 description: One host, end to end — dial, handshake, PTY, streams, resize and close — and the event contract the UI depends on.
 resource: internal/ssh/session.go
 tags: [ssh, transport, concurrency, lifecycle]
-timestamp: 2026-07-29T00:00:00Z
+timestamp: 2026-07-30T00:00:00Z
 ---
 
 # SSH session lifecycle
 
 A `Session` is one host: dial, authenticate, request a PTY, run a login shell, pump output into
 the [scrollback buffer](./scrollback.md), accept keystrokes, resize, close.
+
+Each session also owns a [terminal emulator](./terminal.md), fed by the same output pump and
+resized in lockstep with the PTY, exposed via `Terminal()`.
 
 Nothing in the transport touches the bubbletea model. Sessions report over an event channel; the
 UI drains it with a command and converts events into messages, so model mutation stays inside

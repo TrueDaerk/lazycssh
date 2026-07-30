@@ -2,6 +2,14 @@
 
 ## 2026-07-31
 
+- Per-session terminal emulator (issue #155, first slice of epic #44): new `internal/term`
+  wraps the charmbracelet `x/vt` emulator; every session — real and fake — owns one, fed by
+  the same output pump as the scrollback and resized in lockstep with the PTY, exposed via
+  `Terminal()`. The wrapper drains the emulator's blocking reply pipe unconditionally (a
+  `vim` device-attributes query would otherwise freeze the reader goroutine) and hands
+  replies to an optional handler for #157. No rendering change yet. New concept document
+  `core/terminal.md`; `core/session.md` updated. Version 0.9.17.
+
 - Mouse text selection in panes (issue #149): drag with the left button highlights pane text
   (reverse video, stream-shaped, clamped to the owning pane's body), and `ctrl+c` copies it
   over OSC 52 - ANSI stripped, trailing whitespace trimmed - clears it and sends no interrupt,
