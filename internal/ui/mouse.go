@@ -12,6 +12,9 @@ const wheelStep = 3
 // move their panel's cursor, and the broadcast bar takes the keyboard like a
 // pane does.
 func (a App) handleClick(x, y int) (tea.Model, tea.Cmd) {
+	// Any press abandons a previous selection: a click without a drag is one
+	// of its clearing gestures (issue #149).
+	a = a.clearTextSelection()
 	switch a.layout.regionAt(x, y) {
 	case RegionMain:
 		index, ok := a.paneUnder(x, y)
@@ -26,6 +29,8 @@ func (a App) handleClick(x, y int) (tea.Model, tea.Cmd) {
 		}
 		a.paneIndex = index
 		a = a.enterPane().followFocus()
+		// The press also arms a text selection; only motion makes it one.
+		a = a.beginTextSelection(index, x, y)
 		return a, nil
 
 	case RegionSidebar:

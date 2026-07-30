@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-31T15:00:00Z
+timestamp: 2026-07-31T16:00:00Z
 ---
 
 # TUI shell
@@ -257,6 +257,24 @@ is plain: ANSI styling is stripped and clear markers are excluded, because a pas
 the ID or the error message, not the colours around it. Both chords appear in the `?` overlay,
 generated from the keymap as ever.
 
+**Mouse selection** (issue #149) is the finer grain: press and drag the left button over a
+pane's body and the covered text highlights in reverse video, stream-shaped like a terminal's
+own selection — first row from the anchor, middle rows whole, last row to the head. The pane
+under the press owns the drag; leaving it clamps to that pane's body, so a neighbour pane or a
+border can never be selected. `ctrl+c` with a live selection copies it (OSC 52, ANSI stripped,
+trailing whitespace trimmed), clears it, and sends **nothing** — the status line says
+`copied N lines from <host> … no interrupt sent`, so a user who expected an interrupt sees why
+none went out. Without a selection `ctrl+c` stays what it always was: the interrupt keystroke
+for the host or the broadcast targets.
+
+The selection is anchored to the pane's **screen cells** and remembers the view it was made
+over — pane, body rect, page, split chunk, zoom, scroll offset. Anything that changes that view
+clears it: a click without a drag, `esc`, leaving the grid, a page or chunk turn, a retile, a
+zoom, the pane closing, **scrolling** (the decided answer for scroll-under-selection). New
+output under a tail-following pane redraws beneath the highlight without moving it; the
+highlight is applied at render time from the model alone, so session reader goroutines are
+never involved and the layout can never shift by a cell.
+
 ### Search
 
 `alt+/` opens a search prompt that owns the keyboard while it is open. `enter` commits the term
@@ -444,8 +462,9 @@ hittest.go`), so a click resolves without a terminal and the tests stay table-dr
 - **Wheel** over a pane scrolls **that** pane's scrollback a few lines per notch — the pane
   under the pointer, not the focused one, and without stealing focus. Over a sidebar list it
   moves the cursor.
+- **Drag** over a pane's body selects text for `ctrl+c` — see Copy above.
 
-Mouse reporting is cell-motion: clicks, releases and the wheel, without bare-movement chatter.
+Mouse reporting is cell-motion: clicks, drags, releases and the wheel, without bare-movement chatter.
 Full screen is special-cased — the whole main area is the focused pane.
 
 ## The command line
