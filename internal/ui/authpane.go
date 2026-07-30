@@ -2,8 +2,6 @@ package ui
 
 import (
 	"strings"
-
-	"github.com/charmbracelet/x/ansi"
 )
 
 // In-pane auth prompts (issue #177): an auth question - unknown host key,
@@ -68,23 +66,26 @@ func (a App) questionPaneVisible() bool {
 	return false
 }
 
-// paneQuestionLines renders the open auth question for the pane it belongs to,
-// wrapped to the pane's width; nil for every other pane.
-func (a App) paneQuestionLines(id string, width int) []string {
-	if width <= 0 || id == "" || a.questionPaneID != id {
-		return nil
+// inlineAnswerEcho is what the pane appends to its last scrollback line while
+// its auth question is open: the answer being typed - the yes/no of the host
+// key question, an echoing keyboard-interactive answer - and a cursor block,
+// so the prompt visibly awaits input. A masked answer echoes nothing but the
+// cursor, which is all a terminal shows of a typed password (issue #180).
+func (a App) inlineAnswerEcho(id string) (string, bool) {
+	if id == "" || a.questionPaneID != id {
+		return "", false
 	}
-	var raw []string
 	switch {
 	case a.keyQuestion != nil:
-		raw = a.hostKeyQuestionLines()
+		return string(a.keyAnswer) + a.theme.Cursor.Render(" "), true
 	case a.secretQuestion != nil:
-		raw = a.secretPromptLines()
+		echo := ""
+		if a.secretQuestion.Echo {
+			echo = a.secretInput.Value()
+		}
+		return echo + a.theme.Cursor.Render(" "), true
 	}
-	if len(raw) == 0 {
-		return nil
-	}
-	return strings.Split(ansi.Hardwrap(strings.Join(raw, "\n"), width, true), "\n")
+	return "", false
 }
 
 // authStatusLabel is the status bar's AUTH segment while a question is open,

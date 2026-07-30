@@ -31,7 +31,7 @@ func TestSecretPrompterRoundTrip(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("no question arrived")
 	}
-	if q.prompt != "password for test@db1" || q.echo {
+	if q.prompt != "test@db1's password: " || q.echo {
 		t.Fatalf("question = %+v", q)
 	}
 
@@ -57,7 +57,7 @@ func TestSecretPrompterCancel(t *testing.T) {
 	}()
 
 	q := <-p.questions
-	if q.prompt != "passphrase for /home/u/.ssh/id_ed25519" {
+	if q.prompt != "Enter passphrase for key '/home/u/.ssh/id_ed25519': " {
 		t.Fatalf("prompt = %q", q.prompt)
 	}
 	q.answer <- secretAnswer{}

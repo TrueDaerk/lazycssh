@@ -89,11 +89,16 @@ func TestSecretPromptHonoursEcho(t *testing.T) {
 	}
 }
 
-// A prompt naming a host renders in that host's pane, which gets the focus;
-// the Status panel does not repeat it (issue #177).
-func TestSecretPromptRendersInThePane(t *testing.T) {
-	a := resize(t, testApp(), 120, 40)
-	model, _ := a.Update(SecretQuestionMsg{Host: "web-02", Prompt: "password for test@web-02", Echo: false})
+// A prompt naming a host focuses that host's pane, where the prompt sits in
+// the scrollback (written by the program layer, issue #180): a masked answer
+// echoes nothing there - all a terminal shows of a typed password - and the
+// Status panel does not repeat the question.
+func TestSecretPromptMasksInThePane(t *testing.T) {
+	fleet := newFakeFleet("web-01", "web-02")
+	a := resize(t, NewApp(Config{Hosts: fleet.IDs(), Fleet: fleet, Theme: Options{Dark: true}}), 200, 60)
+	fleet.sessions["web-02"].Emit("test@web-02's password: ")
+
+	model, _ := a.Update(SecretQuestionMsg{Host: "web-02", Prompt: "test@web-02's password: ", Echo: false})
 	a = model.(App)
 
 	if a.Focus() != AreaGrid {
@@ -105,19 +110,36 @@ func TestSecretPromptRendersInThePane(t *testing.T) {
 	for _, k := range []string{"h", "u", "n", "t"} {
 		a = pressKey(t, a, k)
 	}
-	lines := strings.Join(a.paneQuestionLines("web-02", 60), "\n")
-	if !strings.Contains(plain(lines), "password for test@web-02") {
-		t.Fatalf("the pane is missing the prompt label:\n%s", lines)
+	body := plain(a.paneBody("web-02", 80, 10))
+	if !strings.Contains(body, "password: ") {
+		t.Fatalf("the pane is missing the prompt:\n%s", body)
 	}
-	if strings.Contains(plain(lines), "hunt") {
-		t.Fatalf("the typed secret is rendered in the pane:\n%s", lines)
+	if strings.Contains(body, "hunt") {
+		t.Fatalf("the typed secret is rendered in the pane:\n%s", body)
 	}
 	squeezed := strings.NewReplacer(" ", "", "\n", "").Replace(plain(a.statusPanel(40)))
-	if strings.Contains(squeezed, "passwordfortest@web-02") {
+	if strings.Contains(squeezed, "password") {
 		t.Fatalf("the Status panel repeats the in-pane prompt:\n%s", plain(a.statusPanel(40)))
 	}
 	if bar := plain(a.renderStatusBar()); !strings.Contains(bar, "AUTH web-02") {
 		t.Fatalf("the status bar is missing AUTH web-02:\n%s", bar)
+	}
+}
+
+// An echoing keyboard-interactive answer shows inline in the pane as it is
+// typed, the way a terminal echoes it.
+func TestSecretPromptEchoesInThePane(t *testing.T) {
+	fleet := newFakeFleet("web-01")
+	a := resize(t, NewApp(Config{Hosts: fleet.IDs(), Fleet: fleet, Theme: Options{Dark: true}}), 200, 60)
+	fleet.sessions["web-01"].Emit("Verification code: ")
+
+	model, _ := a.Update(SecretQuestionMsg{Host: "web-01", Prompt: "Verification code: ", Echo: true})
+	a = model.(App)
+	for _, k := range []string{"o", "t", "p"} {
+		a = pressKey(t, a, k)
+	}
+	if body := plain(a.paneBody("web-01", 80, 10)); !strings.Contains(body, "Verification code: otp") {
+		t.Fatalf("the echoing answer does not echo inline:\n%s", body)
 	}
 }
 

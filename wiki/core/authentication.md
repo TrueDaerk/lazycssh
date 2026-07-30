@@ -4,7 +4,7 @@ title: Authentication
 description: The order authentication methods are tried in, how secrets are cached across hosts, and the rules that keep them out of logs.
 resource: internal/ssh/auth.go
 tags: [ssh, auth, security, credentials]
-timestamp: 2026-07-30T12:00:00Z
+timestamp: 2026-07-30T15:00:00Z
 ---
 
 # Authentication
@@ -54,15 +54,18 @@ When no prompter is available — a non-interactive run — a method that needs 
 
 Live since issue #175, over the same channel bridge as the [host key
 question](./host-keys.md): the dialling session blocks in `secretPrompter`
-(`internal/program/secretprompt.go`), the question crosses into the event loop, and the UI
-shows it **in the blocked host's own pane** (issue #177) — the pane is focused, the status bar
-says `AUTH <host>`, and the Status panel is the fallback for a host without a visible pane. The
-prompt shows the label — `password for test@db1`, `passphrase for ~/.ssh/id_ed25519`, or the
-server's own keyboard-interactive text — over a **masked** input (`textinput.EchoPassword`;
-an echoing keyboard-interactive question shows what is typed, as the server asked). `enter`
-submits, `esc` cancels and fails that attempt with `cancelled at the prompt`, `ctrl+q` still
-quits. One question at a time; the caches above keep it to one password per user and one
-passphrase per key across the whole fleet.
+(`internal/program/secretprompt.go`), the question crosses into the event loop, and the pane
+behaves like a plain terminal running `ssh` (issues #177, #180). The prompt is written into the
+blocked host's scrollback in ssh's own wording — `test@db1's password: `, `Enter passphrase for
+key '~/.ssh/id_ed25519': `, or the server's keyboard-interactive text — the pane is focused,
+and the answer is typed inline after it: a masked answer echoes nothing, an echoing
+keyboard-interactive answer shows as typed, and the answer line is finished in the history
+(never the secret itself — a masked answer writes only the newline). The status bar says
+`AUTH <host>` while the prompt is open; the Status panel, with its masked `textinput`, is the
+fallback for a host without a visible pane. `enter` submits, `esc` cancels and fails that
+attempt with `cancelled at the prompt`, `ctrl+q` still quits. One question at a time; the
+caches above keep it to one password per user and one passphrase per key across the whole
+fleet.
 
 ## keyboard-interactive
 
