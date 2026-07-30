@@ -46,7 +46,7 @@ func (a App) handleBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	a = a.echoBroadcastKey(msg)
+	a = a.trackBroadcastLine(msg)
 
 	if a.cfg.Sender == nil {
 		a.lastDelivery = "no transport: nothing was sent"
@@ -114,7 +114,7 @@ func (a App) resolveBroadcastEscape(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 // sendBroadcastRaw fans raw bytes out to the targets — the same path a typed
-// keystroke takes, without touching the echo line.
+// keystroke takes, without touching the assembled line.
 func (a App) sendBroadcastRaw(raw []byte) (tea.Model, tea.Cmd) {
 	if a.cfg.Sender == nil {
 		a.lastDelivery = "no transport: nothing was sent"
@@ -130,11 +130,11 @@ func (a App) sendBroadcastRaw(raw []byte) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
-// echoBroadcastKey keeps the bar's local echo line in step with what was
-// typed: printable text appends, backspace trims, enter clears (after the
-// caller records the line). Control keys change nothing here — their effect is
-// on the hosts, and the panes show it.
-func (a App) echoBroadcastKey(msg tea.KeyPressMsg) App {
+// trackBroadcastLine assembles the typed line for the command log: printable
+// text appends, backspace trims, enter clears (after the caller records the
+// line). The line is never displayed — the panes show each host's own echo —
+// it only exists so the audit trail can record whole commands.
+func (a App) trackBroadcastLine(msg tea.KeyPressMsg) App {
 	switch {
 	case msg.Code == tea.KeyBackspace && msg.Mod == 0:
 		if len(a.broadcastLine) > 0 {
@@ -146,8 +146,8 @@ func (a App) echoBroadcastKey(msg tea.KeyPressMsg) App {
 	return a
 }
 
-// BroadcastLine is the bar's local echo of what was typed since the last
-// enter.
+// BroadcastLine is the line assembled from what was typed since the last
+// enter. It is recorded on enter, not rendered.
 func (a App) BroadcastLine() string { return string(a.broadcastLine) }
 
 // renderBroadcastBar draws the always-visible broadcast input. The target
@@ -168,16 +168,18 @@ func (a App) renderBroadcastBar() string {
 		title += " ⚠"
 	}
 
-	line := string(a.broadcastLine)
+	// Typed text is never mirrored here — the panes show each host's own
+	// echo. The bar only says what state it is in.
+	var line string
 	switch {
 	case focused && a.broadcastView:
 		// No cursor: nothing typed here is going anywhere.
 		line = a.theme.Muted.Render("view mode — keys are commands · enter returns to typing")
 	case focused && a.broadcastPending:
-		line += "▏" + a.theme.Muted.Render(" ctrl+a…")
+		line = "▏" + a.theme.Muted.Render(" ctrl+a…")
 	case focused:
-		line += "▏"
-	case line == "":
+		line = "▏" + a.theme.Muted.Render(" keys go to the targets live — the panes echo")
+	default:
 		line = a.theme.Muted.Render("press 5 and type — every key goes to the targets live")
 	}
 

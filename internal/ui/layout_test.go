@@ -51,6 +51,10 @@ func TestComputeLayout(t *testing.T) {
 				t.Fatalf("rows do not add up: %d + %d + %d != %d",
 					l.Main.Height, l.Broadcast.Height, l.StatusBar.Height, tc.height)
 			}
+			if l.SidebarVisible() && l.Sidebar.Height != l.Main.Height+l.Broadcast.Height {
+				t.Fatalf("Sidebar.Height = %d, want the full body height %d",
+					l.Sidebar.Height, l.Main.Height+l.Broadcast.Height)
+			}
 			if tc.height >= MinHeight+BroadcastBarHeight && l.Broadcast.Height != BroadcastBarHeight {
 				t.Fatalf("Broadcast.Height = %d at %dx%d", l.Broadcast.Height, tc.width, tc.height)
 			}
@@ -97,6 +101,14 @@ func TestMainStartsWhereTheSidebarEnds(t *testing.T) {
 	}
 	if l.Broadcast.Y != l.Main.Height {
 		t.Fatalf("Broadcast.Y = %d, the body is %d tall", l.Broadcast.Y, l.Main.Height)
+	}
+	// The bar sits beside the sidebar, not under it: it starts where the grid
+	// starts and covers the grid's columns only.
+	if l.Broadcast.X != l.Sidebar.Width {
+		t.Fatalf("Broadcast.X = %d, sidebar is %d wide", l.Broadcast.X, l.Sidebar.Width)
+	}
+	if l.Broadcast.Width != l.Main.Width {
+		t.Fatalf("Broadcast.Width = %d, the grid is %d wide", l.Broadcast.Width, l.Main.Width)
 	}
 	if l.StatusBar.Y != l.Main.Height+l.Broadcast.Height {
 		t.Fatalf("StatusBar.Y = %d below a %d-tall body and %d-tall bar",

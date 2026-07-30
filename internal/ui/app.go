@@ -855,7 +855,12 @@ func (a App) View() tea.View {
 		return tea.NewView("")
 	}
 
+	// The broadcast bar belongs to the grid's column: it stacks under the
+	// panes, beside the sidebar, which keeps its full height.
 	body := a.renderMain()
+	if a.layout.BroadcastVisible() {
+		body = lipgloss.JoinVertical(lipgloss.Left, body, a.renderBroadcastBar())
+	}
 	if a.layout.SidebarVisible() {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, a.renderSidebar(), body)
 	}
@@ -871,12 +876,7 @@ func (a App) View() tea.View {
 		bottom = a.renderSplitLine()
 	}
 
-	rows := []string{body}
-	if a.layout.BroadcastVisible() {
-		rows = append(rows, a.renderBroadcastBar())
-	}
-	rows = append(rows, bottom)
-	view := lipgloss.JoinVertical(lipgloss.Left, rows...)
+	view := lipgloss.JoinVertical(lipgloss.Left, body, bottom)
 	if a.showHelp {
 		// The help is a popup over the frame, not a replacement for it: the
 		// fleet stays visible underneath, the way lazygit's menus behave.
