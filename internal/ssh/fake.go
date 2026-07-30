@@ -10,6 +10,7 @@ import (
 
 	"github.com/TrueDaerk/lazycssh/internal/hosts"
 	"github.com/TrueDaerk/lazycssh/internal/scrollback"
+	"github.com/TrueDaerk/lazycssh/internal/term"
 )
 
 // Fake is a [Session] that never opens a socket.
@@ -52,6 +53,7 @@ type Fake struct {
 	host   hosts.Host
 	events chan<- Event
 	buf    *scrollback.Buffer
+	emu    *term.Emulator
 
 	mu      sync.Mutex
 	state   State
@@ -75,6 +77,7 @@ func NewFake(id string, host hosts.Host, events chan<- Event) *Fake {
 		host:   host,
 		events: events,
 		buf:    scrollback.New(scrollback.DefaultCapacity),
+		emu:    term.New(DefaultWidth, DefaultHeight),
 		width:  DefaultWidth,
 		height: DefaultHeight,
 	}
@@ -99,6 +102,8 @@ func (f *Fake) Scrollback() *scrollback.Buffer {
 	defer f.mu.Unlock()
 	return f.buf
 }
+
+func (f *Fake) Terminal() *term.Emulator { return f.emu }
 
 func (f *Fake) State() State {
 	f.mu.Lock()
@@ -198,9 +203,11 @@ func (f *Fake) Resize(width, height int) error {
 	}
 
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	f.width, f.height = width, height
 	f.resizes++
+	f.mu.Unlock()
+
+	f.emu.Resize(width, height)
 	return nil
 }
 
@@ -214,6 +221,8 @@ func (f *Fake) Close() error {
 	f.closed = true
 	alreadyDone := f.state.Done()
 	f.mu.Unlock()
+
+	f.emu.Close()
 
 	if !alreadyDone {
 		f.setState(StateClosed, nil)
@@ -234,6 +243,7 @@ func (f *Fake) Emit(output string) {
 	f.mu.Unlock()
 
 	buf.Write([]byte(output))
+	f.emu.Write([]byte(output))
 	f.emit(OutputEvent{ID: f.id})
 }
 

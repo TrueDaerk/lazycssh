@@ -20,6 +20,7 @@ import (
 
 	"github.com/TrueDaerk/lazycssh/internal/hosts"
 	"github.com/TrueDaerk/lazycssh/internal/scrollback"
+	"github.com/TrueDaerk/lazycssh/internal/term"
 )
 
 // Defaults for a session that does not configure them.
@@ -119,6 +120,10 @@ type Session interface {
 	Err() error
 	// Scrollback holds the output received so far.
 	Scrollback() *scrollback.Buffer
+	// Terminal is the emulator fed with the same output bytes as the
+	// scrollback. It tracks screen state the scrollback cannot — alternate
+	// screen, cursor position — for rendering full-screen remote apps.
+	Terminal() *term.Emulator
 	// LastExit is the exit status of the last command the remote shell
 	// reported, and whether one has been reported at all. A shell without the
 	// prompt hook never reports; see exit.go.
@@ -188,6 +193,7 @@ type sshSession struct {
 	cfg    Config
 	events chan<- Event
 	buf    *scrollback.Buffer
+	emu    *term.Emulator
 
 	mu            sync.Mutex
 	state         State
@@ -219,6 +225,7 @@ func New(id string, cfg Config, events chan<- Event) Session {
 		cfg:    cfg,
 		events: events,
 		buf:    buf,
+		emu:    term.New(cfg.Width, cfg.Height),
 		closed: make(chan struct{}),
 	}
 }
@@ -226,6 +233,7 @@ func New(id string, cfg Config, events chan<- Event) Session {
 func (s *sshSession) ID() string                     { return s.id }
 func (s *sshSession) Host() hosts.Host               { return s.cfg.Host }
 func (s *sshSession) Scrollback() *scrollback.Buffer { return s.buf }
+func (s *sshSession) Terminal() *term.Emulator       { return s.emu }
 
 func (s *sshSession) State() State {
 	s.mu.Lock()
@@ -390,6 +398,7 @@ func (s *sshSession) pump(r io.Reader, scan *exitScanner) {
 				scan.Scan(buf[:n])
 			}
 			s.buf.Write(buf[:n])
+			s.emu.Write(buf[:n])
 			s.notifyOutput()
 		}
 		if err != nil {
@@ -453,6 +462,8 @@ func (s *sshSession) Resize(width, height int) error {
 	s.cfg.Width, s.cfg.Height = width, height
 	s.mu.Unlock()
 
+	s.emu.Resize(width, height)
+
 	if session == nil {
 		// Not connected yet: the size is remembered and requested at start.
 		return nil
@@ -490,6 +501,7 @@ func (s *sshSession) Close() error {
 		// client guarantees. Waiting here is what makes "no goroutine leaks"
 		// testable.
 		s.wg.Wait()
+		s.emu.Close()
 
 		s.mu.Lock()
 		if !s.state.Done() {
