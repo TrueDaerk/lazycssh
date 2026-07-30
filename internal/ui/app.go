@@ -161,6 +161,12 @@ type App struct {
 	// since the last enter. The truth is on the hosts; this is the reminder.
 	broadcastLine []rune
 
+	// broadcastView routes the bar's keys to commands instead of the hosts;
+	// broadcastPending is a typed ctrl+a waiting for its second key. Neither
+	// outlives the bar's focus: entering the bar always starts in edit mode.
+	broadcastView    bool
+	broadcastPending bool
+
 	// connectErr is the last connect request's resolve error, shown in the
 	// Status panel until the fleet changes.
 	connectErr string
@@ -360,6 +366,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKey dispatches a key press. Bindings are matched by area, so a key
 // means one thing at a time; see [KeyMap].
 func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// The bar's modal state does not outlive its focus: whatever mode the bar
+	// was left in, coming back to it starts in edit mode.
+	if a.focus != AreaBroadcast {
+		a.broadcastView, a.broadcastPending = false, false
+	}
+
 	// ctrl+q quits even while a text input has the keyboard: the chord is
 	// never a character there, and an empty start opens straight into the
 	// host prompt - which must not be able to trap the user. While typing to
@@ -435,11 +447,19 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.handleTypingKey(msg)
 	}
 
-	// So is the broadcast bar - for every target at once.
+	// So is the broadcast bar - for every target at once. In view mode it
+	// routes to the app-level commands below instead; see broadcastbar.go.
 	if a.focus == AreaBroadcast {
 		return a.handleBroadcastKey(msg)
 	}
 
+	return a.handleAppKey(msg)
+}
+
+// handleAppKey is the app-level command dispatch: everything that is live once
+// no terminal-like input owns the keyboard. The broadcast bar's view mode
+// enters here directly, which is what makes its keys commands.
+func (a App) handleAppKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// The Groups panel's own letters shadow the global ones while it has
 	// focus: n creates a group rather than connecting a host, d asks to
 	// delete rather than selecting the hosts that are down.
@@ -528,7 +548,10 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 	if key.Matches(msg, a.keys.Panel5) {
+		// Selecting the bar is entering it fresh: 5 from view mode is the
+		// second way back to edit mode.
 		a.focus = AreaBroadcast
+		a.broadcastView, a.broadcastPending = false, false
 		return a, nil
 	}
 
@@ -946,12 +969,23 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 func (a App) renderStatusBar() string {
 	var parts []string
 	if a.focus == AreaBroadcast {
-		count := 0
-		if a.cfg.Targets != nil {
-			count = a.cfg.Targets.Count()
+		if a.broadcastView {
+			// View mode sends nothing, so it renders in the calm typing style:
+			// the warning is for keys that reach hosts.
+			parts = append(parts, a.theme.StatusTyping.Render(
+				"BROADCAST VIEW — keys are commands · enter edits · "+escapeKeystroke+" leaves"))
+		} else {
+			count := 0
+			if a.cfg.Targets != nil {
+				count = a.cfg.Targets.Count()
+			}
+			label := fmt.Sprintf("BROADCASTING EDIT → %d host%s — %s leaves", count, plural(count), escapeKeystroke)
+			if a.broadcastPending {
+				label = fmt.Sprintf("BROADCASTING → %d host%s — ctrl+a… esc = view · a = literal ctrl+a",
+					count, plural(count))
+			}
+			parts = append(parts, a.theme.StatusWarning.Render(label))
 		}
-		parts = append(parts, a.theme.StatusWarning.Render(
-			fmt.Sprintf("BROADCASTING → %d host%s — %s leaves", count, plural(count), escapeKeystroke)))
 	}
 	if a.focus == AreaGrid {
 		// Where keystrokes go is the one thing the user must never have to

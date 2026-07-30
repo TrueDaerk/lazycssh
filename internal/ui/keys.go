@@ -97,6 +97,13 @@ type KeyMap struct {
 	// Grid. A focused pane is a terminal: plain keys are forwarded to the
 	// host, so everything lazycssh keeps for itself here is an alt or shift
 	// chord that keystrokeBytes never encoded, plus the one reserved escape.
+	// Broadcast bar. While the bar has the keyboard every plain key is a
+	// keystroke for the targets, so the bar keeps only the reserved escape,
+	// the pane chords, and the csshx-style ctrl+a prefix — plus enter as the
+	// way back from view mode.
+	BroadcastEscape key.Binding
+	BroadcastEdit   key.Binding
+
 	LeaveTyping  key.Binding
 	ToggleSelect key.Binding
 	PaneLeft     key.Binding
@@ -187,6 +194,15 @@ func DefaultKeyMap() KeyMap {
 		SessionEnd: key.NewBinding(key.WithKeys("x"),
 			key.WithHelp("x", "end this session (in the Sessions panel)")),
 
+		// Inside the broadcast bar ctrl+a is the csshx escape prefix, which
+		// shadows both the global connected-only toggle and the readline
+		// start-of-line the bar used to forward; ctrl+a a sends the literal.
+		// From view mode the plain ctrl+a reaches the global toggle again.
+		BroadcastEscape: key.NewBinding(key.WithKeys("ctrl+a"),
+			key.WithHelp("ctrl+a", "prefix: esc = view mode, a = literal ctrl+a")),
+		BroadcastEdit: key.NewBinding(key.WithKeys("enter"),
+			key.WithHelp("enter", "back to edit mode (from view mode)")),
+
 		LeaveTyping: key.NewBinding(key.WithKeys("ctrl+]"),
 			key.WithHelp("ctrl+]", "stop typing to the host")),
 		ToggleSelect: key.NewBinding(key.WithKeys("alt+ ", "alt+space"),
@@ -247,7 +263,7 @@ func (k KeyMap) grid() []key.Binding {
 // broadcastBar returns the bindings that act while the broadcast bar has the
 // keyboard. Everything else is a keystroke for the targets.
 func (k KeyMap) broadcastBar() []key.Binding {
-	return []key.Binding{k.LeaveTyping}
+	return []key.Binding{k.LeaveTyping, k.BroadcastEscape, k.BroadcastEdit}
 }
 
 // Bindings returns the bindings of one area.
@@ -269,6 +285,8 @@ func (k KeyMap) All() []key.Binding {
 	out := k.global()
 	out = append(out, k.sidebar()...)
 	out = append(out, k.grid()...)
+	// The bar shares LeaveTyping with the grid; only its own two are new here.
+	out = append(out, k.BroadcastEscape, k.BroadcastEdit)
 	return out
 }
 
@@ -303,7 +321,7 @@ func (c contextHelp) ShortHelp() []key.Binding {
 		// name chords lazycssh actually keeps.
 		return []key.Binding{k.LeaveTyping, k.PaneLeft, k.PaneRight, k.FullScreen, k.ClosePane}
 	case AreaBroadcast:
-		return []key.Binding{k.LeaveTyping}
+		return []key.Binding{k.LeaveTyping, k.BroadcastEscape, k.BroadcastEdit}
 	default:
 		return []key.Binding{k.NextTab, k.CommandLine, k.Help, k.Quit}
 	}

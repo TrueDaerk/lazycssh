@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-07-30T12:00:00Z
+timestamp: 2026-07-30T16:00:00Z
 ---
 
 # Keymap and help
@@ -21,7 +21,7 @@ A key press is dispatched by focus. Each binding belongs to one area:
 |------|----------------|
 | `AreaGlobal` | works wherever focus is: help, quit, panel numbers, broadcast mode, the command line |
 | `AreaSidebar` | the numbered panels down the left |
-| `AreaBroadcast` | the broadcast bar under the grid — a terminal for the whole target set; only `ctrl+]` and the pane chords are kept |
+| `AreaBroadcast` | the broadcast bar under the grid — a terminal for the whole target set; kept for itself: `ctrl+]`, the pane chords, and the csshx-style `ctrl+a` escape prefix. In the bar's **view mode** every key is an app-level command instead — see [TUI shell](./tui.md#edit-and-view-mode) |
 | `AreaGrid` | the host panes on the right — a focused pane is a terminal, so its bindings are all `alt`/`shift` chords plus the reserved `ctrl+]`; every plain key is forwarded to the host (a test enforces the chord rule) |
 
 The sidebar and the grid may reuse a key — they are never focused at the same time — but a
@@ -46,7 +46,7 @@ duplicate still fails.
 | `!` | global | jump to the next host whose last command failed |
 | `S` | global (app level) | save the run as a session, prompt prefilled |
 | `n` | global (app level) | connect a new host: opens the pattern prompt in the Status panel, ssh-config aliases complete with `tab` |
-| `ctrl+a` | global (app level) | show only the connected hosts; broadcast follows the visible set |
+| `ctrl+a` | global (app level) | show only the connected hosts; broadcast follows the visible set. In the broadcast bar's edit mode the escape prefix shadows this; view mode reaches it again |
 | `ctrl+r` | global (app level) | re-tile the grid for the current hosts (a departure keeps the shape) |
 | `ctrl+s` | global (app level) | split the grid into chunks of N panes (prompt; empty or 0 clears) |
 | `ctrl+→` / `ctrl+←` | global (app level) | next / previous split chunk |
@@ -63,6 +63,8 @@ duplicate still fails.
 | `x` | Sessions panel | end the session under the cursor, after `y/n`: ctrl+c and ctrl+d to its connected hosts |
 | `[` / `]` | sidebar | previous / next chunk of hosts |
 | any plain key | panes | **forwarded to the focused host** — letters, enter, tab, esc, ctrl+c, arrows, all of it |
+| `ctrl+a` | broadcast bar (edit mode) | escape prefix: `esc` switches to view mode, `a` sends a literal `ctrl+a`, anything else cancels — and says so |
+| `enter` | broadcast bar (view mode) | back to edit mode |
 | `ctrl+]` | panes | stop typing: back to the app level, on the Status panel |
 | `alt+space` | panes (and app level) | toggle the focused pane's host in the selection |
 | `alt+←`/`alt+→`/`alt+↑`/`alt+↓` | panes (and app level) | move between panes |
