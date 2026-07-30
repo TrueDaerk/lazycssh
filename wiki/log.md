@@ -2,6 +2,13 @@
 
 ## 2026-07-30
 
+- The grid announces its own overflow: when panes are hidden — more pages, more split chunks,
+  more open sessions — a footer line under the panes says what is hidden and which key reaches
+  it (`+12 more hosts — alt+n · page 1/3 · 2 more sessions — [3]`). The footer costs the grid
+  one row and is skipped in full screen. `core/tui.md` updated. Version 0.9.2.
+
+## 2026-07-30
+
 - `x` in the Sessions panel ends a session after `end "name"? y/n`: every connected terminal
   receives `ctrl+c` then `ctrl+d` via the pane path (never logged), the row shows `(ending)`,
   and the session leaves the list once its hosts are done. A session whose hosts all reach

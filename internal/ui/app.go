@@ -715,8 +715,9 @@ func (a App) closeOrRemove(id string) tea.Cmd {
 	return func() tea.Msg { return CloseHostMsg{ID: id} }
 }
 
-// grid is the current tiling of the main area.
-func (a App) grid() Grid { return TileGrid(a.layout.Main, len(a.hostIDs())) }
+// grid is the current tiling of the main area, minus the overflow footer's
+// line when it is drawn.
+func (a App) grid() Grid { return TileGrid(a.gridArea(), len(a.hostIDs())) }
 
 // Grid returns the tiling the view is drawing, which is what the tests and the
 // paging logic ask about.
@@ -901,6 +902,12 @@ func (a App) renderMain() string {
 		if len(cells) > 0 {
 			rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, cells...))
 		}
+	}
+
+	if a.overflowFooterVisible() {
+		// Hidden panes are announced in the grid itself, not only in the
+		// status bar: what is on screen must never read as the whole run.
+		rows = append(rows, a.overflowFooter())
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
