@@ -88,8 +88,9 @@ is not obvious.
 ## Building and testing
 
 ```sh
-make build           # go build ./cmd/lazycssh
-make install         # go install ./cmd/lazycssh
+make                 # build ./lazycssh
+make install         # install to ~/.local/bin/lazycssh (override with BINDIR=...)
+make uninstall       # remove it again
 make test            # go test ./...
 make vet             # go vet ./...
 go test -race ./...  # what CI runs

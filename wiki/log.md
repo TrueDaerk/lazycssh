@@ -2,6 +2,12 @@
 
 ## 2026-07-31
 
+- `make install` installs to `~/.local/bin` (issue #197): the target builds straight into
+  `$(BINDIR)/lazycssh` — `BINDIR ?= $(HOME)/.local/bin`, created when missing — instead of
+  running `go install` into whatever `GOPATH` points at, and `make uninstall` / `make clean`
+  were added alongside. `README.md`, `CONTRIBUTING.md` and the installation page updated.
+  Version 0.9.38.
+
 - User documentation layer (issue #195): an MkDocs Material site under `userdocs/`
   (`mkdocs.yml`, `strict: true`, built and deployed by `.github/workflows/docs.yml`), plus
   `README.md`, `CONTRIBUTING.md` and `SECURITY.md` at the repository root. The site documents
