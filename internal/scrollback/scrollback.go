@@ -23,6 +23,13 @@ const DefaultCapacity = 10_000
 // arrived.
 const maxLineLength = 64 << 10
 
+// ClearMark is stored as its own line where the remote cleared the screen -
+// an erase-display sequence or an alternate-screen switch. The scrollback is
+// preserved, not wiped: the marker only records where the visible area
+// restarted, and the UI decides what to draw for it. The NULs keep it from
+// colliding with anything a host could print as text.
+const ClearMark = "\x00cleared\x00"
+
 // maxEscapeLength bounds an escape sequence being assembled. A sequence that
 // long is not one this package interprets; it is flushed into the line and
 // left to the render-time sanitizer.
@@ -150,8 +157,10 @@ func (b *Buffer) consumeEscapeLocked(c byte) bool {
 
 	if len(b.esc) >= 3 && c >= 0x40 && c <= 0x7e {
 		// The final byte of a CSI sequence.
-		if c == 'K' {
-			switch string(b.esc[2 : len(b.esc)-1]) {
+		params := string(b.esc[2 : len(b.esc)-1])
+		switch c {
+		case 'K':
+			switch params {
 			case "", "0":
 				// Erase right of the cursor: the cursor is at the end of
 				// the line, so there is nothing to erase.
@@ -162,6 +171,42 @@ func (b *Buffer) consumeEscapeLocked(c byte) bool {
 			}
 			b.esc = nil
 			return true
+		case 'J':
+			// Erase display. "" and "0" erase below the cursor, which is at
+			// the end in this model, so there is nothing to erase. "1" wipes
+			// everything above the current line, "2" the whole screen, "3"
+			// the screen and the emulator's scrollback - "clear" sends "2"
+			// (and often "3"), so this is how a cleared pane happens. The
+			// stored history is kept in every case; only the marker is
+			// planted. Honouring "3" by wiping the ring is a deliberate
+			// non-goal: on a fleet tool, history is worth more than strict
+			// emulation.
+			switch params {
+			case "", "0":
+			case "1":
+				b.markClearedLocked(false)
+				b.esc = nil
+				return true
+			default:
+				b.markClearedLocked(true)
+				b.esc = nil
+				return true
+			}
+			b.esc = nil
+			return true
+		case 'h', 'l':
+			// Alternate-screen switches. Entering (h) is a full-screen
+			// program taking over - its first frame expects an empty screen.
+			// Leaving (l) discards that program's frame; the primary screen
+			// cannot be restored without emulation, so it clears too rather
+			// than showing the alternate screen's last state as if it were
+			// scrollback.
+			switch params {
+			case "?1049", "?1047", "?47":
+				b.markClearedLocked(true)
+				b.esc = nil
+				return true
+			}
 		}
 		b.flushEscapeLocked()
 		return true
@@ -181,6 +226,21 @@ func (b *Buffer) flushEscapeLocked() {
 	if len(b.pending) >= maxLineLength {
 		b.commitLocked()
 	}
+}
+
+// markClearedLocked records a clear-screen at the current position. With
+// dropPending the line being assembled is erased too (whole-screen erase);
+// without it the marker lands before the line (erase-above keeps the cursor's
+// line). Consecutive markers collapse: a program clearing every frame must
+// not fill the ring with markers instead of output.
+func (b *Buffer) markClearedLocked(dropPending bool) {
+	if dropPending {
+		b.pending = b.pending[:0]
+	}
+	if b.count > 0 && b.lines[(b.start+b.count-1)%cap(b.lines)] == ClearMark {
+		return
+	}
+	b.appendLocked(ClearMark)
 }
 
 // commitLocked moves the pending line into the ring. The caller holds the lock.

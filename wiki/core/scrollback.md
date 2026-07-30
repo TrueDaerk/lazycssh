@@ -4,7 +4,7 @@ title: Scrollback buffer
 description: The bounded per-session ring buffer that keeps a chatty host from stalling the UI.
 resource: internal/scrollback/scrollback.go
 tags: [backpressure, concurrency, output]
-timestamp: 2026-07-29T00:00:00Z
+timestamp: 2026-07-30T19:00:00Z
 ---
 
 # Scrollback buffer
@@ -48,6 +48,16 @@ all output.
     committed line,
   - **`ESC[K`** / `ESC[0K` (erase right of the cursor) is consumed silently — nothing sits right
     of the cursor in this model — while `ESC[1K` / `ESC[2K` discard the line.
+- **Clear-screen sequences plant a marker** (issue #131). `ESC[2J` / `ESC[3J` (erase display),
+  `ESC[1J` (erase above) and the alternate-screen switches `ESC[?1049h/l`, `ESC[?1047h/l`,
+  `ESC[?47h/l` store a `ClearMark` line where the visible area restarted; the whole-screen
+  forms also discard the line being assembled, the erase-above form keeps it. Consecutive
+  markers collapse, so a program clearing every frame cannot fill the ring with markers.
+  The history is **preserved, not wiped** — deliberately including `ESC[3J`, whose strict
+  meaning is "erase the scrollback too": on a fleet tool, history is worth more than strict
+  emulation. The pane renders the marker as `~ screen cleared ~`; while following the tail it
+  shows only what came after the last marker, so `clear` (or entering `screen`/`vim`) leaves
+  an apparently empty pane, and scrolling up still reaches everything before it.
 - Every other ANSI escape sequence is stored verbatim, including sequences split across writes.
   Interpreting them is the renderer's job; full emulation is a separate idea (issue #44).
 

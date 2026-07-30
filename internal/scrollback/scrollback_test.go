@@ -452,3 +452,77 @@ func assertLines(t *testing.T, got, want []string) {
 		}
 	}
 }
+
+// The clear-screen family: erase-display and alternate-screen switches plant
+// a [ClearMark] where the visible area restarted, and preserve the history
+// around it - the issue-131 behavior.
+func TestClearScreenPlantsAMarker(t *testing.T) {
+	tests := []struct {
+		name   string
+		writes []string
+		want   []string
+	}{
+		{
+			name:   "erase whole screen drops the pending line and marks",
+			writes: []string{"old\ntyp\x1b[2J$ \n"},
+			want:   []string{"old", ClearMark, "$ "},
+		},
+		{
+			name:   "clear's usual sequence: home then erase",
+			writes: []string{"old\n\x1b[H\x1b[2J$ \n"},
+			want:   []string{"old", ClearMark, "$ "},
+		},
+		{
+			name:   "erase scrollback too is treated as a clear, not a wipe",
+			writes: []string{"old\n\x1b[3J\x1b[H\x1b[2J$ \n"},
+			want:   []string{"old", ClearMark, "$ "},
+		},
+		{
+			name:   "erase above keeps the line the cursor is on",
+			writes: []string{"old\nkept\x1b[1J!\n"},
+			want:   []string{"old", ClearMark, "kept!"},
+		},
+		{
+			name:   "erase below is a silent no-op at the tail",
+			writes: []string{"hi\x1b[J!\n\x1b[0J"},
+			want:   []string{"hi!"},
+		},
+		{
+			name:   "entering the alternate screen clears",
+			writes: []string{"old\n\x1b[?1049hscreen frame\n"},
+			want:   []string{"old", ClearMark, "screen frame"},
+		},
+		{
+			name:   "leaving the alternate screen clears too",
+			writes: []string{"vim ui\n\x1b[?1049l$ \n"},
+			want:   []string{"vim ui", ClearMark, "$ "},
+		},
+		{
+			name:   "the legacy alternate-screen switches clear as well",
+			writes: []string{"a\n\x1b[?47hb\n\x1b[?1047lc\n"},
+			want:   []string{"a", ClearMark, "b", ClearMark, "c"},
+		},
+		{
+			name:   "consecutive clears collapse into one marker",
+			writes: []string{"old\n\x1b[2J\x1b[2J\x1b[?1049h$ \n"},
+			want:   []string{"old", ClearMark, "$ "},
+		},
+		{
+			name:   "other private-mode switches pass through verbatim",
+			writes: []string{"a\x1b[?25lb\n"},
+			want:   []string{"a\x1b[?25lb"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := New(100)
+			for _, w := range tt.writes {
+				if _, err := b.Write([]byte(w)); err != nil {
+					t.Fatalf("Write(%q) returned error: %v", w, err)
+				}
+			}
+			assertLines(t, b.Lines(), tt.want)
+		})
+	}
+}

@@ -2,6 +2,14 @@
 
 ## 2026-07-30
 
+- `clear`, `screen` and friends now clear the pane (issue #131): erase-display sequences and
+  alternate-screen switches plant a `ClearMark` in the scrollback; the pane following the tail
+  starts after the last marker, so the view is empty while the history stays scrollable above
+  a `~ screen cleared ~` marker. `ESC[3J` deliberately does not wipe the ring.
+  `core/scrollback.md` updated. Version 0.9.6.
+
+## 2026-07-30
+
 - Fixed the render crash under the connected-only filter (issue #135): a mass disconnect could
   shrink the visible host list between two `hostIDs()` computations of the same frame, and
   `renderPane` indexed past the end. `View` now freezes the list once per frame

@@ -156,3 +156,67 @@ func TestPaneBodyDegenerateCases(t *testing.T) {
 		t.Fatalf("a run without a fleet rendered %q", got)
 	}
 }
+
+// The acceptance criterion of issue 131: `clear` on a host leaves an
+// (apparently) empty pane instead of the full previous output.
+func TestPaneBodyIsEmptyAfterClear(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	for i := 1; i <= 10; i++ {
+		fleet.sessions["web-01"].Emitf("line-%02d\n", i)
+	}
+	fleet.sessions["web-01"].Emit("\x1b[H\x1b[2J")
+
+	if body := plain(a.paneBody("web-01", 40, 5)); body != "" {
+		t.Fatalf("the pane still shows output after clear:\n%s", body)
+	}
+}
+
+// After a clear, new output starts at the top of the pane, alone - the old
+// lines do not bleed in from above while following the tail.
+func TestPaneBodyShowsOnlyPostClearOutput(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	for i := 1; i <= 10; i++ {
+		fleet.sessions["web-01"].Emitf("old-%02d\n", i)
+	}
+	fleet.sessions["web-01"].Emit("\x1b[2J$ uptime\n")
+
+	body := plain(a.paneBody("web-01", 40, 5))
+	if !strings.Contains(body, "$ uptime") {
+		t.Fatalf("the post-clear output is missing:\n%s", body)
+	}
+	if strings.Contains(body, "old-") {
+		t.Fatalf("pre-clear output bleeds into the cleared pane:\n%s", body)
+	}
+}
+
+// Entering the alternate screen - `screen`, `vim` - shows a fresh panel too.
+func TestPaneBodyClearsOnAlternateScreen(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.sessions["web-01"].Emit("$ screen\n")
+	fleet.sessions["web-01"].Emit("\x1b[?1049h")
+
+	if body := plain(a.paneBody("web-01", 40, 5)); body != "" {
+		t.Fatalf("entering the alternate screen left old output on show:\n%s", body)
+	}
+}
+
+// The scrollback is preserved, not wiped: scrolling up reaches the pre-clear
+// history, with a marker where the clear happened.
+func TestClearedHistoryStaysScrollable(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	for i := 1; i <= 10; i++ {
+		fleet.sessions["web-01"].Emitf("old-%02d\n", i)
+	}
+	fleet.sessions["web-01"].Emit("\x1b[2J$ \n")
+
+	a.scroll = map[string]int{"web-01": 5}
+	body := plain(a.paneBody("web-01", 40, 5))
+	if !strings.Contains(body, "old-") {
+		t.Fatalf("scrolling up does not reach the pre-clear history:\n%s", body)
+	}
+
+	a.scroll["web-01"] = 1
+	if body := plain(a.paneBody("web-01", 40, 5)); !strings.Contains(body, "screen cleared") {
+		t.Fatalf("no marker where the clear happened:\n%s", body)
+	}
+}
