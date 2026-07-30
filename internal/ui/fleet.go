@@ -126,6 +126,9 @@ func (a App) snapshotFleet() App {
 		a.fleetHosts = nil
 		a.hostStates = nil
 		a.fleetCounts = ssh.Counts{Total: len(a.cfg.Hosts)}
+		if len(a.cfg.Hosts) > 0 {
+			a.hadHosts = true
+		}
 		return a
 	}
 	ids := a.cfg.Fleet.IDs()
@@ -155,6 +158,9 @@ func (a App) snapshotFleet() App {
 	a.fleetHosts = ids
 	a.hostStates = states
 	a.fleetCounts = counts
+	if len(ids) > 0 {
+		a.hadHosts = true
+	}
 	return a
 }
 

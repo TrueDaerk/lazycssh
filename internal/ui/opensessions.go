@@ -28,6 +28,12 @@ type openSession struct {
 	// as every host is done - closed or failed - rather than waiting for a
 	// host that died mid-shutdown.
 	Ending bool
+	// SawClose remembers that a host of this session logged out cleanly.
+	// Closed panes leave the run on their own (issue #146), so by the time
+	// only failed hosts remain the logouts are no longer visible in the
+	// host states - this flag is what lets such a session still end instead
+	// of a dead-on-arrival host keeping it, and the program, alive.
+	SawClose bool
 }
 
 // GroupOpenMsg asks the program to open a saved group as a session. The UI
@@ -229,24 +235,28 @@ func gridChanged() tea.Cmd {
 }
 
 // sessionOver reports whether an open session has run its course: every host
-// deliberately closed, or - for a session the user asked to end - every host
-// done one way or the other. A session whose hosts merely all *failed* is not
-// over: that is an outage to look at and reconnect, not a completed shutdown.
+// is done and at least one ended in a deliberate logout - seen live or
+// remembered in SawClose after its pane left - or, for a session the user
+// asked to end, every host done one way or the other. A session whose hosts
+// merely all *failed* is not over: that is an outage to look at and
+// reconnect, not a completed shutdown. But a failed host must not keep a
+// session - and with it the program - alive after every other host was
+// logged out (issue #146).
 func (a App) sessionOver(s openSession) bool {
 	if len(s.Hosts) == 0 {
 		return true
 	}
-	closedAll, doneAll := true, true
+	sawClose, doneAll := s.SawClose, true
 	for _, id := range s.Hosts {
 		st := a.state(id)
-		if st != ssh.StateClosed {
-			closedAll = false
+		if st == ssh.StateClosed {
+			sawClose = true
 		}
 		if !st.Done() {
 			doneAll = false
 		}
 	}
-	return closedAll || (s.Ending && doneAll)
+	return doneAll && (sawClose || s.Ending)
 }
 
 // reapSessions ends every session that is over: it leaves the list, and its
@@ -255,6 +265,18 @@ func (a App) sessionOver(s openSession) bool {
 // "ctrl+d broadcast to the whole session" ends the session without another
 // keypress.
 func (a App) reapSessions() (App, tea.Cmd) {
+	// Record clean logouts before judging the sessions, so a session whose
+	// last live host just logged out ends in this same pass even though its
+	// closed panes are about to leave the run.
+	for i := range a.open {
+		for _, id := range a.open[i].Hosts {
+			if a.state(id) == ssh.StateClosed {
+				a.open[i].SawClose = true
+				break
+			}
+		}
+	}
+
 	var ended []openSession
 	activeName := a.ActiveSession()
 	focused := a.FocusedHost()
@@ -266,56 +288,71 @@ func (a App) reapSessions() (App, tea.Cmd) {
 		}
 		kept = append(kept, s)
 	}
-	if len(ended) == 0 {
-		a.open = kept
-		return a, nil
-	}
 	a.open = kept
 
-	// The foreground is kept by identity; losing it falls back to what is
-	// still open, the way pruning does.
-	a.active = -1
-	for i, s := range a.open {
-		if s.Name == activeName {
-			a.active = i
-			break
-		}
-	}
-	if a.active < 0 && len(a.open) > 0 {
-		a.active = len(a.open) - 1
-	}
-	if a.ActiveSession() != activeName {
-		// The foreground fell back to a different session; a shape kept from
-		// the ended one would be a museum of the wrong view.
-		a = a.resetGridSlots()
-	}
-	a.sessionCursor = clamp(a.sessionCursor, 0, max(0, len(a.open)-1))
-
-	// An ended session's hosts leave the run, deduplicated, unless a
-	// surviving session still holds them.
-	surviving := make(map[string]bool)
-	for _, s := range a.open {
-		for _, id := range s.Hosts {
-			surviving[id] = true
-		}
-	}
-	fleet := make(map[string]bool)
-	for _, id := range a.fleetIDs() {
-		fleet[id] = true
-	}
+	var cmds []tea.Cmd
 	removed := make(map[string]bool)
-	cmds := []tea.Cmd{gridChanged()}
-	for _, s := range ended {
-		for _, id := range s.Hosts {
-			if surviving[id] || removed[id] || !fleet[id] {
-				continue
+	if len(ended) > 0 {
+		// The foreground is kept by identity; losing it falls back to what is
+		// still open, the way pruning does.
+		a.active = -1
+		for i, s := range a.open {
+			if s.Name == activeName {
+				a.active = i
+				break
 			}
-			removed[id] = true
-			host := id
-			cmds = append(cmds, func() tea.Msg { return RemoveHostMsg{ID: host} })
+		}
+		if a.active < 0 && len(a.open) > 0 {
+			a.active = len(a.open) - 1
+		}
+		if a.ActiveSession() != activeName {
+			// The foreground fell back to a different session; a shape kept
+			// from the ended one would be a museum of the wrong view.
+			a = a.resetGridSlots()
+		}
+		a.sessionCursor = clamp(a.sessionCursor, 0, max(0, len(a.open)-1))
+
+		// An ended session's hosts leave the run, deduplicated, unless a
+		// surviving session still holds a host that is not itself done.
+		surviving := make(map[string]bool)
+		for _, s := range a.open {
+			for _, id := range s.Hosts {
+				surviving[id] = true
+			}
+		}
+		fleet := make(map[string]bool)
+		for _, id := range a.fleetIDs() {
+			fleet[id] = true
+		}
+		cmds = append(cmds, gridChanged())
+		for _, s := range ended {
+			for _, id := range s.Hosts {
+				if surviving[id] || removed[id] || !fleet[id] {
+					continue
+				}
+				removed[id] = true
+				host := id
+				cmds = append(cmds, func() tea.Msg { return RemoveHostMsg{ID: host} })
+			}
 		}
 	}
 
+	// A cleanly logged-out shell has nothing left to show: its pane leaves
+	// the run on its own (issue #146), whichever sessions still list the
+	// host - the shell is just as gone in all of them. The removal comes
+	// back as HostsChangedMsg, which keeps the grid shape: no retile.
+	for _, id := range a.fleetIDs() {
+		if removed[id] || a.state(id) != ssh.StateClosed {
+			continue
+		}
+		removed[id] = true
+		host := id
+		cmds = append(cmds, func() tea.Msg { return RemoveHostMsg{ID: host} })
+	}
+
+	if len(cmds) == 0 {
+		return a, nil
+	}
 	a = a.syncBroadcastLimit().refocus(focused).followFocus()
 	return a, tea.Batch(cmds...)
 }

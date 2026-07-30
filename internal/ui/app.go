@@ -181,6 +181,12 @@ type App struct {
 	hostStates  map[string]hostState
 	fleetCounts ssh.Counts
 
+	// hadHosts records that the run held at least one host at some point.
+	// It is what separates a run that emptied - every session logged out or
+	// removed, the program's work is done, quit (issue #146) - from a run
+	// that started empty and is waiting on the sessions picker.
+	hadHosts bool
+
 	// scroll is each pane's scrollback offset in wrapped lines from the
 	// bottom; a missing entry is the tail. searchTerm is the one term every
 	// pane highlights.
@@ -351,6 +357,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// The program tracks how the run was assembled; saving writes
 			// patterns, so they must follow every change.
 			next.cfg.RunPatterns = msg.Patterns
+		}
+		if next.hadHosts && len(next.fleetIDs()) == 0 {
+			// The run had hosts and now has none: every session was logged
+			// out or removed, so the program's work is done (issue #146). A
+			// run that *started* empty is different - it is waiting on the
+			// sessions picker and hadHosts is still false.
+			return next, tea.Quit
 		}
 		return next, nil
 

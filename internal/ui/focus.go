@@ -33,6 +33,9 @@ func (a App) PaneIndex() int { return a.paneIndex }
 func (a App) withHosts(hosts []string) App {
 	focused := a.FocusedHost()
 	a.cfg.Hosts = hosts
+	if len(hosts) > 0 {
+		a.hadHosts = true
+	}
 
 	// Scroll offsets belong to hosts; a host that left the run takes its
 	// offset with it, so a later host reusing the name starts at the tail.

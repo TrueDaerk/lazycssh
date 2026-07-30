@@ -4,7 +4,7 @@ title: Groups and open sessions
 description: Persisted host groups, the open sessions they become, and how the foreground session scopes the grid and the broadcast.
 resource: internal/ui/opensessions.go
 tags: [groups, sessions, workspace, broadcast]
-timestamp: 2026-07-30T09:00:00Z
+timestamp: 2026-07-31T12:00:00Z
 ---
 
 # Groups and open sessions
@@ -63,12 +63,23 @@ broadcast mode is, and nothing lands in the command log. The session is marked `
 leaves the list once its hosts are done; a shell that swallows the keystrokes keeps it listed,
 and `x` asks again and resends.
 
-A session ends by itself when **all** of its hosts reach `closed` — which is what `ctrl+d`
-typed in broadcast mode across the whole session produces. Its hosts then leave the run, unless
-another open session still contains them. A session marked as ending also accepts `failed` as
-done — a host that died mid-shutdown must not keep a zombie session listed — but a session
-whose hosts merely all failed, never asked to end, stays: that is an outage to look at and
-reconnect, not a completed shutdown.
+A shell that logs out cleanly (`ctrl+d`, `exit`) closes its own pane: the host reaches
+`closed` and leaves the run on its own, whichever open sessions still list it — the shell is
+just as gone in all of them (issue #146). The departure keeps the grid shape; retiling stays an
+explicit act (`ctrl+r`, split).
+
+A session ends by itself once every host is **done** (`closed` or `failed`) and at least one of
+them ended in a clean logout — seen live, or remembered (`SawClose`) after that pane already
+left. This is what `ctrl+d` typed in broadcast mode across the whole session produces, and it
+is also why a host that failed from the start cannot keep the session — and with it the
+program — alive after every other host was logged out. A session marked as ending accepts
+`failed` alone as done — a host that died mid-shutdown must not keep a zombie session listed —
+but a session whose hosts merely all failed, never any logout and never asked to end, stays:
+that is an outage to look at and reconnect, not a completed shutdown.
+
+When the run held hosts and loses the last one — the final session logged out, the last pane
+removed — the program quits: its work is done. A run that *started* empty is different; it is
+waiting on the sessions picker and stays.
 
 ## What this deliberately is not
 
