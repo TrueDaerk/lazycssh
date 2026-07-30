@@ -4,7 +4,7 @@ title: Terminal emulation
 description: The per-session vt emulator — what it tracks, why it drains its own reply pipe, and how a pane renders a full-screen app's live grid.
 resource: internal/term
 tags: [terminal, vt, emulation, alt-screen]
-timestamp: 2026-07-31T00:00:00Z
+timestamp: 2026-07-31T02:00:00Z
 ---
 
 # Terminal emulation
@@ -54,7 +54,8 @@ Every `Session` — real and fake — owns an emulator and exposes it via `Termi
 pump tees each read into scrollback and emulator; `Resize` resizes both the remote PTY and the
 emulator. The [broadcast router](./broadcast-scope.md) reads `IsAltScreen` through the
 manager's `AltScreen` method: `all` and `selected` mode exclude alt-screen hosts from their
-targets, and the status bar names the skip.
+targets while the scope is mixed — with every reachable host on the alternate screen nothing
+is excluded (issue #191) — and the status bar names the skip.
 
 ## Grid rendering in the pane
 

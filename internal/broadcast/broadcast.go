@@ -353,7 +353,8 @@ func (r *Router) Focus() string { return r.focus }
 
 // Targets returns the hosts a keystroke actually reaches right now: the scope
 // minus every host whose session cannot take input, and — in all and selected
-// mode — minus every host whose remote app is on the alternate screen.
+// mode, while the scope is mixed — minus every host whose remote app is on
+// the alternate screen.
 //
 // Without a transport every host in scope counts as a target, because there is
 // nothing yet that could say otherwise.
@@ -363,12 +364,13 @@ func (r *Router) Targets() []string {
 		return scope
 	}
 
+	skipAlt := r.excludesAltScreen() && r.mixedAltScreen(scope)
 	var out []string
 	for _, id := range scope {
 		if !r.sessions.Connected(id) {
 			continue
 		}
-		if r.excludesAltScreen() && r.sessions.AltScreen(id) {
+		if skipAlt && r.sessions.AltScreen(id) {
 			continue
 		}
 		out = append(out, id)
@@ -385,15 +387,45 @@ func (r *Router) excludesAltScreen() bool {
 	return r.mode == ModeAll || r.mode == ModeSelected
 }
 
+// mixedAltScreen reports whether the connected hosts in scope are split
+// between the alternate screen and the primary one. The exclusion only makes
+// sense then: it protects the one stray vim from a keystroke meant for the
+// shells around it. When every reachable host is on the alternate screen
+// there is no asymmetry left to protect — the uniform state is what a
+// broadcast that opened those apps looks like, and excluding everyone would
+// make the editors it opened undrivable (issue #191).
+func (r *Router) mixedAltScreen(scope []string) bool {
+	var alt, primary bool
+	for _, id := range scope {
+		if !r.sessions.Connected(id) {
+			continue
+		}
+		if r.sessions.AltScreen(id) {
+			alt = true
+		} else {
+			primary = true
+		}
+		if alt && primary {
+			return true
+		}
+	}
+	return false
+}
+
 // AltScreenSkipped returns the connected hosts in scope that are excluded from
 // the targets because a full-screen app is running there. Empty in modes that
-// do not exclude them.
+// do not exclude them, and empty when every reachable host in scope is on the
+// alternate screen — nothing is skipped then, the keystrokes flow.
 func (r *Router) AltScreenSkipped() []string {
 	if r.sessions == nil || !r.excludesAltScreen() {
 		return nil
 	}
+	scope := r.Scope()
+	if !r.mixedAltScreen(scope) {
+		return nil
+	}
 	var out []string
-	for _, id := range r.Scope() {
+	for _, id := range scope {
 		if r.sessions.Connected(id) && r.sessions.AltScreen(id) {
 			out = append(out, id)
 		}

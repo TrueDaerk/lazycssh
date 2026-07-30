@@ -803,3 +803,99 @@ func TestSendReportsALostWriter(t *testing.T) {
 		t.Fatalf("web-01 received %q", sessions.writes["web-01"])
 	}
 }
+
+// The issue-191 behavior: the alt-screen exclusion protects the one stray
+// vim among shells. When every reachable host in scope is on the alternate
+// screen — a broadcast opened those editors — there is nothing to protect,
+// and the keystrokes must flow to all of them.
+func TestUniformAltScreenScopeIsNotExcluded(t *testing.T) {
+	tests := []struct {
+		name     string
+		mode     Mode
+		selected []string
+		want     string
+	}{
+		{"all reaches the editors it opened", ModeAll, nil, "web-01,web-02,web-03"},
+		{"selected reaches its editors too", ModeSelected, []string{"web-01", "web-02"}, "web-01,web-02"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, _ := router(t, 3)
+			sessions := newFakeSessions("web-01", "web-02", "web-03")
+			for _, id := range []string{"web-01", "web-02", "web-03"} {
+				sessions.altScreen[id] = true
+			}
+			r.Attach(sessions)
+
+			if err := r.SetMode(tt.mode); err != nil {
+				t.Fatalf("SetMode: %v", err)
+			}
+			for _, id := range tt.selected {
+				r.Toggle(id)
+			}
+
+			if got := strings.Join(r.Targets(), ","); got != tt.want {
+				t.Fatalf("Targets() = %q, want %q", got, tt.want)
+			}
+			if got := r.AltScreenSkipped(); got != nil {
+				t.Fatalf("AltScreenSkipped() = %v, want nil - nothing is skipped", got)
+			}
+		})
+	}
+}
+
+// A selected sub-scope can be uniformly on the alt screen while the rest of
+// the working set is not: the mix is judged against the scope, not the fleet.
+func TestUniformityIsJudgedAgainstTheScope(t *testing.T) {
+	r, _ := router(t, 3)
+	sessions := newFakeSessions("web-01", "web-02", "web-03")
+	sessions.altScreen["web-01"] = true
+	sessions.altScreen["web-02"] = true
+	r.Attach(sessions)
+
+	if err := r.SetMode(ModeSelected); err != nil {
+		t.Fatalf("SetMode: %v", err)
+	}
+	r.Toggle("web-01")
+	r.Toggle("web-02")
+
+	if got := strings.Join(r.Targets(), ","); got != "web-01,web-02" {
+		t.Fatalf("Targets() = %q, want both selected editors", got)
+	}
+}
+
+// A down host does not make an all-alt-screen scope count as mixed: only
+// hosts that can take input weigh in.
+func TestDownHostsDoNotBreakUniformity(t *testing.T) {
+	r, _ := router(t, 3)
+	sessions := newFakeSessions("web-01", "web-02", "web-03")
+	sessions.altScreen["web-01"] = true
+	sessions.altScreen["web-02"] = true
+	sessions.up["web-03"] = false
+	r.Attach(sessions)
+
+	if got := strings.Join(r.Targets(), ","); got != "web-01,web-02" {
+		t.Fatalf("Targets() = %q, want the two editors", got)
+	}
+	if got := r.AltScreenSkipped(); got != nil {
+		t.Fatalf("AltScreenSkipped() = %v, want nil", got)
+	}
+}
+
+// One shell among the editors restores the protection: the shell is the only
+// target and the editors are named as skipped.
+func TestOneShellAmongEditorsRestoresTheExclusion(t *testing.T) {
+	r, _ := router(t, 3)
+	sessions := newFakeSessions("web-01", "web-02", "web-03")
+	sessions.altScreen["web-01"] = true
+	sessions.altScreen["web-03"] = true
+	r.Attach(sessions)
+
+	if got := strings.Join(r.Targets(), ","); got != "web-02" {
+		t.Fatalf("Targets() = %q, want just the shell", got)
+	}
+	if got := strings.Join(r.AltScreenSkipped(), ","); got != "web-01,web-03" {
+		t.Fatalf("AltScreenSkipped() = %q, want the editors", got)
+	}
+}
