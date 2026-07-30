@@ -300,9 +300,10 @@ func TestRememberedLogoutEndsAFailedRemainder(t *testing.T) {
 	}
 }
 
-// A run that held hosts and lost the last one quits: the program's work is
-// done. This is what lets a session full of ctrl+d logouts end the program.
-func TestRunThatEmptiedQuits(t *testing.T) {
+// A run that held hosts and lost the last one stays open on the neutral start
+// view (issue #168): the TUI is the hub the next group is opened from, and
+// quitting is what q and ctrl+q are for.
+func TestRunThatEmptiedStaysOpen(t *testing.T) {
 	a, fleet := soloApp(t)
 
 	fleet.sessions["web-01"].Disconnect(nil)
@@ -312,12 +313,24 @@ func TestRunThatEmptiedQuits(t *testing.T) {
 
 	fleet.ids = nil
 	fleet.sessions = map[string]*ssh.Fake{}
-	_, cmd := a.Update(HostsChangedMsg{Hosts: nil})
-	if cmd == nil {
-		t.Fatal("the emptied run produced no command, want quit")
+	model, cmd := a.Update(HostsChangedMsg{Hosts: nil})
+	for _, msg := range msgsFrom(t, cmd) {
+		if msg == tea.Quit() {
+			t.Fatal("the emptied run quit the program")
+		}
 	}
-	if msg := cmd(); msg != tea.Quit() {
-		t.Fatalf("the emptied run produced %v, want tea.Quit", msg)
+	a = model.(App)
+	if a.Focus() == AreaGrid {
+		t.Fatal("focus stayed on the grid with no panes to focus")
+	}
+	if got := len(a.OpenSessionNames()); got != 0 {
+		t.Fatalf("open sessions = %d, want none", got)
+	}
+
+	// The neutral view must be a real restart: a host connecting afterwards
+	// begins a fresh run whose emptying is judged anew.
+	if a.hadHosts {
+		t.Fatal("hadHosts survived the emptied run")
 	}
 }
 
