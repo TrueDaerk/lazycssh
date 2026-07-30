@@ -31,6 +31,11 @@ type Targeter interface {
 	SetLimit(ids []string)
 	// Targets are the hosts a keystroke reaches right now.
 	Targets() []string
+	// Scope is the mode's host set before the liveness filter: what Targets
+	// would be if every host in scope could take input. Auth prompts are
+	// answered against it (issue #184), because a session waiting at a
+	// password prompt is exactly not connected yet.
+	Scope() []string
 	// Count is how many hosts that is.
 	Count() int
 	// Describe renders the status bar label.

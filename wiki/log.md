@@ -2,6 +2,12 @@
 
 ## 2026-07-30
 
+- The broadcast line answers every prompting host again (issue #184): auth keystrokes are
+  mirrored against the broadcast *scope*, not `Targets()` — the liveness filter in `Targets()`
+  drops exactly the sessions that are waiting at a password prompt, so with a transport
+  attached the answer reached nobody. `Targeter` gains `Scope()`; the regression test runs
+  with the transport attached. `core/broadcast-scope.md` updated. Version 0.9.31.
+
 - Auth prompts are concurrent and per pane (issue #182): every dialling session shows its own
   question in its own scrollback at once — routed by session id, exact, so ten dials of
   `test@localhost` on ten ports prompt ten panes instead of piling onto the first alias match.
