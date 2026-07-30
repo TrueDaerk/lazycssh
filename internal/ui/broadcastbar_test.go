@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 )
 
 // barApp builds an app with a recording sender and the broadcast bar focused.
@@ -129,5 +131,32 @@ func TestTabReachesTheBroadcastBar(t *testing.T) {
 	}
 	if a.Focus() != AreaBroadcast {
 		t.Fatalf("Focus() = %v after tabbing past every panel", a.Focus())
+	}
+}
+
+// Issue #133: a keystroke that reached nobody without a single error - an
+// empty scope, every host down - must say so in the status line instead of
+// reading as delivered typing.
+func TestBroadcastBarSaysWhenNobodyReceived(t *testing.T) {
+	a, sender := barApp(t, "web-01")
+	sender.delivery = broadcast.Delivery{Mode: broadcast.ModeAll, Scope: 1, Targets: 0, Delivered: 0}
+
+	a = pressKey(t, a, "l")
+
+	if !strings.Contains(a.LastDelivery(), "no host can take input") {
+		t.Fatalf("LastDelivery() = %q, want a zero-delivery warning", a.LastDelivery())
+	}
+}
+
+// The same warning covers the ctrl+a a literal path.
+func TestBroadcastRawSaysWhenNobodyReceived(t *testing.T) {
+	a, sender := barApp(t, "web-01")
+	sender.delivery = broadcast.Delivery{Mode: broadcast.ModeAll, Scope: 0, Targets: 0, Delivered: 0}
+
+	a = pressKey(t, a, "ctrl+a")
+	a = pressKey(t, a, "a")
+
+	if !strings.Contains(a.LastDelivery(), "no host can take input") {
+		t.Fatalf("LastDelivery() = %q, want a zero-delivery warning", a.LastDelivery())
 	}
 }

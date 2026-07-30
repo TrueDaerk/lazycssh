@@ -436,7 +436,12 @@ func (r *Router) Send(p []byte) (Delivery, error) {
 	for _, id := range targets {
 		w, ok := r.sessions.Writer(id)
 		if !ok {
+			// The host was a target a moment ago and has no writer now: the
+			// session dropped between the two calls. Silence here was issue
+			// #133's suspect - a keystroke that reports success while a host
+			// received nothing.
 			d.Failed = append(d.Failed, id)
+			d.Errs = append(d.Errs, fmt.Errorf("write to %s: session lost its writer", id))
 			continue
 		}
 		if _, err := w.Write(p); err != nil {

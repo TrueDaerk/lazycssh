@@ -321,13 +321,17 @@ type fakeSessions struct {
 	up      map[string]bool
 	writes  map[string]string
 	failing map[string]bool
+	// writerless hosts report connected but have no writer - the race where
+	// a session drops between Targets() and the write (issue #133).
+	writerless map[string]bool
 }
 
 func newFakeSessions(ids ...string) *fakeSessions {
 	f := &fakeSessions{
-		up:      make(map[string]bool),
-		writes:  make(map[string]string),
-		failing: make(map[string]bool),
+		up:         make(map[string]bool),
+		writes:     make(map[string]string),
+		failing:    make(map[string]bool),
+		writerless: make(map[string]bool),
 	}
 	for _, id := range ids {
 		f.up[id] = true
@@ -338,7 +342,7 @@ func newFakeSessions(ids ...string) *fakeSessions {
 func (f *fakeSessions) Connected(id string) bool { return f.up[id] }
 
 func (f *fakeSessions) Writer(id string) (io.Writer, bool) {
-	if !f.up[id] {
+	if !f.up[id] || f.writerless[id] {
 		return nil, false
 	}
 	return &fakeWriter{sessions: f, id: id}, true
@@ -689,5 +693,29 @@ func TestNilLimitLiftsTheLimit(t *testing.T) {
 	r.SetLimit([]string{})
 	if !r.Limited() || len(r.Targets()) != 0 {
 		t.Fatalf("an empty limit was not enforced: limited=%v targets=%v", r.Limited(), r.Targets())
+	}
+}
+
+// Issue #133: a target whose writer vanished between Targets() and the write
+// is a failed delivery that errors, not a silent success - the count the user
+// read must never claim more than the hosts that got the bytes.
+func TestSendReportsALostWriter(t *testing.T) {
+	r, _ := router(t, 2)
+	sessions := newFakeSessions("web-01", "web-02")
+	sessions.writerless["web-02"] = true
+	r.Attach(sessions)
+
+	d, err := r.Send([]byte("x"))
+	if err == nil {
+		t.Fatal("Send hid the lost writer")
+	}
+	if d.Delivered != 1 {
+		t.Fatalf("Delivery = %+v", d)
+	}
+	if strings.Join(d.Failed, ",") != "web-02" {
+		t.Fatalf("Failed = %v", d.Failed)
+	}
+	if sessions.writes["web-01"] != "x" {
+		t.Fatalf("web-01 received %q", sessions.writes["web-01"])
 	}
 }
