@@ -148,6 +148,10 @@ type App struct {
 	// the hosts that can take input right now.
 	connectedOnly bool
 
+	// keptSlots is the cell count the grid shape is kept from, so a host
+	// leaving does not reflow every pane; see internal/ui/retile.go.
+	keptSlots int
+
 	// The split: chunks of splitSize panes, splitChunk on screen. 0 is off.
 	splitInput textinput.Model
 	splitSize  int
@@ -245,7 +249,7 @@ func NewApp(cfg Config) App {
 	}
 	// A run that starts with hosts starts with a session holding them: the
 	// CLI arguments are a workspace like any opened group.
-	a = a.adoptNewHosts()
+	a = a.adoptNewHosts().keepGridSlots()
 	// An argumentless start opens with nothing focused: the empty grid says
 	// what the options are, and which of them comes first - connect, launch a
 	// session, read the help - is the user's call, not the program's.
@@ -322,7 +326,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case HostsChangedMsg:
 		focused := a.FocusedHost()
-		next := a.withHosts(msg.Hosts).pruneSessions().adoptNewHosts().refocus(focused).followFocus()
+		next := a.withHosts(msg.Hosts).pruneSessions().adoptNewHosts().
+			keepGridSlots().refocus(focused).followFocus()
 		// The fleet changed, so whatever a connect complained about is stale.
 		next.connectErr = ""
 		if msg.Patterns != nil {
@@ -486,6 +491,9 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, a.keys.ConnectedOnly):
 		return a.toggleConnectedOnly()
+
+	case key.Matches(msg, a.keys.Retile):
+		return a.retile()
 
 	case key.Matches(msg, a.keys.Split):
 		return a.beginSplit(), nil
@@ -716,8 +724,9 @@ func (a App) closeOrRemove(id string) tea.Cmd {
 }
 
 // grid is the current tiling of the main area, minus the overflow footer's
-// line when it is drawn.
-func (a App) grid() Grid { return TileGrid(a.gridArea(), len(a.hostIDs())) }
+// line when it is drawn. It tiles for the kept slot count, which is the host
+// count unless a departure left an empty cell behind.
+func (a App) grid() Grid { return TileGrid(a.gridArea(), a.gridSlots()) }
 
 // Grid returns the tiling the view is drawing, which is what the tests and the
 // paging logic ask about.

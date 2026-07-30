@@ -20,7 +20,7 @@ func (a App) overflowFooterVisible() bool {
 		// status bar still carries the counts.
 		return false
 	}
-	g := TileGrid(a.layout.Main, len(a.hostIDs()))
+	g := TileGrid(a.layout.Main, a.gridSlots())
 	return g.Pages > 1 || a.splitChunks() > 1 || len(a.open) > 1
 }
 

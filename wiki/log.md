@@ -2,6 +2,13 @@
 
 ## 2026-07-30
 
+- A host leaving the run no longer reflows the grid: the shape is kept and the freed cell
+  renders empty; `ctrl+r` re-tiles on request and resizes the PTYs. Joins still grow the grid
+  immediately, and explicit view changes (session switch, `ctrl+a`, `ctrl+s`) tile for the new
+  view. `core/tui.md` and `core/keys.md` updated. Version 0.9.3.
+
+## 2026-07-30
+
 - The grid announces its own overflow: when panes are hidden — more pages, more split chunks,
   more open sessions — a footer line under the panes says what is hidden and which key reaches
   it (`+12 more hosts — alt+n · page 1/3 · 2 more sessions — [3]`). The footer costs the grid

@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-30T11:00:00Z
+timestamp: 2026-07-30T12:00:00Z
 ---
 
 # TUI shell
@@ -79,6 +79,13 @@ are and where a host sits on its own.
 
 An empty slot on the last page — three hosts in a 2×2 — is drawn as an empty frame rather than
 being reflowed, so the panes stay the size they were as hosts come and go.
+
+The same rule covers departures entirely: **a host leaving the run does not reflow the grid**.
+The shape is kept, the freed cell renders empty, and `ctrl+r` re-tiles on request (and resizes
+the PTYs). Growth is immediate — a new pane has to appear somewhere — and an explicit view
+change (session switch, `ctrl+a`, `ctrl+s`) tiles for the new view rather than keeping a museum
+of the old one. A terminal resize reflows as always: the user caused that change. While typing,
+`ctrl+r` belongs to the host (readline reverse-search).
 
 `f` full-screens the focused pane and `f` again returns to the grid. The issue proposed `1`/`2`/`3`
 for this, but the epic gives the number keys to the sidebar panels; a key cannot mean both, so
@@ -178,6 +185,13 @@ are and where a host sits on its own.
 
 An empty slot on the last page — three hosts in a 2×2 — is drawn as an empty frame rather than
 being reflowed, so the panes stay the size they were as hosts come and go.
+
+The same rule covers departures entirely: **a host leaving the run does not reflow the grid**.
+The shape is kept, the freed cell renders empty, and `ctrl+r` re-tiles on request (and resizes
+the PTYs). Growth is immediate — a new pane has to appear somewhere — and an explicit view
+change (session switch, `ctrl+a`, `ctrl+s`) tiles for the new view rather than keeping a museum
+of the old one. A terminal resize reflows as always: the user caused that change. While typing,
+`ctrl+r` belongs to the host (readline reverse-search).
 
 `f` full-screens the focused pane and `f` again returns to the grid. The issue proposed `1`/`2`/`3`
 for this, but the epic gives the number keys to the sidebar panels; a key cannot mean both, so
