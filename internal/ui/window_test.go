@@ -13,7 +13,9 @@ func pagedApp(t *testing.T, hosts int, width, height int) App {
 	if a.Pages() < 2 {
 		t.Fatalf("setup: %d hosts fit on one page at %dx%d", hosts, width, height)
 	}
-	return a
+	// ctrl+arrows are app-level commands: while a pane is focused they stay
+	// keystrokes for the host, so the paging tests drive them from outside.
+	return pressKey(t, a, "ctrl+]")
 }
 
 func TestWindowShowsOnePageOfHosts(t *testing.T) {
@@ -33,7 +35,7 @@ func TestPagingMovesTheWindowAndTheFocus(t *testing.T) {
 	a := pagedApp(t, 12, 60, 14)
 	perPage := a.Grid().PerPage
 
-	a = pressKey(t, a, "alt+n")
+	a = pressKey(t, a, "ctrl+right")
 	if a.Page() != 1 {
 		t.Fatalf("Page() = %d after paging forward", a.Page())
 	}
@@ -45,7 +47,7 @@ func TestPagingMovesTheWindowAndTheFocus(t *testing.T) {
 		t.Fatalf("FocusedHost() = %q after paging", a.FocusedHost())
 	}
 
-	a = pressKey(t, a, "alt+p")
+	a = pressKey(t, a, "ctrl+left")
 	if a.Page() != 0 {
 		t.Fatalf("Page() = %d after paging back", a.Page())
 	}
@@ -54,19 +56,25 @@ func TestPagingMovesTheWindowAndTheFocus(t *testing.T) {
 	}
 }
 
-func TestPagingStopsAtBothEnds(t *testing.T) {
+// The single navigator wraps (issue #147): back from the first page lands on
+// the last, forward from the last lands on the first.
+func TestPagingWrapsAtBothEnds(t *testing.T) {
 	a := pagedApp(t, 12, 60, 14)
 
-	a = pressKey(t, a, "alt+p")
-	if a.Page() != 0 {
-		t.Fatalf("Page() = %d after paging back from the first page", a.Page())
+	a = pressKey(t, a, "ctrl+left")
+	if got, want := a.Page(), a.Pages()-1; got != want {
+		t.Fatalf("Page() = %d after wrapping backward, want %d", got, want)
+	}
+	if !contains(a.WindowHosts(), a.FocusedHost()) {
+		t.Fatalf("the focused host %q is not on screen after the wrap", a.FocusedHost())
 	}
 
-	for range 20 {
-		a = pressKey(t, a, "alt+n")
+	a = pressKey(t, a, "ctrl+right")
+	if a.Page() != 0 {
+		t.Fatalf("Page() = %d after wrapping forward, want 0", a.Page())
 	}
-	if got, want := a.Page(), a.Pages()-1; got != want {
-		t.Fatalf("Page() = %d after running off the end, want %d", got, want)
+	if a.FocusedHost() != "web-01" {
+		t.Fatalf("FocusedHost() = %q after wrapping forward", a.FocusedHost())
 	}
 }
 
@@ -93,7 +101,7 @@ func TestPagingDoesNotChangeTheHostList(t *testing.T) {
 	a := pagedApp(t, 12, 60, 14)
 	before := strings.Join(a.hostIDs(), ",")
 
-	a = pressKey(t, a, "alt+n")
+	a = pressKey(t, a, "ctrl+right")
 	if got := strings.Join(a.hostIDs(), ","); got != before {
 		t.Fatalf("paging changed the run's hosts:\n%s\n%s", before, got)
 	}
@@ -120,7 +128,7 @@ func TestPageIndicatorOnlyWhenItPages(t *testing.T) {
 func TestPageClampsWhenTheTerminalChanges(t *testing.T) {
 	a := pagedApp(t, 12, 60, 14)
 	for range 20 {
-		a = pressKey(t, a, "alt+n")
+		a = pressKey(t, a, "ctrl+right")
 	}
 	last := a.Page()
 
@@ -159,10 +167,10 @@ func TestWindowWithNoHosts(t *testing.T) {
 }
 
 func TestPagingWithASinglePageDoesNothing(t *testing.T) {
-	a := resize(t, fleetApp(t, 4), 200, 60)
+	a := pressKey(t, resize(t, fleetApp(t, 4), 200, 60), "ctrl+]")
 	before := a.View().Content
 
-	a = pressKey(t, a, "alt+n")
+	a = pressKey(t, a, "ctrl+right")
 	if a.Page() != 0 || a.View().Content != before {
 		t.Fatal("paging moved a window that has only one page")
 	}

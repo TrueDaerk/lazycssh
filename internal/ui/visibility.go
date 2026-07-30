@@ -130,21 +130,57 @@ func (a App) applySplit(size int) (App, tea.Cmd) {
 	return a, gridChanged()
 }
 
-// stepSplit shows the next or previous chunk, stopping at the ends rather
-// than wrapping - wrapping from the last chunk to the first is how a command
-// reaches the hosts at the other end of the fleet.
-func (a App) stepSplit(delta int) (App, tea.Cmd) {
-	if a.splitSize <= 0 {
+// stepView shows the next or previous screenful (issue #147): pages inside
+// the current split chunk first, then the neighbouring chunk, wrapping at
+// both ends. With the split off it degenerates to page navigation with wrap.
+// Wrapping is safe here because paging never changes who receives a
+// keystroke, and a chunk change runs the same resync a direct chunk step
+// always did - the status bar's page and SPLIT indicators say where the wrap
+// landed.
+func (a App) stepView(delta int) (App, tea.Cmd) {
+	g := a.grid()
+	chunks := a.splitChunks() // 0 while the split is off
+	if g.Pages <= 1 && chunks <= 1 {
+		// One screenful: nothing to step, and no flicker.
 		return a, nil
 	}
-	next := clamp(a.splitChunk+delta, 0, a.splitChunks()-1)
-	if next == clamp(a.splitChunk, 0, a.splitChunks()-1) {
-		return a, nil
+	page := a.clampedPage(g)
+	if delta > 0 && page < g.Pages-1 {
+		return a.pageBy(+1).syncFocusTarget(), nil
 	}
-	a.splitChunk = next
+	if delta < 0 && page > 0 {
+		return a.pageBy(-1).syncFocusTarget(), nil
+	}
+	return a.stepChunkWrapped(delta)
+}
+
+// stepChunkWrapped moves the split chunk by delta with wrap-around, landing
+// on the first page of the new chunk going forward and on its last page going
+// backward. Without a multi-chunk split it wraps the pages instead.
+func (a App) stepChunkWrapped(delta int) (App, tea.Cmd) {
+	chunks := a.splitChunks()
+	if chunks <= 1 {
+		g := a.grid()
+		if delta > 0 {
+			a.page = 0
+		} else {
+			a.page = g.Pages - 1
+		}
+		a.paneIndex = clamp(a.page*g.PerPage, 0, len(a.hostIDs())-1)
+		return a.syncFocusTarget(), nil
+	}
+
+	a.splitChunk = (clamp(a.splitChunk, 0, chunks-1) + delta + chunks) % chunks
 	a.page = 0
 	a.paneIndex = 0
 	a = a.resetGridSlots().syncBroadcastLimit().syncFocusTarget()
+	if delta < 0 {
+		if g := a.grid(); g.Pages > 1 {
+			a.page = g.Pages - 1
+			a.paneIndex = clamp(a.page*g.PerPage, 0, len(a.hostIDs())-1)
+			a = a.syncFocusTarget()
+		}
+	}
 	return a, gridChanged()
 }
 

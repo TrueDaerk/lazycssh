@@ -36,7 +36,7 @@ func (a App) gridArea() Rect {
 
 // overflowFooter renders the footer line: what is hidden, and the key that
 // reaches it. Each part names its own navigation, because "more" means three
-// different keys depending on what is hiding it - a page (alt+n), a split
+// different keys depending on what is hiding it - a page (ctrl+→), a split
 // chunk (ctrl+→), another session (the Sessions panel).
 func (a App) overflowFooter() string {
 	var parts []string
@@ -45,7 +45,7 @@ func (a App) overflowFooter() string {
 	if g.Pages > 1 {
 		hidden := len(a.hostIDs()) - len(a.WindowHosts())
 		parts = append(parts, a.theme.StatusWarning.Render(fmt.Sprintf(
-			"+%d more host%s — alt+n · page %d/%d",
+			"+%d more host%s — ctrl+→ · page %d/%d",
 			hidden, plural(hidden), a.clampedPage(g)+1, g.Pages)))
 	}
 

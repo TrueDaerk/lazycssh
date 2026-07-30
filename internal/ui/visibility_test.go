@@ -178,8 +178,10 @@ func TestSplitShowsTheFirstChunk(t *testing.T) {
 	}
 }
 
-// ctrl+right shows the next chunk and stops at the end rather than wrapping.
-func TestSplitStepsBetweenChunksAndStopsAtTheEnds(t *testing.T) {
+// ctrl+right shows the next chunk and wraps at the ends (issue #147): the
+// last chunk leads back to the first, and stepping back from the first lands
+// on the last. The status bar's SPLIT indicator says where the wrap landed.
+func TestSplitStepsBetweenChunksAndWraps(t *testing.T) {
 	a, _, _ := splitApp(t)
 	a = applySplitSize(t, a, "5")
 
@@ -191,14 +193,17 @@ func TestSplitStepsBetweenChunksAndStopsAtTheEnds(t *testing.T) {
 		t.Fatalf("the indicator did not follow:\n%s", got)
 	}
 
-	a = pressKey(t, a, "ctrl+right") // already the last chunk
-	if got := strings.Join(a.hostIDs(), ","); got != "web-06,web-07,web-08,web-09,web-10" {
-		t.Fatalf("visible hosts = %q after stepping past the end", got)
+	a = pressKey(t, a, "ctrl+right") // past the last chunk: wrap to the first
+	if got := a.hostIDs()[0]; got != "web-01" {
+		t.Fatalf("visible hosts start at %q after wrapping forward", got)
+	}
+	if got := plain(a.View().Content); !strings.Contains(got, "SPLIT 1/2") {
+		t.Fatalf("the indicator did not follow the wrap:\n%s", got)
 	}
 
-	a = pressKey(t, a, "ctrl+left")
-	if got := a.hostIDs()[0]; got != "web-01" {
-		t.Fatalf("visible hosts start at %q after ctrl+left", got)
+	a = pressKey(t, a, "ctrl+left") // before the first chunk: wrap to the last
+	if got := a.hostIDs()[0]; got != "web-06" {
+		t.Fatalf("visible hosts start at %q after wrapping backward", got)
 	}
 }
 
@@ -343,5 +348,43 @@ func TestViewSurvivesHostListShrinkingMidRender(t *testing.T) {
 	flaky.armed = true
 	if got := a.View().Content; got == "" {
 		t.Fatal("View rendered nothing")
+	}
+}
+
+// The acceptance criterion of issue #147: navigation is page-major inside the
+// chunk, then the chunk, wrapping at both ends. Three hosts split by 2 on a
+// one-pane terminal: chunk 1 holds two pages, chunk 2 one.
+func TestStepViewPagesInsideTheChunkThenSteps(t *testing.T) {
+	a := resize(t, fleetApp(t, 3), 60, 14)
+	a = pressKey(t, a, "ctrl+]")
+	a = applySplitSize(t, a, "2")
+
+	if got := a.FocusedHost(); got != "web-01" {
+		t.Fatalf("setup: FocusedHost() = %q", got)
+	}
+
+	a = pressKey(t, a, "ctrl+right") // page 2 of chunk 1
+	if got := a.FocusedHost(); got != "web-02" {
+		t.Fatalf("FocusedHost() = %q, want the chunk's second page", got)
+	}
+
+	a = pressKey(t, a, "ctrl+right") // chunk 2, page 1
+	if got := a.FocusedHost(); got != "web-03" {
+		t.Fatalf("FocusedHost() = %q, want the next chunk", got)
+	}
+
+	a = pressKey(t, a, "ctrl+right") // past the end: wrap to chunk 1, page 1
+	if got := a.FocusedHost(); got != "web-01" {
+		t.Fatalf("FocusedHost() = %q after wrapping forward", got)
+	}
+
+	a = pressKey(t, a, "ctrl+left") // before the start: last chunk, last page
+	if got := a.FocusedHost(); got != "web-03" {
+		t.Fatalf("FocusedHost() = %q after wrapping backward", got)
+	}
+
+	a = pressKey(t, a, "ctrl+left") // back into chunk 1, on its last page
+	if got := a.FocusedHost(); got != "web-02" {
+		t.Fatalf("FocusedHost() = %q stepping back into the first chunk", got)
 	}
 }

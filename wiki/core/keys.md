@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-07-30T21:00:00Z
+timestamp: 2026-07-31T14:00:00Z
 ---
 
 # Keymap and help
@@ -49,7 +49,7 @@ duplicate still fails.
 | `ctrl+a` | global (app level) | show only the connected hosts; broadcast follows the visible set. In the broadcast bar's edit mode the escape prefix shadows this; view mode reaches it again |
 | `ctrl+r` | global (app level) | re-tile the grid for the current hosts (a departure keeps the shape) |
 | `ctrl+s` | global (app level) | split the grid into chunks of N panes (prompt; empty or 0 clears) |
-| `ctrl+→` / `ctrl+←` | global (app level) | next / previous split chunk |
+| `ctrl+→` / `ctrl+←` | global (app level) | next / previous screenful: pages, then split chunks, wrapping at the ends |
 | `a` | global (app level) | select every host |
 | `i` | global (app level) | invert the selection |
 | `c` | global (app level) | clear the selection |
@@ -71,7 +71,6 @@ duplicate still fails.
 | `alt+z` | panes (and app level) | full-screen this pane |
 | `alt+r` | panes (and app level) | reconnect this host |
 | `alt+x` | panes (and app level) | close this host; on a dead host, remove its pane |
-| `alt+p` / `alt+n` | panes (and app level) | page through the panes |
 | `alt+y` | panes (and app level) | copy this pane's visible text to the clipboard (OSC 52) |
 | `alt+d` | panes (and app level) | copy this pane's whole scrollback to the clipboard (OSC 52) |
 | `shift+pgup` / `shift+pgdn` | panes (and app level) | scroll the focused pane back / forward |
