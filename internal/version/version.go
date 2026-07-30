@@ -7,7 +7,7 @@ package version
 import "runtime/debug"
 
 // Version is the semantic version of this build, without a leading "v".
-const Version = "0.9.10"
+const Version = "0.9.11"
 
 // revisionLength is the number of hex characters of the VCS revision kept in
 // [String]. Seven matches the short hash git itself prints.
