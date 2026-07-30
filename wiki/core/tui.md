@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-30T09:00:00Z
+timestamp: 2026-07-30T11:00:00Z
 ---
 
 # TUI shell
@@ -95,6 +95,13 @@ keystroke — that is the entire reason the two are separate concepts.
 - moving the pane focus off the edge of a page turns the page rather than focusing a pane that is
   not drawn,
 - the page indicator (`page 2/5`) appears in the status bar only when there is more than one page,
+- whenever the grid is showing a *part* — more pages, more split chunks, more open sessions — an
+  **overflow footer** takes the grid's bottom line and says so in place: `+12 more hosts — alt+n
+  · page 1/3 · 2 more sessions — [3]`. Each part names its own navigation, because "more" means
+  a different key depending on what hides it (page `alt+n`, chunk `ctrl+→`, session panel `3`).
+  The visible panes must never read as the whole run; a muted counter in the status bar alone is
+  too easy to read past. Full screen skips the footer — `alt+z` is an explicit zoom with its own
+  way back,
 - the page is clamped on every render: a terminal that shrinks produces more pages, and the page
   the user was on may stop existing.
 
