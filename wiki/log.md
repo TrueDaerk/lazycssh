@@ -1,5 +1,13 @@
 # Log
 
+## 2026-07-31
+
+- Deduplicated `core/tui.md` (issue #144): the "Pane grid" and "The window" sections existed
+  twice — a nested copy under Focus and a second window section without the overflow-footer
+  material. One copy of each remains, the fuller one; no content was unique to the deleted
+  copies. Issues #136 and #139 had to edit both copies, which is the drift this removes.
+  Version 0.9.11.
+
 ## 2026-07-30
 
 - Session state renders from the model, not the transport (issue #136): `FleetUpdatedMsg` makes

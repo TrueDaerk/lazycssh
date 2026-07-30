@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-30T23:00:00Z
+timestamp: 2026-07-31T00:00:00Z
 ---
 
 # TUI shell
@@ -172,58 +172,6 @@ bypassing the broadcast scope entirely: typing into a pane can never fan out.
   [Keymap and help](./keys.md). Commands exist only while no input pane is focused,
 - nothing wraps. Stepping off the last pane onto the first is how a user ends up typing into the
   machine at the other end of the fleet.
-
-### Pane grid
-
-`TileGrid(area, count)` is the tiling: the squarest arrangement that holds the hosts, bounded by
-how many minimum-size panes the area actually fits. It is a pure function, so two renders of the
-same state cannot disagree about where a pane is.
-
-| Hosts | Shape |
-|-------|-------|
-| 1 | 1×1 |
-| 2 | 2×1 |
-| 3, 4 | 2×2 |
-| 6 | 3×2 |
-| 9 | 3×3 |
-| 12 | 4×3 |
-| 20 | 5×4 |
-
-A pane never shows its host less than a 45×16 terminal (issue #139) — a 47×19 cell once the
-border and the header line are counted in, and the remote PTY is sized to the same content, so
-remote line wrapping always matches what is rendered. The guideline value is tuned in one place
-(`MinPaneContentWidth`/`MinPaneContentHeight` in `internal/ui/grid.go`). When the hosts do not
-fit at that size the grid **pages** rather than shrinking further — four readable panes and a
-page indicator beat twelve unreadable ones. `Grid.Pages`, `Grid.Page(i)` and `Grid.Cell(i)` say how many pages there
-are and where a host sits on its own.
-
-An empty slot on the last page — three hosts in a 2×2 — is drawn as an empty frame rather than
-being reflowed, so the panes stay the size they were as hosts come and go.
-
-The same rule covers departures entirely: **a host leaving the run does not reflow the grid**.
-The shape is kept, the freed cell renders empty, and `ctrl+r` re-tiles on request (and resizes
-the PTYs). Growth is immediate — a new pane has to appear somewhere — and an explicit view
-change (session switch, `ctrl+a`, `ctrl+s`) tiles for the new view rather than keeping a museum
-of the old one. A terminal resize reflows as always: the user caused that change. While typing,
-`ctrl+r` belongs to the host (readline reverse-search).
-
-`f` full-screens the focused pane and `f` again returns to the grid. The issue proposed `1`/`2`/`3`
-for this, but the epic gives the number keys to the sidebar panels; a key cannot mean both, so
-full screen took the letter.
-
-## The window
-
-The **window** is which hosts are on screen. It is not the [working set](./working-sets.md),
-which is which hosts a command is about. Paging the window never changes who receives a
-keystroke — that is the entire reason the two are separate concepts.
-
-- `alt+n` and `alt+p` move the window a whole page and put the pane focus on the first host
-  of the new page, so the pane that receives a keystroke is one the user can see,
-- moving the pane focus off the edge of a page turns the page rather than focusing a pane that is
-  not drawn,
-- the page indicator (`page 2/5`) appears in the status bar only when there is more than one page,
-- the page is clamped on every render: a terminal that shrinks produces more pages, and the page
-  the user was on may stop existing.
 
 ## Pane output
 
