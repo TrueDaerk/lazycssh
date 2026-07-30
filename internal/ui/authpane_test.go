@@ -21,6 +21,14 @@ func authTestApp(t *testing.T) (App, *fakeFleet) {
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)
 	}
+	// Attach the transport, as the real program does: Targets() then filters
+	// the scope to connected sessions, which is exactly the wiring that
+	// dropped prompting panes out of the broadcast answer (issue #184) -
+	// every session here is still pending, so Targets() is empty.
+	router.Attach(fleet)
+	if got := router.Targets(); len(got) != 0 {
+		t.Fatalf("Targets() = %v, want none while every session is pending", got)
+	}
 	sender := &fakeSender{delivery: broadcast.Delivery{Mode: broadcast.ModeAll}}
 	a := resize(t, NewApp(Config{
 		Fleet: fleet, Targets: router, WorkingSet: ws, Sender: sender,

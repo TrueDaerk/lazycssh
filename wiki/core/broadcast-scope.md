@@ -4,7 +4,7 @@ title: Broadcast scope
 description: What `BROADCAST all` means when a working set is active, and how the target count is made unmissable.
 resource: internal/broadcast
 tags: [broadcast, working-set, safety]
-timestamp: 2026-07-31T13:00:00Z
+timestamp: 2026-07-30T19:00:00Z
 ---
 
 # Broadcast scope
@@ -58,8 +58,14 @@ delivery: a count that included it would promise something the transport cannot 
 In `all` and `selected` mode, targets also exclude every host whose remote app is on the
 alternate screen — a keystroke meant for one `vim` must not reach twenty of them.
 `AltScreenSkipped()` names those hosts, and the exclusion is spelled out in `Describe`.
+
 `single` is how one talks to the full-screen app, and `fleet` is the explicit every-host
 escape hatch; neither excludes. See [terminal emulation](./terminal.md).
+
+**Auth prompts are answered against the scope, not the targets** (issue #184): a session
+waiting at a password prompt is exactly *not* connected yet, so the liveness filter would drop
+the very panes the broadcast line is answering. The UI mirrors auth keystrokes into every
+prompting pane of `Scope()`; live delivery keeps using `Targets()`.
 
 The router learns liveness from a `Sessions` interface, satisfied by
 [`ssh.Manager`](./manager.md) via `Connected`, `Writer` and `AltScreen`. Until a transport is

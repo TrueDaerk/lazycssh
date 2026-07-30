@@ -131,18 +131,20 @@ func (a App) cancelAuth(id string) (App, tea.Cmd) {
 	return a, func() tea.Msg { return SecretAnswerMsg{SessionID: id} }
 }
 
-// feedAuthBroadcast mirrors a broadcast keystroke into every prompting target
-// pane: characters append, backspace edits, enter submits each, ctrl+c
-// cancels each - one typing action answers a uniform cluster. It reports how
-// many prompts took the keystroke, so the caller can tell "nothing listened"
-// from "the prompts did".
+// feedAuthBroadcast mirrors a broadcast keystroke into every prompting pane
+// of the broadcast scope: characters append, backspace edits, enter submits
+// each, ctrl+c cancels each - one typing action answers a uniform cluster. It
+// walks the *scope*, not Targets(): the liveness filter would drop exactly
+// the sessions that are waiting at a prompt (issue #184). It reports how many
+// prompts took the keystroke, so the caller can tell "nothing listened" from
+// "the prompts did".
 func (a App) feedAuthBroadcast(msg tea.KeyPressMsg) (App, []tea.Cmd, int) {
 	if len(a.auth) == 0 || a.cfg.Targets == nil {
 		return a, nil, 0
 	}
 	var cmds []tea.Cmd
 	fed := 0
-	for _, id := range a.cfg.Targets.Targets() {
+	for _, id := range a.cfg.Targets.Scope() {
 		if a.auth[id] == nil {
 			continue
 		}
