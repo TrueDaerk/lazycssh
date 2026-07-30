@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-30T12:00:00Z
+timestamp: 2026-07-30T16:00:00Z
 ---
 
 # TUI shell
@@ -119,8 +119,10 @@ narrows the broadcast with it: the visible set is pushed into the router's
 [visibility limit](./broadcast-scope.md), so `all`/`selected` reach only what is on screen.
 The filter is a view over live state, not a removal: a host that reconnects reappears without a
 keypress. While it is on, the status bar carries `CONNECTED HOSTS ONLY`; a filter that hides
-every pane renders `no connected hosts` rather than an empty run. While typing into a pane or
-the broadcast bar, `ctrl+a` stays a keystroke for the hosts — readline start-of-line.
+every pane renders `no connected hosts` rather than an empty run. While typing into a pane,
+`ctrl+a` stays a keystroke for the hosts — readline start-of-line. In the broadcast bar it is
+the csshx-style escape prefix instead: the literal is `ctrl+a a`, and the toggle is reachable
+from the bar's view mode, where `ctrl+a` is a command again — see the broadcast bar section.
 
 ### Split
 
@@ -408,11 +410,38 @@ The bar keeps a local echo line — printable text appends, backspace trims — 
 what was typed; the truth is on the hosts. `enter` sends a carriage return and records the
 assembled non-empty line in the [command log](./command-log.md) once; the individual keystrokes
 are never recorded, because this is where a password may be typed. The title always carries the
-live target count (`Broadcast [5] → 7 hosts`), and the status bar says `BROADCASTING → 7 hosts`
-in the warning style while the bar has the keyboard. On short terminals the bar degrades to a
-bare line and then disappears before the grid gives up a row.
+live target count (`Broadcast [5] → 7 hosts`), and the status bar says
+`BROADCASTING EDIT → 7 hosts` in the warning style while the bar has the keyboard. On short
+terminals the bar degrades to a bare line and then disappears before the grid gives up a row.
 
 The pane-management chords (`alt+arrows` and friends) keep working from the bar.
+
+### Edit and view mode
+
+The bar is modal, vim-like in the minimal sense of having exactly two modes. **Edit mode** is
+the default and everything above: keystrokes go to the hosts. **View mode** routes every key to
+the app-level commands instead — broadcast scope, selection, panel numbers, `ctrl+a`, `ctrl+r`,
+the pane chords — and sends nothing, so commands work without leaving the input.
+
+Mode switching is modeled on csshx, with `ctrl+a` as the escape prefix inside the bar:
+
+- `ctrl+a` `esc` — switch to view mode.
+- `enter` (in view mode) — back to edit mode; selecting the bar again (`5`, a click) also
+  re-enters it in edit mode.
+- `ctrl+a` `a` — send one literal `ctrl+a` to the targets, which is how a remote `screen` or
+  `tmux` behind the broadcast stays reachable. The literal is never echoed into the bar's line.
+- `ctrl+a` anything else — the prefix is cancelled, nothing is sent, and the status bar says so
+  rather than silently swallowing the keystroke.
+
+The mode is unmissable: the status bar carries `BROADCASTING EDIT → 7 hosts` in the warning
+style, or `BROADCAST VIEW — keys are commands` in the calm typing style, and an armed prefix
+shows as `ctrl+a… esc = view · a = literal ctrl+a`. The modal state does not outlive the bar's
+focus — leaving in view mode and coming back lands in edit mode.
+
+The `ctrl+a` prefix shadows the global connected-only toggle (and the readline start-of-line
+the bar used to forward) while edit mode has the keyboard. That is deliberate: the global
+binding itself is unchanged, and it is reachable from inside the bar as `ctrl+a` `esc`
+`ctrl+a`, since view mode routes to the app-level commands.
 
 ## Mouse
 

@@ -2,6 +2,16 @@
 
 ## 2026-07-30
 
+- The broadcast bar is modal, csshx style: edit mode (default) sends every keystroke to the
+  targets; `ctrl+a` `esc` switches to view mode, where keys are app-level commands and nothing
+  is sent, and `enter` returns to edit. `ctrl+a` `a` sends a literal `ctrl+a` for remote
+  `screen`/`tmux`; an unknown key after the prefix cancels it audibly. The status bar carries
+  `EDIT`/`VIEW` and the armed prefix. The prefix shadows the global connected-only `ctrl+a`
+  only inside the bar's edit mode; view mode reaches the toggle again. `core/tui.md` and
+  `core/keys.md` updated. Version 0.9.4.
+
+## 2026-07-30
+
 - A host leaving the run no longer reflows the grid: the shape is kept and the freed cell
   renders empty; `ctrl+r` re-tiles on request and resizes the PTYs. Joins still grow the grid
   immediately, and explicit view changes (session switch, `ctrl+a`, `ctrl+s`) tile for the new
