@@ -69,12 +69,13 @@ type Model struct {
 	// prompter carries host key questions out of dialling sessions and
 	// secrets does the same for passwords, passphrases and
 	// keyboard-interactive answers; both nil when a test injected its own
-	// session factory. pendingKey and pendingSecret are the questions the UI
-	// is showing right now, waiting for their answers.
-	prompter      *keyPrompter
-	pendingKey    *keyQuestion
-	secrets       *secretPrompter
-	pendingSecret *secretQuestion
+	// session factory. pendingKeys and pendingSecrets are the questions the
+	// UI is showing right now, by session id - every dialling session may
+	// have its own open at once (issue #182).
+	prompter       *keyPrompter
+	pendingKeys    map[string]*keyQuestion
+	secrets        *secretPrompter
+	pendingSecrets map[string]*secretQuestion
 
 	// ctx bounds every dial. Cancelled when the program shuts down.
 	ctx context.Context
@@ -184,7 +185,7 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 func realFactory(ctx context.Context, insecure bool, prompter ssh.HostKeyPrompter, secrets ssh.Prompter) (ssh.Factory, error) {
 	creds := &ssh.Credentials{Prompter: secrets}
 
-	callback := func(host hosts.Host) cryptossh.HostKeyCallback {
+	callback := func(sessionID string, host hosts.Host) cryptossh.HostKeyCallback {
 		return ssh.InsecureIgnoreHostKey()
 	}
 	if !insecure {
@@ -196,8 +197,8 @@ func realFactory(ctx context.Context, insecure bool, prompter ssh.HostKeyPrompte
 		if err != nil {
 			return nil, err
 		}
-		callback = func(host hosts.Host) cryptossh.HostKeyCallback {
-			return known.Callback(ctx, host)
+		callback = func(sessionID string, host hosts.Host) cryptossh.HostKeyCallback {
+			return known.Callback(ctx, sessionID, host)
 		}
 	}
 
@@ -205,7 +206,7 @@ func realFactory(ctx context.Context, insecure bool, prompter ssh.HostKeyPrompte
 		return ssh.New(req.ID, ssh.Config{
 			Host:            req.Host,
 			Auth:            creds.Methods(ctx, req.ID, req.Host),
-			HostKeyCallback: callback(req.Host),
+			HostKeyCallback: callback(req.ID, req.Host),
 			Scrollback:      req.Scrollback,
 		}, req.Events)
 	}, nil

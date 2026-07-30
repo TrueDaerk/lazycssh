@@ -19,10 +19,10 @@ import (
 )
 
 // promptFunc adapts a function to HostKeyPrompter.
-type promptFunc func(ctx context.Context, host hosts.Host, keyType, fingerprint string) (bool, error)
+type promptFunc func(ctx context.Context, sessionID string, host hosts.Host, keyType, fingerprint string) (bool, error)
 
-func (f promptFunc) ConfirmHostKey(ctx context.Context, host hosts.Host, keyType, fingerprint string) (bool, error) {
-	return f(ctx, host, keyType, fingerprint)
+func (f promptFunc) ConfirmHostKey(ctx context.Context, sessionID string, host hosts.Host, keyType, fingerprint string) (bool, error) {
+	return f(ctx, sessionID, host, keyType, fingerprint)
 }
 
 // knownHostsFor returns a path to a known_hosts file containing the server's key
@@ -68,7 +68,7 @@ func TestKnownHostsAcceptsARecordedKey(t *testing.T) {
 	srv := newTestServer(t)
 	path := knownHostsFor(t, srv, t.TempDir())
 
-	kh, err := NewKnownHosts([]string{path}, promptFunc(func(context.Context, hosts.Host, string, string) (bool, error) {
+	kh, err := NewKnownHosts([]string{path}, promptFunc(func(context.Context, string, hosts.Host, string, string) (bool, error) {
 		t.Error("a recorded key must not produce a prompt")
 		return false, nil
 	}))
@@ -76,7 +76,7 @@ func TestKnownHostsAcceptsARecordedKey(t *testing.T) {
 		t.Fatalf("NewKnownHosts: %v", err)
 	}
 
-	s, err := startWith(t, srv, kh.Callback(t.Context(), serverHost(srv)))
+	s, err := startWith(t, srv, kh.Callback(t.Context(), "s1", serverHost(srv)))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestKnownHostsPromptsForAnUnknownKeyAndRemembersIt(t *testing.T) {
 		seenKeyType     string
 	)
 	kh, err := NewKnownHosts([]string{path}, promptFunc(
-		func(_ context.Context, _ hosts.Host, keyType, fingerprint string) (bool, error) {
+		func(_ context.Context, _ string, _ hosts.Host, keyType, fingerprint string) (bool, error) {
 			prompts.Add(1)
 			seenKeyType, seenFingerprint = keyType, fingerprint
 			return true, nil
@@ -103,7 +103,7 @@ func TestKnownHostsPromptsForAnUnknownKeyAndRemembersIt(t *testing.T) {
 		t.Fatalf("NewKnownHosts: %v", err)
 	}
 
-	s, err := startWith(t, srv, kh.Callback(t.Context(), serverHost(srv)))
+	s, err := startWith(t, srv, kh.Callback(t.Context(), "s1", serverHost(srv)))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestKnownHostsPromptsForAnUnknownKeyAndRemembersIt(t *testing.T) {
 
 	// And it must be effective immediately for further sessions this run.
 	prompts.Store(0)
-	s2, err := startWith(t, srv, kh.Callback(t.Context(), serverHost(srv)))
+	s2, err := startWith(t, srv, kh.Callback(t.Context(), "s1", serverHost(srv)))
 	if err != nil {
 		t.Fatalf("second Start: %v", err)
 	}
@@ -147,12 +147,12 @@ func TestKnownHostsRejectionFailsOnlyThatSession(t *testing.T) {
 	path := filepath.Join(dir, "known_hosts")
 
 	kh, err := NewKnownHosts([]string{path}, promptFunc(
-		func(context.Context, hosts.Host, string, string) (bool, error) { return false, nil }))
+		func(context.Context, string, hosts.Host, string, string) (bool, error) { return false, nil }))
 	if err != nil {
 		t.Fatalf("NewKnownHosts: %v", err)
 	}
 
-	s, err := startWith(t, srv, kh.Callback(t.Context(), serverHost(srv)))
+	s, err := startWith(t, srv, kh.Callback(t.Context(), "s1", serverHost(srv)))
 	if err == nil {
 		t.Fatal("Start succeeded with a rejected host key")
 	}
@@ -184,7 +184,7 @@ func TestKnownHostsChangedKeyIsAHardFailure(t *testing.T) {
 
 	var prompts atomic.Int32
 	kh, err := NewKnownHosts([]string{path}, promptFunc(
-		func(context.Context, hosts.Host, string, string) (bool, error) {
+		func(context.Context, string, hosts.Host, string, string) (bool, error) {
 			prompts.Add(1)
 			return true, nil // would accept, and must never be asked
 		}))
@@ -192,7 +192,7 @@ func TestKnownHostsChangedKeyIsAHardFailure(t *testing.T) {
 		t.Fatalf("NewKnownHosts: %v", err)
 	}
 
-	_, err = startWith(t, srv, kh.Callback(t.Context(), serverHost(srv)))
+	_, err = startWith(t, srv, kh.Callback(t.Context(), "s1", serverHost(srv)))
 	if err == nil {
 		t.Fatal("Start succeeded against a host whose key changed")
 	}
@@ -230,7 +230,7 @@ func TestKnownHostsWithoutPrompterRefuses(t *testing.T) {
 		t.Fatalf("NewKnownHosts: %v", err)
 	}
 
-	_, err = startWith(t, srv, kh.Callback(t.Context(), serverHost(srv)))
+	_, err = startWith(t, srv, kh.Callback(t.Context(), "s1", serverHost(srv)))
 	if err == nil {
 		t.Fatal("Start succeeded with an unknown key and no prompter")
 	}
@@ -247,14 +247,14 @@ func TestKnownHostsPrompterErrorFailsTheSession(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "known_hosts")
 
 	kh, err := NewKnownHosts([]string{path}, promptFunc(
-		func(context.Context, hosts.Host, string, string) (bool, error) {
+		func(context.Context, string, hosts.Host, string, string) (bool, error) {
 			return false, errors.New("the user closed the prompt")
 		}))
 	if err != nil {
 		t.Fatalf("NewKnownHosts: %v", err)
 	}
 
-	if _, err := startWith(t, srv, kh.Callback(t.Context(), serverHost(srv))); err == nil {
+	if _, err := startWith(t, srv, kh.Callback(t.Context(), "s1", serverHost(srv))); err == nil {
 		t.Fatal("Start succeeded although the prompt failed")
 	}
 }
@@ -275,7 +275,7 @@ func TestKnownHostsReadsHashedEntries(t *testing.T) {
 	}
 
 	kh, err := NewKnownHosts([]string{path}, promptFunc(
-		func(context.Context, hosts.Host, string, string) (bool, error) {
+		func(context.Context, string, hosts.Host, string, string) (bool, error) {
 			t.Error("a hashed but recorded key must not produce a prompt")
 			return false, nil
 		}))
@@ -283,7 +283,7 @@ func TestKnownHostsReadsHashedEntries(t *testing.T) {
 		t.Fatalf("NewKnownHosts: %v", err)
 	}
 
-	s, err := startWith(t, srv, kh.Callback(t.Context(), serverHost(srv)))
+	s, err := startWith(t, srv, kh.Callback(t.Context(), "s1", serverHost(srv)))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestKnownHostsSkipsMissingFilesButUsesTheOnesThatExist(t *testing.T) {
 
 	// The writable file is listed first and does not exist; the second does.
 	kh, err := NewKnownHosts([]string{absent, present}, promptFunc(
-		func(context.Context, hosts.Host, string, string) (bool, error) {
+		func(context.Context, string, hosts.Host, string, string) (bool, error) {
 			t.Error("a key recorded in the second file must not produce a prompt")
 			return false, nil
 		}))
@@ -306,7 +306,7 @@ func TestKnownHostsSkipsMissingFilesButUsesTheOnesThatExist(t *testing.T) {
 		t.Fatalf("NewKnownHosts: %v", err)
 	}
 
-	s, err := startWith(t, srv, kh.Callback(t.Context(), serverHost(srv)))
+	s, err := startWith(t, srv, kh.Callback(t.Context(), "s1", serverHost(srv)))
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -319,12 +319,12 @@ func TestKnownHostsCreatesTheFileAndItsDirectory(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "dot-ssh", "known_hosts")
 
 	kh, err := NewKnownHosts([]string{path}, promptFunc(
-		func(context.Context, hosts.Host, string, string) (bool, error) { return true, nil }))
+		func(context.Context, string, hosts.Host, string, string) (bool, error) { return true, nil }))
 	if err != nil {
 		t.Fatalf("NewKnownHosts: %v", err)
 	}
 
-	if _, err := startWith(t, srv, kh.Callback(t.Context(), serverHost(srv))); err != nil {
+	if _, err := startWith(t, srv, kh.Callback(t.Context(), "s1", serverHost(srv))); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 

@@ -20,7 +20,7 @@ func TestKeyPrompterRoundTrip(t *testing.T) {
 	}
 	got := make(chan result, 1)
 	go func() {
-		accept, err := p.ConfirmHostKey(context.Background(),
+		accept, err := p.ConfirmHostKey(context.Background(), "web-01",
 			hosts.Host{Alias: "web-01"}, "ssh-ed25519", "SHA256:abc")
 		got <- result{accept, err}
 	}()
@@ -52,42 +52,55 @@ func TestKeyPrompterHonoursTheContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if _, err := p.ConfirmHostKey(ctx, hosts.Host{Alias: "web-01"}, "ssh-ed25519", "SHA256:abc"); err == nil {
+	if _, err := p.ConfirmHostKey(ctx, "web-01", hosts.Host{Alias: "web-01"}, "ssh-ed25519", "SHA256:abc"); err == nil {
 		t.Fatal("ConfirmHostKey returned no error under a cancelled context")
 	}
 }
 
-// The event-loop wiring: a question becomes the UI message, the UI's answer
-// releases the session and re-arms the pump for the next question.
-func TestHostKeyQuestionReachesTheUIAndBack(t *testing.T) {
+// The event-loop wiring: every question becomes a UI message the moment it
+// arrives - two sessions may prompt at once (issue #182) - and each answer
+// releases exactly the session it names.
+func TestHostKeyQuestionsReachTheUIConcurrently(t *testing.T) {
 	m := &Model{
 		app:      ui.NewApp(ui.Config{}),
 		prompter: &keyPrompter{questions: make(chan *keyQuestion)},
 	}
 
-	q := &keyQuestion{host: hosts.Host{Alias: "web-01"}, keyType: "ssh-ed25519",
-		fingerprint: "SHA256:abc", answer: make(chan bool, 1)}
-	model, _ := m.Update(keyQuestionMsg{q: q})
+	q1 := &keyQuestion{sessionID: "localhost", host: hosts.Host{Alias: "localhost"},
+		keyType: "ssh-ed25519", fingerprint: "SHA256:abc", answer: make(chan bool, 1)}
+	q2 := &keyQuestion{sessionID: "localhost#2", host: hosts.Host{Alias: "localhost"},
+		keyType: "ssh-ed25519", fingerprint: "SHA256:def", answer: make(chan bool, 1)}
+	model, cmd := m.Update(keyQuestionMsg{q: q1})
 	m = model.(*Model)
-	if got := m.app.HostKeyQuestionPending(); got != "web-01" {
-		t.Fatalf("HostKeyQuestionPending() = %q", got)
+	if cmd == nil {
+		t.Fatal("the first question did not re-arm the pump")
+	}
+	model, _ = m.Update(keyQuestionMsg{q: q2})
+	m = model.(*Model)
+	if got := m.app.AuthPending(); got != 2 {
+		t.Fatalf("AuthPending() = %d, want both questions open", got)
 	}
 
-	model, cmd := m.Update(ui.HostKeyAnswerMsg{Host: "web-01", Accept: true})
+	model, _ = m.Update(ui.HostKeyAnswerMsg{SessionID: "localhost#2", Accept: true})
 	m = model.(*Model)
 	select {
-	case accept := <-q.answer:
+	case accept := <-q2.answer:
 		if !accept {
 			t.Fatal("the answer arrived as a rejection")
 		}
 	default:
-		t.Fatal("the answer never reached the session")
+		t.Fatal("the answer never reached its session")
 	}
-	if m.pendingKey != nil {
-		t.Fatal("pendingKey survived the answer")
+	select {
+	case <-q1.answer:
+		t.Fatal("the answer released the wrong session")
+	default:
 	}
-	if cmd == nil {
-		t.Fatal("the answer did not re-arm the prompt pump")
+	if _, still := m.pendingKeys["localhost"]; !still {
+		t.Fatal("the unanswered question was dropped")
+	}
+	if _, gone := m.pendingKeys["localhost#2"]; gone {
+		t.Fatal("the answered question survived")
 	}
 }
 
@@ -95,7 +108,7 @@ func TestHostKeyQuestionReachesTheUIAndBack(t *testing.T) {
 // belonged to may have given up meanwhile.
 func TestStrayHostKeyAnswerIsDropped(t *testing.T) {
 	m := &Model{app: ui.NewApp(ui.Config{})}
-	if _, cmd := m.Update(ui.HostKeyAnswerMsg{Host: "web-01", Accept: true}); cmd != nil {
+	if _, cmd := m.Update(ui.HostKeyAnswerMsg{SessionID: "web-01", Accept: true}); cmd != nil {
 		t.Fatal("a stray answer produced a command")
 	}
 }

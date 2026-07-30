@@ -2,7 +2,6 @@ package program
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/TrueDaerk/lazycssh/internal/scrollback"
 )
@@ -13,25 +12,19 @@ import (
 // newline - and the history still says afterwards what was asked and answered.
 // Secrets are never echoed: a masked answer writes only the newline.
 
-// promptScrollback finds the scrollback of the session an auth question names.
-// Questions carry the host alias; session ids are the alias, or alias#n when
-// the same alias was dialled twice, in which case the first one is echoed to.
-// Nil when the run has no such session (or no manager, as tests may not).
-func (m *Model) promptScrollback(alias string) *scrollback.Buffer {
-	if m.mgr == nil || alias == "" {
+// promptScrollback is the scrollback of the session an auth question names -
+// by session id, exact: ten dials of the same alias are ten panes, and each
+// question echoes into its own (issue #182). Nil when the run has no such
+// session (or no manager, as tests may not).
+func (m *Model) promptScrollback(sessionID string) *scrollback.Buffer {
+	if m.mgr == nil || sessionID == "" {
 		return nil
 	}
-	if s, ok := m.mgr.Session(alias); ok {
-		return s.Scrollback()
+	s, ok := m.mgr.Session(sessionID)
+	if !ok {
+		return nil
 	}
-	for _, id := range m.mgr.IDs() {
-		if strings.HasPrefix(id, alias+"#") {
-			if s, ok := m.mgr.Session(id); ok {
-				return s.Scrollback()
-			}
-		}
-	}
-	return nil
+	return s.Scrollback()
 }
 
 // echoPrompt writes a prompt into a session's scrollback, on its own line when

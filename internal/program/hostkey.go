@@ -11,14 +11,15 @@ import (
 
 // The host key question's transport (issue #173). A dialling session that
 // meets an unknown key blocks inside [keyPrompter.ConfirmHostKey]; the
-// question travels over a channel into the event loop, the UI renders it and
-// answers with [ui.HostKeyAnswerMsg], and the answer releases the session's
-// goroutine. One question is in flight at a time - the channel is unbuffered
-// and the pump is re-armed only after the answer - so twenty new hosts ask
-// twenty times, in order, never as a pile of dialogs.
+// question travels over a channel into the event loop, the UI renders it in
+// that session's pane and answers with [ui.HostKeyAnswerMsg], and the answer
+// releases the session's goroutine. Every dialling session may have its own
+// question open at once (issue #182): the pump re-arms on receipt, and the
+// open questions are held by session id.
 
 // keyQuestion is one blocked session's question.
 type keyQuestion struct {
+	sessionID   string
 	host        hosts.Host
 	keyType     string
 	fingerprint string
@@ -36,8 +37,8 @@ type keyPrompter struct {
 // ConfirmHostKey ships the question to the UI and waits for the answer. The
 // context is the session's own: a run shutting down, or that session being
 // closed, withdraws the question instead of leaking a goroutine.
-func (p *keyPrompter) ConfirmHostKey(ctx context.Context, host hosts.Host, keyType, fingerprint string) (bool, error) {
-	q := &keyQuestion{host: host, keyType: keyType, fingerprint: fingerprint, answer: make(chan bool, 1)}
+func (p *keyPrompter) ConfirmHostKey(ctx context.Context, sessionID string, host hosts.Host, keyType, fingerprint string) (bool, error) {
+	q := &keyQuestion{sessionID: sessionID, host: host, keyType: keyType, fingerprint: fingerprint, answer: make(chan bool, 1)}
 	select {
 	case p.questions <- q:
 	case <-ctx.Done():
@@ -57,8 +58,9 @@ type keyQuestionMsg struct {
 }
 
 // promptPump waits for the next host key question, like pump does for fleet
-// events. It is armed at Init and re-armed by the answer, never earlier - the
-// serialization lives here.
+// events. It is armed at Init and re-armed the moment a question arrives, so
+// every dialling session's question reaches the UI without waiting for the
+// previous answer.
 func (m *Model) promptPump() tea.Cmd {
 	if m.prompter == nil {
 		return nil
@@ -73,31 +75,36 @@ func (m *Model) promptPump() tea.Cmd {
 	}
 }
 
-// askHostKey shows the question in the UI and remembers whose it is. The
-// question is also written into the host's scrollback in ssh's own wording, so
-// the pane reads like a plain terminal (issue #180).
+// askHostKey shows the question in the UI, remembers whose it is, and re-arms
+// the pump so the next session's question is not held back. The question is
+// also written into the session's scrollback in ssh's own wording, so the pane
+// reads like a plain terminal (issue #180).
 func (m *Model) askHostKey(msg keyQuestionMsg) (tea.Model, tea.Cmd) {
-	m.pendingKey = msg.q
-	echoPrompt(m.promptScrollback(msg.q.host.Alias), hostKeyPromptText(msg.q))
-	return m, m.forward(ui.HostKeyQuestionMsg{
+	if m.pendingKeys == nil {
+		m.pendingKeys = make(map[string]*keyQuestion)
+	}
+	m.pendingKeys[msg.q.sessionID] = msg.q
+	echoPrompt(m.promptScrollback(msg.q.sessionID), hostKeyPromptText(msg.q))
+	return m, tea.Batch(m.forward(ui.HostKeyQuestionMsg{
+		SessionID:   msg.q.sessionID,
 		Host:        msg.q.host.Alias,
 		KeyType:     msg.q.keyType,
 		Fingerprint: msg.q.fingerprint,
-	})
+	}), m.promptPump())
 }
 
-// answerHostKey releases the blocked session and re-arms the pump for the
-// next question.
+// answerHostKey releases the blocked session the answer names.
 func (m *Model) answerHostKey(msg ui.HostKeyAnswerMsg) (tea.Model, tea.Cmd) {
-	if m.pendingKey == nil {
+	q, ok := m.pendingKeys[msg.SessionID]
+	if !ok {
 		return m, nil
 	}
 	shown := "no"
 	if msg.Accept {
 		shown = "yes"
 	}
-	echoAnswer(m.promptScrollback(m.pendingKey.host.Alias), shown)
-	m.pendingKey.answer <- msg.Accept
-	m.pendingKey = nil
-	return m, m.promptPump()
+	echoAnswer(m.promptScrollback(q.sessionID), shown)
+	q.answer <- msg.Accept
+	delete(m.pendingKeys, msg.SessionID)
+	return m, nil
 }

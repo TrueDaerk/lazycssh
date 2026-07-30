@@ -34,7 +34,7 @@ type CommandPrompter struct {
 }
 
 // Password runs the configured command, or falls back.
-func (p CommandPrompter) Password(ctx context.Context, host hosts.Host) (string, error) {
+func (p CommandPrompter) Password(ctx context.Context, sessionID string, host hosts.Host) (string, error) {
 	cmd := secret.Command{}
 	if p.PasswordCommand != nil {
 		cmd = p.PasswordCommand(host)
@@ -43,7 +43,7 @@ func (p CommandPrompter) Password(ctx context.Context, host hosts.Host) (string,
 		if p.Fallback == nil {
 			return "", fmt.Errorf("password for %s: %w", host.Alias, ErrNoPrompter)
 		}
-		return p.Fallback.Password(ctx, host)
+		return p.Fallback.Password(ctx, sessionID, host)
 	}
 
 	value, err := cmd.Run(ctx)
@@ -55,7 +55,7 @@ func (p CommandPrompter) Password(ctx context.Context, host hosts.Host) (string,
 }
 
 // Passphrase runs the configured command, or falls back.
-func (p CommandPrompter) Passphrase(ctx context.Context, host hosts.Host, keyPath string) (string, error) {
+func (p CommandPrompter) Passphrase(ctx context.Context, sessionID string, host hosts.Host, keyPath string) (string, error) {
 	cmd := secret.Command{}
 	if p.PassphraseCommand != nil {
 		cmd = p.PassphraseCommand(keyPath)
@@ -64,7 +64,7 @@ func (p CommandPrompter) Passphrase(ctx context.Context, host hosts.Host, keyPat
 		if p.Fallback == nil {
 			return "", fmt.Errorf("passphrase for %s: %w", keyPath, ErrNoPrompter)
 		}
-		return p.Fallback.Passphrase(ctx, host, keyPath)
+		return p.Fallback.Passphrase(ctx, sessionID, host, keyPath)
 	}
 
 	value, err := cmd.Run(ctx)
@@ -78,9 +78,9 @@ func (p CommandPrompter) Passphrase(ctx context.Context, host hosts.Host, keyPat
 // Question always falls back: a keyboard-interactive challenge is a
 // conversation, and answering an unknown question with a stored password would
 // hand it to whatever the server decided to ask.
-func (p CommandPrompter) Question(ctx context.Context, host hosts.Host, question string, echo bool) (string, error) {
+func (p CommandPrompter) Question(ctx context.Context, sessionID string, host hosts.Host, question string, echo bool) (string, error) {
 	if p.Fallback == nil {
 		return "", fmt.Errorf("keyboard-interactive for %s: %w", host.Alias, ErrNoPrompter)
 	}
-	return p.Fallback.Question(ctx, host, question, echo)
+	return p.Fallback.Question(ctx, sessionID, host, question, echo)
 }

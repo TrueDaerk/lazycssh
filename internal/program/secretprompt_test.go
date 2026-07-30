@@ -21,7 +21,7 @@ func TestSecretPrompterRoundTrip(t *testing.T) {
 	}
 	got := make(chan result, 1)
 	go func() {
-		v, err := p.Password(context.Background(), hosts.Host{Alias: "db1", User: "test"})
+		v, err := p.Password(context.Background(), "db1", hosts.Host{Alias: "db1", User: "test"})
 		got <- result{v, err}
 	}()
 
@@ -52,7 +52,7 @@ func TestSecretPrompterCancel(t *testing.T) {
 
 	got := make(chan error, 1)
 	go func() {
-		_, err := p.Passphrase(context.Background(), hosts.Host{Alias: "db1"}, "/home/u/.ssh/id_ed25519")
+		_, err := p.Passphrase(context.Background(), "db1", hosts.Host{Alias: "db1"}, "/home/u/.ssh/id_ed25519")
 		got <- err
 	}()
 
@@ -77,41 +77,49 @@ func TestSecretPrompterHonoursTheContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if _, err := p.ask(ctx, "x", "password for x", false); err == nil {
+	if _, err := p.ask(ctx, "x", "x", "password for x", false); err == nil {
 		t.Fatal("ask returned no error under a cancelled context")
 	}
 }
 
-// The event-loop wiring: the question becomes the UI message, the UI's answer
-// releases the session and re-arms the pump.
-func TestSecretQuestionReachesTheUIAndBack(t *testing.T) {
+// The event-loop wiring: every question becomes a UI message the moment it
+// arrives, and each answer releases exactly the session it names (issue #182).
+func TestSecretQuestionsReachTheUIConcurrently(t *testing.T) {
 	m := &Model{
 		app:     ui.NewApp(ui.Config{}),
 		secrets: &secretPrompter{questions: make(chan *secretQuestion)},
 	}
 
-	q := &secretQuestion{prompt: "password for test@db1", answer: make(chan secretAnswer, 1)}
-	model, _ := m.Update(secretQuestionMsg{q: q})
+	q1 := &secretQuestion{sessionID: "localhost", prompt: "test@localhost's password: ", answer: make(chan secretAnswer, 1)}
+	q2 := &secretQuestion{sessionID: "localhost#2", prompt: "test@localhost's password: ", answer: make(chan secretAnswer, 1)}
+	model, cmd := m.Update(secretQuestionMsg{q: q1})
 	m = model.(*Model)
-	if !m.app.SecretPromptOpen() {
-		t.Fatal("the prompt did not open in the UI")
+	if cmd == nil {
+		t.Fatal("the first question did not re-arm the pump")
+	}
+	model, _ = m.Update(secretQuestionMsg{q: q2})
+	m = model.(*Model)
+	if got := m.app.AuthPending(); got != 2 {
+		t.Fatalf("AuthPending() = %d, want both prompts open", got)
 	}
 
-	model, cmd := m.Update(ui.SecretAnswerMsg{Value: "hunt", Ok: true})
+	model, _ = m.Update(ui.SecretAnswerMsg{SessionID: "localhost", Value: "hunt", Ok: true})
 	m = model.(*Model)
 	select {
-	case a := <-q.answer:
+	case a := <-q1.answer:
 		if !a.ok || a.value != "hunt" {
 			t.Fatalf("answer = %+v", a)
 		}
 	default:
-		t.Fatal("the answer never reached the session")
+		t.Fatal("the answer never reached its session")
 	}
-	if m.pendingSecret != nil {
-		t.Fatal("pendingSecret survived the answer")
+	select {
+	case <-q2.answer:
+		t.Fatal("the answer released the wrong session")
+	default:
 	}
-	if cmd == nil {
-		t.Fatal("the answer did not re-arm the secret pump")
+	if _, still := m.pendingSecrets["localhost#2"]; !still {
+		t.Fatal("the unanswered prompt was dropped")
 	}
 }
 

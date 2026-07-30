@@ -34,14 +34,9 @@ func (a App) panelBody(panel Panel, width, height int) string {
 func (a App) statusPanel(width int) string {
 	var lines []string
 
-	// An auth question renders in the host's own pane; the Status panel is
-	// its fallback for a host without a visible pane. It outranks everything:
-	// it owns the keyboard while it is open, and a security decision must be
-	// visible while it is made.
-	if !a.questionPaneVisible() {
-		lines = append(lines, a.hostKeyQuestionLines()...)
-		lines = append(lines, a.secretPromptLines()...)
-	}
+	// Open auth prompts are counted first: their questions live in the panes,
+	// but panes can be off screen, and a blocked dial must not look idle.
+	lines = append(lines, a.authPanelLines()...)
 
 	// The open new-host prompt comes first: while it has the keyboard it is
 	// the thing being interacted with, and its hints must not be pushed off a

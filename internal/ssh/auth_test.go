@@ -65,24 +65,24 @@ func writeKey(t *testing.T, passphrase string) (path string, pub ssh.PublicKey) 
 	return path, signer.PublicKey()
 }
 
-func TestCredentialsPromptsOncePerUser(t *testing.T) {
+func TestCredentialsPromptsOncePerMachine(t *testing.T) {
 	var calls atomic.Int32
 	creds := &Credentials{
 		DisableAgent: true,
 		Prompter: FuncPrompter{
-			PasswordFunc: func(context.Context, hosts.Host) (string, error) {
+			PasswordFunc: func(context.Context, string, hosts.Host) (string, error) {
 				calls.Add(1)
 				return testPassword, nil
 			},
 		},
 	}
 
-	// Forty hosts, one account: the user must be asked exactly once.
+	// One machine asked forty times - reconnects, retries - prompts exactly
+	// once; the rest is served from the cache.
 	for i := 0; i < 40; i++ {
-		host := authHost("srv" + string(rune('a'+i%26)))
-		got, err := creds.password(t.Context(), host)
+		got, err := creds.password(t.Context(), "s1", authHost("srv"))
 		if err != nil {
-			t.Fatalf("password for %s: %v", host.Alias, err)
+			t.Fatalf("password: %v", err)
 		}
 		if got != testPassword {
 			t.Fatalf("password = %q, want the answered value", got)
@@ -90,37 +90,42 @@ func TestCredentialsPromptsOncePerUser(t *testing.T) {
 	}
 
 	if got := calls.Load(); got != 1 {
-		t.Errorf("the user was asked %d times, want exactly 1: forty prompts for one password makes the tool unusable", got)
+		t.Errorf("the machine was asked %d times, want exactly 1", got)
 	}
 }
 
-func TestCredentialsPasswordCacheIsPerUser(t *testing.T) {
+// The cache is per machine, not per login user (issue #182): the same user on
+// ten ports of one address is ten machines that may hold ten different
+// passwords - a docker test cluster is exactly that - and each prompts its own
+// pane. A uniform cluster is still answered once, through the broadcast line.
+func TestCredentialsPasswordCacheIsPerMachine(t *testing.T) {
 	var asked []string
 	var mu sync.Mutex
 
 	creds := &Credentials{
 		DisableAgent: true,
 		Prompter: FuncPrompter{
-			PasswordFunc: func(_ context.Context, h hosts.Host) (string, error) {
+			PasswordFunc: func(_ context.Context, _ string, h hosts.Host) (string, error) {
 				mu.Lock()
 				defer mu.Unlock()
-				asked = append(asked, h.User)
-				return "secret-for-" + h.User, nil
+				asked = append(asked, passwordKey(h))
+				return "secret", nil
 			},
 		},
 	}
 
-	root := hosts.Host{Alias: "a", User: "root"}
-	deploy := hosts.Host{Alias: "b", User: "deploy"}
+	one := hosts.Host{Alias: "localhost", Addr: "localhost", Port: 2201, User: "test"}
+	two := hosts.Host{Alias: "localhost", Addr: "localhost", Port: 2202, User: "test"}
+	otherUser := hosts.Host{Alias: "localhost", Addr: "localhost", Port: 2201, User: "root"}
 
-	for _, h := range []hosts.Host{root, deploy, root, deploy} {
-		if _, err := creds.password(t.Context(), h); err != nil {
+	for _, h := range []hosts.Host{one, two, otherUser, one, two, otherUser} {
+		if _, err := creds.password(t.Context(), "s1", h); err != nil {
 			t.Fatalf("password: %v", err)
 		}
 	}
 
-	if len(asked) != 2 {
-		t.Errorf("asked %v, want one prompt per distinct user", asked)
+	if len(asked) != 3 {
+		t.Errorf("asked %v, want one prompt per distinct machine", asked)
 	}
 }
 
@@ -129,7 +134,7 @@ func TestCredentialsPromptsConcurrentlyWithoutDuplicating(t *testing.T) {
 	creds := &Credentials{
 		DisableAgent: true,
 		Prompter: FuncPrompter{
-			PasswordFunc: func(context.Context, hosts.Host) (string, error) {
+			PasswordFunc: func(context.Context, string, hosts.Host) (string, error) {
 				calls.Add(1)
 				time.Sleep(10 * time.Millisecond)
 				return testPassword, nil
@@ -142,7 +147,7 @@ func TestCredentialsPromptsConcurrentlyWithoutDuplicating(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			creds.password(context.Background(), authHost("srv"))
+			creds.password(context.Background(), "s1", authHost("srv"))
 		}()
 	}
 	wg.Wait()
@@ -152,11 +157,11 @@ func TestCredentialsPromptsConcurrentlyWithoutDuplicating(t *testing.T) {
 	if got := calls.Load(); got > 20 {
 		t.Errorf("prompted %d times for 20 concurrent sessions", got)
 	}
-	if _, err := creds.password(t.Context(), authHost("srv")); err != nil {
+	if _, err := creds.password(t.Context(), "s1", authHost("srv")); err != nil {
 		t.Fatalf("password after the race: %v", err)
 	}
 	before := calls.Load()
-	creds.password(t.Context(), authHost("srv"))
+	creds.password(t.Context(), "s1", authHost("srv"))
 	if got := calls.Load(); got != before {
 		t.Errorf("a settled cache still prompted: %d -> %d", before, got)
 	}
@@ -167,7 +172,7 @@ func TestCredentialsForgetPassword(t *testing.T) {
 	creds := &Credentials{
 		DisableAgent: true,
 		Prompter: FuncPrompter{
-			PasswordFunc: func(context.Context, hosts.Host) (string, error) {
+			PasswordFunc: func(context.Context, string, hosts.Host) (string, error) {
 				calls.Add(1)
 				return testPassword, nil
 			},
@@ -175,9 +180,9 @@ func TestCredentialsForgetPassword(t *testing.T) {
 	}
 	host := authHost("srv")
 
-	creds.password(t.Context(), host)
-	creds.ForgetPassword(host.User)
-	creds.password(t.Context(), host)
+	creds.password(t.Context(), "s1", host)
+	creds.ForgetPassword(host)
+	creds.password(t.Context(), "s1", host)
 
 	if got := calls.Load(); got != 2 {
 		t.Errorf("prompted %d times, want 2: a wrong answer must be correctable", got)
@@ -191,7 +196,7 @@ func TestCredentialsLoadsEncryptedIdentityOncePerFile(t *testing.T) {
 	creds := &Credentials{
 		DisableAgent: true,
 		Prompter: FuncPrompter{
-			PassphraseFunc: func(_ context.Context, _ hosts.Host, path string) (string, error) {
+			PassphraseFunc: func(_ context.Context, _ string, _ hosts.Host, path string) (string, error) {
 				calls.Add(1)
 				if path != keyPath {
 					t.Errorf("asked for %q, want the key path %q", path, keyPath)
@@ -202,7 +207,7 @@ func TestCredentialsLoadsEncryptedIdentityOncePerFile(t *testing.T) {
 	}
 
 	for i := 0; i < 5; i++ {
-		signers, err := creds.identitySigners(t.Context(), authHost("srv", keyPath))
+		signers, err := creds.identitySigners(t.Context(), "s1", authHost("srv", keyPath))
 		if err != nil {
 			t.Fatalf("identitySigners: %v", err)
 		}
@@ -222,14 +227,14 @@ func TestCredentialsUnencryptedIdentityNeedsNoPrompt(t *testing.T) {
 	creds := &Credentials{
 		DisableAgent: true,
 		Prompter: FuncPrompter{
-			PassphraseFunc: func(context.Context, hosts.Host, string) (string, error) {
+			PassphraseFunc: func(context.Context, string, hosts.Host, string) (string, error) {
 				t.Error("an unencrypted key must not produce a passphrase prompt")
 				return "", errors.New("unexpected prompt")
 			},
 		},
 	}
 
-	signers, err := creds.identitySigners(t.Context(), authHost("srv", keyPath))
+	signers, err := creds.identitySigners(t.Context(), "s1", authHost("srv", keyPath))
 	if err != nil {
 		t.Fatalf("identitySigners: %v", err)
 	}
@@ -245,7 +250,7 @@ func TestCredentialsWrongPassphraseIsForgotten(t *testing.T) {
 	creds := &Credentials{
 		DisableAgent: true,
 		Prompter: FuncPrompter{
-			PassphraseFunc: func(context.Context, hosts.Host, string) (string, error) {
+			PassphraseFunc: func(context.Context, string, hosts.Host, string) (string, error) {
 				if calls.Add(1) == 1 {
 					return "wrong-on-purpose", nil
 				}
@@ -255,13 +260,13 @@ func TestCredentialsWrongPassphraseIsForgotten(t *testing.T) {
 	}
 	host := authHost("srv", keyPath)
 
-	if _, err := creds.identitySigners(t.Context(), host); err == nil {
+	if _, err := creds.identitySigners(t.Context(), "s1", host); err == nil {
 		t.Fatal("a wrong passphrase produced no error")
 	}
 
 	// The second attempt must ask again rather than reuse the wrong answer for
 	// every remaining host.
-	signers, err := creds.identitySigners(t.Context(), host)
+	signers, err := creds.identitySigners(t.Context(), "s1", host)
 	if err != nil {
 		t.Fatalf("second attempt: %v", err)
 	}
@@ -279,7 +284,7 @@ func TestCredentialsMissingIdentityIsNotFatalWhenAnotherWorks(t *testing.T) {
 
 	host := authHost("srv", filepath.Join(t.TempDir(), "absent"), keyPath)
 
-	signers, err := creds.identitySigners(t.Context(), host)
+	signers, err := creds.identitySigners(t.Context(), "s1", host)
 	if err != nil {
 		t.Fatalf("identitySigners: %v", err)
 	}
@@ -292,10 +297,10 @@ func TestCredentialsWithoutPrompter(t *testing.T) {
 	keyPath, _ := writeKey(t, testPassphrase)
 	creds := &Credentials{DisableAgent: true}
 
-	if _, err := creds.password(t.Context(), authHost("srv")); !errors.Is(err, ErrNoPrompter) {
+	if _, err := creds.password(t.Context(), "s1", authHost("srv")); !errors.Is(err, ErrNoPrompter) {
 		t.Errorf("password error = %v, want ErrNoPrompter", err)
 	}
-	if _, err := creds.identitySigners(t.Context(), authHost("srv", keyPath)); !errors.Is(err, ErrNoPrompter) {
+	if _, err := creds.identitySigners(t.Context(), "s1", authHost("srv", keyPath)); !errors.Is(err, ErrNoPrompter) {
 		t.Errorf("identity error = %v, want ErrNoPrompter", err)
 	}
 }
@@ -305,11 +310,11 @@ func TestCredentialsKeyboardInteractiveReusesThePassword(t *testing.T) {
 	creds := &Credentials{
 		DisableAgent: true,
 		Prompter: FuncPrompter{
-			PasswordFunc: func(context.Context, hosts.Host) (string, error) {
+			PasswordFunc: func(context.Context, string, hosts.Host) (string, error) {
 				passwordCalls.Add(1)
 				return testPassword, nil
 			},
-			QuestionFunc: func(_ context.Context, _ hosts.Host, q string, _ bool) (string, error) {
+			QuestionFunc: func(_ context.Context, _ string, _ hosts.Host, q string, _ bool) (string, error) {
 				questionCalls.Add(1)
 				return "answer to " + q, nil
 			},
@@ -319,7 +324,7 @@ func TestCredentialsKeyboardInteractiveReusesThePassword(t *testing.T) {
 
 	// A PAM server asking the usual single question is served from the password
 	// cache, so a password host and a PAM host behave the same.
-	answers, err := creds.answer(t.Context(), host, []string{"Password: "}, []bool{false})
+	answers, err := creds.answer(t.Context(), "s1", host, []string{"Password: "}, []bool{false})
 	if err != nil {
 		t.Fatalf("answer: %v", err)
 	}
@@ -331,7 +336,7 @@ func TestCredentialsKeyboardInteractiveReusesThePassword(t *testing.T) {
 	}
 
 	// Anything else is a real question.
-	answers, err = creds.answer(t.Context(), host, []string{"Verification code: "}, []bool{false})
+	answers, err = creds.answer(t.Context(), "s1", host, []string{"Verification code: "}, []bool{false})
 	if err != nil {
 		t.Fatalf("answer: %v", err)
 	}
@@ -347,7 +352,7 @@ func TestCredentialsAnswersEveryQuestion(t *testing.T) {
 	creds := &Credentials{
 		DisableAgent: true,
 		Prompter: FuncPrompter{
-			QuestionFunc: func(_ context.Context, _ hosts.Host, q string, echo bool) (string, error) {
+			QuestionFunc: func(_ context.Context, _ string, _ hosts.Host, q string, echo bool) (string, error) {
 				if q == "Username: " && !echo {
 					t.Error("an echoing question was reported as hidden")
 				}
@@ -356,7 +361,7 @@ func TestCredentialsAnswersEveryQuestion(t *testing.T) {
 		},
 	}
 
-	answers, err := creds.answer(t.Context(), authHost("srv"),
+	answers, err := creds.answer(t.Context(), "s1", authHost("srv"),
 		[]string{"Username: ", "Token: "}, []bool{true, false})
 	if err != nil {
 		t.Fatalf("answer: %v", err)
@@ -414,9 +419,11 @@ func TestNoSecretEverAppearsInAnError(t *testing.T) {
 	creds := &Credentials{
 		DisableAgent: true,
 		Prompter: FuncPrompter{
-			PassphraseFunc: func(context.Context, hosts.Host, string) (string, error) { return "wrong-" + testPassphrase, nil },
-			PasswordFunc:   func(context.Context, hosts.Host) (string, error) { return testPassword, nil },
-			QuestionFunc: func(context.Context, hosts.Host, string, bool) (string, error) {
+			PassphraseFunc: func(context.Context, string, hosts.Host, string) (string, error) {
+				return "wrong-" + testPassphrase, nil
+			},
+			PasswordFunc: func(context.Context, string, hosts.Host) (string, error) { return testPassword, nil },
+			QuestionFunc: func(context.Context, string, hosts.Host, string, bool) (string, error) {
 				return testPassword, nil
 			},
 		},
@@ -426,10 +433,10 @@ func TestNoSecretEverAppearsInAnError(t *testing.T) {
 	var messages []string
 
 	// Every path that can fail after a secret has been handled.
-	if _, err := creds.identitySigners(t.Context(), host); err != nil {
+	if _, err := creds.identitySigners(t.Context(), "s1", host); err != nil {
 		messages = append(messages, err.Error())
 	}
-	if _, err := creds.identitySigners(t.Context(), authHost("srv", filepath.Join(t.TempDir(), "absent"))); err != nil {
+	if _, err := creds.identitySigners(t.Context(), "s1", authHost("srv", filepath.Join(t.TempDir(), "absent"))); err != nil {
 		messages = append(messages, err.Error())
 	}
 
@@ -474,7 +481,7 @@ func TestAuthAgainstServer(t *testing.T) {
 		creds := &Credentials{
 			DisableAgent: true,
 			Prompter: FuncPrompter{
-				PasswordFunc: func(context.Context, hosts.Host) (string, error) { return srv.Password, nil },
+				PasswordFunc: func(context.Context, string, hosts.Host) (string, error) { return srv.Password, nil },
 			},
 		}
 		connectWith(t, srv, creds, nil)
@@ -496,7 +503,7 @@ func TestAuthAgainstServer(t *testing.T) {
 		creds := &Credentials{
 			DisableAgent: true,
 			Prompter: FuncPrompter{
-				PassphraseFunc: func(context.Context, hosts.Host, string) (string, error) {
+				PassphraseFunc: func(context.Context, string, hosts.Host, string) (string, error) {
 					prompts.Add(1)
 					return testPassphrase, nil
 				},

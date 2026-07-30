@@ -34,12 +34,18 @@ func (a App) handleTypingKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return next, cmd
 	}
 
+	id := a.FocusedHost()
+	if q := a.authFor(id); q != nil {
+		// The pane's open auth question takes the typing (issue #182): the
+		// keystrokes edit its answer, not a shell that is not there yet.
+		return a.handleAuthKey(id, msg)
+	}
+
 	raw := keystrokeBytes(msg)
 	if len(raw) == 0 {
 		return a, nil
 	}
 
-	id := a.FocusedHost()
 	if id == "" {
 		return a, nil
 	}

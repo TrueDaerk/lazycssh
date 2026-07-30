@@ -200,19 +200,9 @@ type App struct {
 	cmdHistoryPos int
 	lastDelivery  string
 
-	// keyQuestion is the open host key question, nil when none is, and
-	// keyAnswer the yes/no being typed for it; see internal/ui/hostkey.go.
-	keyQuestion *HostKeyQuestionMsg
-	keyAnswer   []rune
-
-	// secretQuestion is the open secret prompt and secretInput its masked
-	// input; see internal/ui/secretprompt.go.
-	secretQuestion *SecretQuestionMsg
-	secretInput    textinput.Model
-
-	// questionPaneID is the pane the open auth question renders in, empty when
-	// it falls back to the Status panel; see internal/ui/authpane.go.
-	questionPaneID string
+	// auth is the open auth questions by session id - every dialling session
+	// may have its own at once (issue #182); see internal/ui/authpane.go.
+	auth map[string]*paneAuth
 
 	groupList        []groupRow
 	groupsErr        error
@@ -269,10 +259,6 @@ func NewApp(cfg Config) App {
 	split.Placeholder = "panes per view"
 	split.Prompt = ""
 
-	secret := textinput.New()
-	secret.Prompt = ""
-	secret.EchoMode = textinput.EchoPassword
-
 	a := App{
 		cfg:             cfg,
 		keys:            keys,
@@ -285,7 +271,6 @@ func NewApp(cfg Config) App {
 		groupNameInput:  groupName,
 		groupHostsInput: groupHosts,
 		splitInput:      split,
-		secretInput:     secret,
 		scroll:          make(map[string]int),
 		focus:           AreaSidebar,
 		panel:           PanelStatus,
@@ -459,20 +444,8 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "ctrl+q" &&
 		(a.cmdInput.Focused() || a.hostInput.Focused() ||
 			a.searchInput.Focused() || a.Saving() || a.splitInput.Focused() ||
-			a.GroupDialogOpen() || a.deleteGroup != "" || a.endSession != "" ||
-			a.keyQuestion != nil || a.secretQuestion != nil) {
+			a.GroupDialogOpen() || a.deleteGroup != "" || a.endSession != "") {
 		return a, tea.Quit
-	}
-
-	// The host key question owns the keyboard while it is open: a keystroke
-	// meant for a host must not accept a key it was never asked about.
-	if a.keyQuestion != nil {
-		return a.handleHostKeyQuestionKey(msg)
-	}
-
-	// So does the secret prompt: a password is typed, never broadcast.
-	if a.secretQuestion != nil {
-		return a.handleSecretPromptKey(msg)
 	}
 
 	// The command line has the keyboard while it is open: a command containing
@@ -1083,10 +1056,11 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 func (a App) renderStatusBar() string {
 	var parts []string
 	if label := a.authStatusLabel(); label != "" {
-		// An open auth question owns the keyboard: no keystroke reaches a
-		// host, so the AUTH segment replaces TYPING/BROADCASTING outright.
+		// Open auth prompts are counted here whatever has focus: panes off
+		// screen may be waiting too.
 		parts = append(parts, a.theme.StatusWarning.Render(label))
-	} else if a.focus == AreaBroadcast {
+	}
+	if a.focus == AreaBroadcast {
 		if a.broadcastView {
 			// View mode sends nothing, so it renders in the calm typing style:
 			// the warning is for keys that reach hosts.
@@ -1105,7 +1079,7 @@ func (a App) renderStatusBar() string {
 			parts = append(parts, a.theme.StatusWarning.Render(label))
 		}
 	}
-	if a.focus == AreaGrid && a.authStatusLabel() == "" {
+	if a.focus == AreaGrid {
 		// Where keystrokes go is the one thing the user must never have to
 		// guess. The literal word carries the meaning, so it survives NoColor.
 		target := a.FocusedHost()

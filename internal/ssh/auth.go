@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -31,14 +32,16 @@ const (
 // only.
 type Prompter interface {
 	// Passphrase asks for the passphrase protecting a private key file. The
-	// host is the one whose dial hit the encrypted key - the answer is cached
-	// per key file, but the question belongs to a host the user can see.
-	Passphrase(ctx context.Context, host hosts.Host, keyPath string) (string, error)
+	// session id names the dial that hit the encrypted key - the answer is
+	// cached per key file, but the question belongs to a pane the user can
+	// see, and an alias alone cannot name one when a fleet dials the same
+	// alias on ten ports (issue #182).
+	Passphrase(ctx context.Context, sessionID string, host hosts.Host, keyPath string) (string, error)
 	// Password asks for the login password of a host.
-	Password(ctx context.Context, host hosts.Host) (string, error)
+	Password(ctx context.Context, sessionID string, host hosts.Host) (string, error)
 	// Question asks a free-form keyboard-interactive question. echo reports
 	// whether the answer may be shown while it is typed.
-	Question(ctx context.Context, host hosts.Host, question string, echo bool) (string, error)
+	Question(ctx context.Context, sessionID string, host hosts.Host, question string, echo bool) (string, error)
 }
 
 // ErrNoPrompter is returned when a secret is needed but nothing can ask for it,
@@ -48,8 +51,11 @@ var ErrNoPrompter = errors.New("ssh: a secret is required but no prompter is ava
 // Credentials builds the authentication methods offered to a host, and caches
 // the secrets it had to ask for.
 //
-// The cache is what makes forty hosts bearable: a passphrase is requested once
-// per key file and a password once per login user, however many hosts need it.
+// A passphrase is requested once per key file, however many hosts use it, and
+// a password once per user@addr:port - per machine, not per login user,
+// because hosts may hold different passwords (issue #182). A uniform cluster
+// is still one typing action: every pane prompts, and the broadcast line
+// answers all of them at once.
 //
 // Nothing here is ever written to disk. A Credentials value holds secrets in
 // memory for the lifetime of the run.
@@ -64,8 +70,13 @@ type Credentials struct {
 
 	mu          sync.Mutex
 	passphrases map[string]string // key file path -> passphrase
-	passwords   map[string]string // login user -> password
+	passwords   map[string]string // user@addr:port -> password
 	lastMethod  map[string]string // session id -> the method last attempted
+}
+
+// passwordKey is the password cache key: the machine, not the login user.
+func passwordKey(host hosts.Host) string {
+	return host.User + "@" + net.JoinHostPort(host.Addr, strconv.Itoa(host.Port))
 }
 
 // Methods returns the authentication methods to offer a host, in the order they
@@ -119,19 +130,19 @@ func (c *Credentials) chain(ctx context.Context, sessionID string, host hosts.Ho
 	if len(host.IdentityFiles) > 0 {
 		chain = append(chain, authMethod{MethodPublicKey, ssh.PublicKeysCallback(func() ([]ssh.Signer, error) {
 			c.note(sessionID, MethodPublicKey)
-			return c.identitySigners(ctx, host)
+			return c.identitySigners(ctx, sessionID, host)
 		})})
 	}
 
 	chain = append(chain, authMethod{MethodPassword, ssh.PasswordCallback(func() (string, error) {
 		c.note(sessionID, MethodPassword)
-		return c.password(ctx, host)
+		return c.password(ctx, sessionID, host)
 	})})
 
 	chain = append(chain, authMethod{MethodKeyboardInteractive,
 		ssh.KeyboardInteractive(func(name, instruction string, questions []string, echos []bool) ([]string, error) {
 			c.note(sessionID, MethodKeyboardInteractive)
-			return c.answer(ctx, host, questions, echos)
+			return c.answer(ctx, sessionID, host, questions, echos)
 		})})
 
 	return chain
@@ -195,14 +206,14 @@ func (c *Credentials) agentSigners() (func() ([]ssh.Signer, error), bool) {
 
 // identitySigners loads the host's identity files, prompting once per encrypted
 // key however many hosts use it.
-func (c *Credentials) identitySigners(ctx context.Context, host hosts.Host) ([]ssh.Signer, error) {
+func (c *Credentials) identitySigners(ctx context.Context, sessionID string, host hosts.Host) ([]ssh.Signer, error) {
 	var (
 		signers []ssh.Signer
 		errs    []error
 	)
 
 	for _, path := range host.IdentityFiles {
-		signer, err := c.loadIdentity(ctx, host, path)
+		signer, err := c.loadIdentity(ctx, sessionID, host, path)
 		if err != nil {
 			// A missing or unusable key is not fatal on its own: ssh config
 			// files routinely list keys that do not exist on every machine.
@@ -220,7 +231,7 @@ func (c *Credentials) identitySigners(ctx context.Context, host hosts.Host) ([]s
 
 // loadIdentity reads one private key, asking for a passphrase if it is
 // encrypted.
-func (c *Credentials) loadIdentity(ctx context.Context, host hosts.Host, path string) (ssh.Signer, error) {
+func (c *Credentials) loadIdentity(ctx context.Context, sessionID string, host hosts.Host, path string) (ssh.Signer, error) {
 	pem, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read identity %s: %w", path, err)
@@ -236,7 +247,7 @@ func (c *Credentials) loadIdentity(ctx context.Context, host hosts.Host, path st
 		return nil, fmt.Errorf("parse identity %s: %w", path, err)
 	}
 
-	passphrase, err := c.passphrase(ctx, host, path)
+	passphrase, err := c.passphrase(ctx, sessionID, host, path)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +263,7 @@ func (c *Credentials) loadIdentity(ctx context.Context, host hosts.Host, path st
 }
 
 // passphrase returns the cached passphrase for a key file, asking for it once.
-func (c *Credentials) passphrase(ctx context.Context, host hosts.Host, path string) (string, error) {
+func (c *Credentials) passphrase(ctx context.Context, sessionID string, host hosts.Host, path string) (string, error) {
 	c.mu.Lock()
 	if v, ok := c.passphrases[path]; ok {
 		c.mu.Unlock()
@@ -265,7 +276,7 @@ func (c *Credentials) passphrase(ctx context.Context, host hosts.Host, path stri
 		return "", fmt.Errorf("identity %s is encrypted: %w", path, ErrNoPrompter)
 	}
 
-	v, err := prompter.Passphrase(ctx, host, path)
+	v, err := prompter.Passphrase(ctx, sessionID, host, path)
 	if err != nil {
 		return "", fmt.Errorf("passphrase for %s: %w", path, err)
 	}
@@ -286,14 +297,16 @@ func (c *Credentials) forgetPassphrase(path string) {
 	delete(c.passphrases, path)
 }
 
-// password returns the cached password for a login user, asking for it once.
+// password returns the cached password for a machine, asking for it once.
 //
-// The cache is keyed by user rather than by host: the whole point of a cluster
-// tool is that the same account exists on every machine, and asking forty times
-// for one password would make the tool unusable.
-func (c *Credentials) password(ctx context.Context, host hosts.Host) (string, error) {
+// The cache is keyed per user@addr:port, not per login user: hosts may hold
+// different passwords (issue #182). A reconnect reuses the machine's answer; a
+// uniform cluster is answered once through the broadcast line, which fills
+// every prompting pane at the same time.
+func (c *Credentials) password(ctx context.Context, sessionID string, host hosts.Host) (string, error) {
+	key := passwordKey(host)
 	c.mu.Lock()
-	if v, ok := c.passwords[host.User]; ok {
+	if v, ok := c.passwords[key]; ok {
 		c.mu.Unlock()
 		return v, nil
 	}
@@ -304,7 +317,7 @@ func (c *Credentials) password(ctx context.Context, host hosts.Host) (string, er
 		return "", fmt.Errorf("password for %s: %w", host.Alias, ErrNoPrompter)
 	}
 
-	v, err := prompter.Password(ctx, host)
+	v, err := prompter.Password(ctx, sessionID, host)
 	if err != nil {
 		return "", fmt.Errorf("password for %s: %w", host.Alias, err)
 	}
@@ -313,30 +326,30 @@ func (c *Credentials) password(ctx context.Context, host hosts.Host) (string, er
 	if c.passwords == nil {
 		c.passwords = make(map[string]string)
 	}
-	c.passwords[host.User] = v
+	c.passwords[key] = v
 	c.mu.Unlock()
 
 	return v, nil
 }
 
-// ForgetPassword drops the cached password for a user, so a wrong answer can be
-// corrected instead of failing every remaining host.
-func (c *Credentials) ForgetPassword(user string) {
+// ForgetPassword drops the cached password for a machine, so a wrong answer
+// can be corrected instead of failing every later attempt.
+func (c *Credentials) ForgetPassword(host hosts.Host) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.passwords, user)
+	delete(c.passwords, passwordKey(host))
 }
 
 // answer responds to keyboard-interactive questions. A single question that
 // looks like a password prompt is served from the password cache, which is what
 // makes PAM-based servers behave like password servers.
-func (c *Credentials) answer(ctx context.Context, host hosts.Host, questions []string, echos []bool) ([]string, error) {
+func (c *Credentials) answer(ctx context.Context, sessionID string, host hosts.Host, questions []string, echos []bool) ([]string, error) {
 	if len(questions) == 0 {
 		return nil, nil
 	}
 
 	if len(questions) == 1 && !echoAt(echos, 0) && looksLikePasswordPrompt(questions[0]) {
-		v, err := c.password(ctx, host)
+		v, err := c.password(ctx, sessionID, host)
 		if err != nil {
 			return nil, err
 		}
@@ -349,7 +362,7 @@ func (c *Credentials) answer(ctx context.Context, host hosts.Host, questions []s
 
 	answers := make([]string, len(questions))
 	for i, q := range questions {
-		v, err := c.Prompter.Question(ctx, host, q, echoAt(echos, i))
+		v, err := c.Prompter.Question(ctx, sessionID, host, q, echoAt(echos, i))
 		if err != nil {
 			return nil, fmt.Errorf("keyboard-interactive for %s: %w", host.Alias, err)
 		}
@@ -373,28 +386,28 @@ func looksLikePasswordPrompt(question string) bool {
 // FuncPrompter adapts plain functions to [Prompter], which is convenient for
 // tests and for a non-interactive front end.
 type FuncPrompter struct {
-	PassphraseFunc func(ctx context.Context, host hosts.Host, keyPath string) (string, error)
-	PasswordFunc   func(ctx context.Context, host hosts.Host) (string, error)
-	QuestionFunc   func(ctx context.Context, host hosts.Host, question string, echo bool) (string, error)
+	PassphraseFunc func(ctx context.Context, sessionID string, host hosts.Host, keyPath string) (string, error)
+	PasswordFunc   func(ctx context.Context, sessionID string, host hosts.Host) (string, error)
+	QuestionFunc   func(ctx context.Context, sessionID string, host hosts.Host, question string, echo bool) (string, error)
 }
 
-func (p FuncPrompter) Passphrase(ctx context.Context, host hosts.Host, keyPath string) (string, error) {
+func (p FuncPrompter) Passphrase(ctx context.Context, sessionID string, host hosts.Host, keyPath string) (string, error) {
 	if p.PassphraseFunc == nil {
 		return "", ErrNoPrompter
 	}
-	return p.PassphraseFunc(ctx, host, keyPath)
+	return p.PassphraseFunc(ctx, sessionID, host, keyPath)
 }
 
-func (p FuncPrompter) Password(ctx context.Context, host hosts.Host) (string, error) {
+func (p FuncPrompter) Password(ctx context.Context, sessionID string, host hosts.Host) (string, error) {
 	if p.PasswordFunc == nil {
 		return "", ErrNoPrompter
 	}
-	return p.PasswordFunc(ctx, host)
+	return p.PasswordFunc(ctx, sessionID, host)
 }
 
-func (p FuncPrompter) Question(ctx context.Context, host hosts.Host, question string, echo bool) (string, error) {
+func (p FuncPrompter) Question(ctx context.Context, sessionID string, host hosts.Host, question string, echo bool) (string, error) {
 	if p.QuestionFunc == nil {
 		return "", ErrNoPrompter
 	}
-	return p.QuestionFunc(ctx, host, question, echo)
+	return p.QuestionFunc(ctx, sessionID, host, question, echo)
 }
