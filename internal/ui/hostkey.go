@@ -41,14 +41,14 @@ func (a App) HostKeyQuestionPending() string {
 	return a.keyQuestion.Host
 }
 
-// showHostKeyQuestion opens the question. The Status panel is where it
-// renders, so the panel is selected for the user - a security question must
-// not be answerable without being seeable.
+// showHostKeyQuestion opens the question in the host's own pane, which is
+// focused for the user - a security question must not be answerable without
+// being seeable, and the pane is where the host it concerns is. A host without
+// a visible pane is asked about in the Status panel instead.
 func (a App) showHostKeyQuestion(msg HostKeyQuestionMsg) App {
 	q := msg
 	a.keyQuestion = &q
-	a.panel = PanelStatus
-	return a
+	return a.focusQuestionPane(msg.Host)
 }
 
 // handleHostKeyQuestionKey answers the question: y accepts and remembers the
@@ -59,15 +59,18 @@ func (a App) handleHostKeyQuestionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 	switch msg.String() {
 	case "y", "Y":
 		a.keyQuestion = nil
+		a.questionPaneID = ""
 		return a, func() tea.Msg { return HostKeyAnswerMsg{Host: q.Host, Accept: true} }
 	case "n", "N", "esc":
 		a.keyQuestion = nil
+		a.questionPaneID = ""
 		return a, func() tea.Msg { return HostKeyAnswerMsg{Host: q.Host, Accept: false} }
 	}
 	return a, nil
 }
 
-// hostKeyQuestionLines renders the open question for the Status panel. The
+// hostKeyQuestionLines renders the open question - in the host's pane, or in
+// the Status panel when the pane is not visible. The
 // fingerprint is the substance of the decision, so it gets its own line and is
 // never truncated into prettiness.
 func (a App) hostKeyQuestionLines() []string {

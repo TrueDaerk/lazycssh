@@ -209,6 +209,10 @@ type App struct {
 	secretQuestion *SecretQuestionMsg
 	secretInput    textinput.Model
 
+	// questionPaneID is the pane the open auth question renders in, empty when
+	// it falls back to the Status panel; see internal/ui/authpane.go.
+	questionPaneID string
+
 	groupList        []groupRow
 	groupsErr        error
 	saveErr          error
@@ -1058,9 +1062,11 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 	focused := gridFocused && host == a.paneIndex
 
 	// The border eats two columns and rows, the header the top line of what
-	// remains.
+	// remains. An open auth question for this host takes the bottom lines; the
+	// body gives up that height rather than pushing the question off the pane.
 	content := a.paneHeader(host, cell.Width-2, focused)
-	if body := a.paneBody(id, cell.Width-2, cell.Height-3); body != "" {
+	question := a.paneQuestionLines(id, cell.Width-2)
+	if body := a.paneBody(id, cell.Width-2, cell.Height-3-len(question)); body != "" {
 		if a.paneAltScreen(id) {
 			// A full-screen app owns the grid; a text selection over a live
 			// screen would highlight cells that repaint under it.
@@ -1068,6 +1074,9 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 		} else {
 			content = content + "\n" + a.highlightSelection(id, cell.Width-2, body)
 		}
+	}
+	if len(question) > 0 {
+		content = content + "\n" + strings.Join(question, "\n")
 	}
 
 	return a.frame(a.theme.PaneFrame(focused, a.commandFailed(id)), cell, content)
@@ -1077,7 +1086,11 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 // the run, and every flag that weakens a default.
 func (a App) renderStatusBar() string {
 	var parts []string
-	if a.focus == AreaBroadcast {
+	if label := a.authStatusLabel(); label != "" {
+		// An open auth question owns the keyboard: no keystroke reaches a
+		// host, so the AUTH segment replaces TYPING/BROADCASTING outright.
+		parts = append(parts, a.theme.StatusWarning.Render(label))
+	} else if a.focus == AreaBroadcast {
 		if a.broadcastView {
 			// View mode sends nothing, so it renders in the calm typing style:
 			// the warning is for keys that reach hosts.
@@ -1096,7 +1109,7 @@ func (a App) renderStatusBar() string {
 			parts = append(parts, a.theme.StatusWarning.Render(label))
 		}
 	}
-	if a.focus == AreaGrid {
+	if a.focus == AreaGrid && a.authStatusLabel() == "" {
 		// Where keystrokes go is the one thing the user must never have to
 		// guess. The literal word carries the meaning, so it survives NoColor.
 		target := a.FocusedHost()

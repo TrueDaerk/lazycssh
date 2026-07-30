@@ -4,7 +4,7 @@ title: Authentication
 description: The order authentication methods are tried in, how secrets are cached across hosts, and the rules that keep them out of logs.
 resource: internal/ssh/auth.go
 tags: [ssh, auth, security, credentials]
-timestamp: 2026-07-31T21:00:00Z
+timestamp: 2026-07-30T12:00:00Z
 ---
 
 # Authentication
@@ -54,8 +54,10 @@ When no prompter is available — a non-interactive run — a method that needs 
 
 Live since issue #175, over the same channel bridge as the [host key
 question](./host-keys.md): the dialling session blocks in `secretPrompter`
-(`internal/program/secretprompt.go`), the question crosses into the event loop, and the Status
-panel shows the label — `password for test@db1`, `passphrase for ~/.ssh/id_ed25519`, or the
+(`internal/program/secretprompt.go`), the question crosses into the event loop, and the UI
+shows it **in the blocked host's own pane** (issue #177) — the pane is focused, the status bar
+says `AUTH <host>`, and the Status panel is the fallback for a host without a visible pane. The
+prompt shows the label — `password for test@db1`, `passphrase for ~/.ssh/id_ed25519`, or the
 server's own keyboard-interactive text — over a **masked** input (`textinput.EchoPassword`;
 an echoing keyboard-interactive question shows what is typed, as the server asked). `enter`
 submits, `esc` cancels and fails that attempt with `cancelled at the prompt`, `ctrl+q` still

@@ -24,6 +24,9 @@ var errPromptCancelled = errors.New("cancelled at the prompt")
 
 // secretQuestion is one blocked session's request for a secret.
 type secretQuestion struct {
+	// host is the alias of the host whose dial is blocked on the answer; the
+	// UI uses it to render the prompt in that host's pane.
+	host   string
 	prompt string
 	echo   bool
 	// answer is buffered so the answering side never blocks, even if the
@@ -43,8 +46,8 @@ type secretPrompter struct {
 }
 
 // ask ships one question and waits for its answer under the session's context.
-func (p *secretPrompter) ask(ctx context.Context, prompt string, echo bool) (string, error) {
-	q := &secretQuestion{prompt: prompt, echo: echo, answer: make(chan secretAnswer, 1)}
+func (p *secretPrompter) ask(ctx context.Context, host, prompt string, echo bool) (string, error) {
+	q := &secretQuestion{host: host, prompt: prompt, echo: echo, answer: make(chan secretAnswer, 1)}
 	select {
 	case p.questions <- q:
 	case <-ctx.Done():
@@ -62,15 +65,15 @@ func (p *secretPrompter) ask(ctx context.Context, prompt string, echo bool) (str
 }
 
 func (p *secretPrompter) Password(ctx context.Context, host hosts.Host) (string, error) {
-	return p.ask(ctx, fmt.Sprintf("password for %s@%s", host.User, host.Alias), false)
+	return p.ask(ctx, host.Alias, fmt.Sprintf("password for %s@%s", host.User, host.Alias), false)
 }
 
-func (p *secretPrompter) Passphrase(ctx context.Context, keyPath string) (string, error) {
-	return p.ask(ctx, "passphrase for "+keyPath, false)
+func (p *secretPrompter) Passphrase(ctx context.Context, host hosts.Host, keyPath string) (string, error) {
+	return p.ask(ctx, host.Alias, "passphrase for "+keyPath, false)
 }
 
 func (p *secretPrompter) Question(ctx context.Context, host hosts.Host, question string, echo bool) (string, error) {
-	return p.ask(ctx, host.Alias+": "+question, echo)
+	return p.ask(ctx, host.Alias, host.Alias+": "+question, echo)
 }
 
 // secretQuestionMsg delivers one question into the event loop.
@@ -97,7 +100,7 @@ func (m *Model) secretPump() tea.Cmd {
 // askSecret shows the prompt in the UI and remembers whose it is.
 func (m *Model) askSecret(msg secretQuestionMsg) (tea.Model, tea.Cmd) {
 	m.pendingSecret = msg.q
-	return m, m.forward(ui.SecretQuestionMsg{Prompt: msg.q.prompt, Echo: msg.q.echo})
+	return m, m.forward(ui.SecretQuestionMsg{Host: msg.q.host, Prompt: msg.q.prompt, Echo: msg.q.echo})
 }
 
 // answerSecret releases the blocked session and re-arms the pump.

@@ -1,5 +1,15 @@
 # Log
 
+## 2026-07-30
+
+- Auth questions render in the host's own pane (issue #177): an unknown-host-key question or a
+  secret prompt focuses the affected pane and draws the question at the bottom of its body, so
+  it cannot be missed and its host is never in doubt; the status bar says `AUTH <host>` for as
+  long as it is open. The Status panel remains the fallback for a host without a visible pane.
+  `Prompter.Passphrase` now takes the host whose dial hit the encrypted key, so every secret
+  question can name a pane. `core/host-keys.md` and `core/authentication.md` updated.
+  Version 0.9.28.
+
 ## 2026-07-31
 
 - Passwords, passphrases and keyboard-interactive answers are asked for in the TUI (issue

@@ -4,7 +4,7 @@ title: Host key verification
 description: How lazycssh verifies server keys against known_hosts, why a changed key is never a prompt, and the one explicit way out.
 resource: internal/ssh/knownhosts.go
 tags: [ssh, security, known-hosts]
-timestamp: 2026-07-31T20:00:00Z
+timestamp: 2026-07-30T12:00:00Z
 ---
 
 # Host key verification
@@ -38,8 +38,12 @@ There is no code path from a changed key to a connection.
 
 The prompt is live since issue #173. A dialling session that meets an unknown key blocks in
 `keyPrompter.ConfirmHostKey` (`internal/program/hostkey.go`); the question travels over an
-unbuffered channel into the event loop, the UI shows it in the **Status panel** — host alias,
-key type, the full SHA256 fingerprint — and it owns the keyboard while open: `y` accepts and
+unbuffered channel into the event loop, and the UI shows it **in the host's own pane** (issue
+#177): the pane is focused, the question — key type, the full SHA256 fingerprint — renders at
+the bottom of its body, and the status bar carries an `AUTH <host>` segment while it is open. A
+host whose pane is not visible (hidden by a filter or a split, or already gone) is asked in the
+Status panel instead, and the status bar segment points there. Either way the question owns the
+keyboard while open: `y` accepts and
 remembers, `n`/`esc` rejects and fails that pane, every other key is swallowed (`ctrl+q` still
 quits). Questions arrive **one at a time, per host**: the pump re-arms only after the answer,
 so twenty new hosts ask twenty times in order. A session closed or cancelled while its question

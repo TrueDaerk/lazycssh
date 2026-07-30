@@ -16,6 +16,10 @@ import (
 // dialling session needs a credential; the session stays blocked until
 // [SecretAnswerMsg] comes back.
 type SecretQuestionMsg struct {
+	// Host is the alias of the host whose dial is blocked on the answer; its
+	// pane is where the prompt renders. Empty means no pane, and the Status
+	// panel is the fallback.
+	Host string
 	// Prompt says what is being asked for, e.g. "password for test@db1".
 	Prompt string
 	// Echo reports whether the answer may be shown while it is typed. It is
@@ -36,12 +40,13 @@ type SecretAnswerMsg struct {
 // SecretPromptOpen reports whether the secret prompt has the keyboard.
 func (a App) SecretPromptOpen() bool { return a.secretQuestion != nil }
 
-// showSecretQuestion opens the prompt. The Status panel is where it renders,
-// so the panel is selected for the user.
+// showSecretQuestion opens the prompt in the host's own pane, which is
+// focused for the user; a host without a visible pane is asked in the Status
+// panel instead.
 func (a App) showSecretQuestion(msg SecretQuestionMsg) App {
 	q := msg
 	a.secretQuestion = &q
-	a.panel = PanelStatus
+	a = a.focusQuestionPane(msg.Host)
 	a.secretInput.SetValue("")
 	if msg.Echo {
 		a.secretInput.EchoMode = textinput.EchoNormal
@@ -56,6 +61,7 @@ func (a App) showSecretQuestion(msg SecretQuestionMsg) App {
 // input's buffer.
 func (a App) closeSecretQuestion() App {
 	a.secretQuestion = nil
+	a.questionPaneID = ""
 	a.secretInput.SetValue("")
 	a.secretInput.Blur()
 	return a
@@ -79,7 +85,8 @@ func (a App) handleSecretPromptKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return a, cmd
 }
 
-// secretPromptLines renders the open prompt for the Status panel.
+// secretPromptLines renders the open prompt - in the host's pane, or in the
+// Status panel when the pane is not visible.
 func (a App) secretPromptLines() []string {
 	if a.secretQuestion == nil {
 		return nil
