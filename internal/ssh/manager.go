@@ -329,6 +329,14 @@ func (m *Manager) Connected(id string) bool {
 	return ok && s.State() == StateConnected
 }
 
+// AltScreen reports whether a host's remote app is on the alternate screen —
+// a full-screen app like vim owning that session's keyboard. The broadcast
+// router asks so that all and selected mode keep their keystrokes out of it.
+func (m *Manager) AltScreen(id string) bool {
+	s, ok := m.Session(id)
+	return ok && s.State() == StateConnected && s.Terminal().IsAltScreen()
+}
+
 // Writer returns a host's stdin, and whether there is one. A session that is not
 // connected is deliberately not a writer: writing into a dead session would
 // report success to a user who is about to assume the command ran.

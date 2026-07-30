@@ -52,7 +52,9 @@ race the race detector flags.
 
 Every `Session` — real and fake — owns an emulator and exposes it via `Terminal()`. The output
 pump tees each read into scrollback and emulator; `Resize` resizes both the remote PTY and the
-emulator. Broadcast exclusion of alt-screen panes is #158.
+emulator. The [broadcast router](./broadcast-scope.md) reads `IsAltScreen` through the
+manager's `AltScreen` method: `all` and `selected` mode exclude alt-screen hosts from their
+targets, and the status bar names the skip.
 
 ## Grid rendering in the pane
 

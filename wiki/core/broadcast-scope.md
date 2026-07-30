@@ -55,9 +55,15 @@ Targets are the scope minus every host whose session cannot take input — diall
 closed. `Unreachable()` names those. A host that is down is excluded from the count *and* from
 delivery: a count that included it would promise something the transport cannot do.
 
+In `all` and `selected` mode, targets also exclude every host whose remote app is on the
+alternate screen — a keystroke meant for one `vim` must not reach twenty of them.
+`AltScreenSkipped()` names those hosts, and the exclusion is spelled out in `Describe`.
+`single` is how one talks to the full-screen app, and `fleet` is the explicit every-host
+escape hatch; neither excludes. See [terminal emulation](./terminal.md).
+
 The router learns liveness from a `Sessions` interface, satisfied by
-[`ssh.Manager`](./manager.md) via `Connected` and `Writer`. Until a transport is attached the
-router answers about scope only.
+[`ssh.Manager`](./manager.md) via `Connected`, `Writer` and `AltScreen`. Until a transport is
+attached the router answers about scope only.
 
 ## Rendering
 
@@ -65,6 +71,7 @@ router answers about scope only.
 
 ```
 BROADCAST all (7/8 up)
+BROADCAST all (6/8 up, 1 alt-screen skipped)
 BROADCAST set:front-half (19/20 up)
 BROADCAST selected (3/3 up)
 BROADCAST single web-01 (1/1 up)

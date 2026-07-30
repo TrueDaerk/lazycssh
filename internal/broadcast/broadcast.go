@@ -79,6 +79,10 @@ type Sessions interface {
 	Connected(id string) bool
 	// Writer returns the host's stdin, and whether there is one.
 	Writer(id string) (io.Writer, bool)
+	// AltScreen reports whether the host's remote app is on the alternate
+	// screen — a full-screen app (vim, htop) that owns that session's
+	// keyboard. A keystroke meant for one vim must not reach twenty of them.
+	AltScreen(id string) bool
 }
 
 // Router resolves the current mode, working set, selection and focus into the
@@ -348,7 +352,8 @@ func (r *Router) Forget(ids ...string) {
 func (r *Router) Focus() string { return r.focus }
 
 // Targets returns the hosts a keystroke actually reaches right now: the scope
-// minus every host whose session cannot take input.
+// minus every host whose session cannot take input, and — in all and selected
+// mode — minus every host whose remote app is on the alternate screen.
 //
 // Without a transport every host in scope counts as a target, because there is
 // nothing yet that could say otherwise.
@@ -360,7 +365,36 @@ func (r *Router) Targets() []string {
 
 	var out []string
 	for _, id := range scope {
-		if r.sessions.Connected(id) {
+		if !r.sessions.Connected(id) {
+			continue
+		}
+		if r.excludesAltScreen() && r.sessions.AltScreen(id) {
+			continue
+		}
+		out = append(out, id)
+	}
+	return out
+}
+
+// excludesAltScreen reports whether the current mode keeps its hands off
+// full-screen apps. All and selected do: a broadcast keystroke landing inside
+// twenty editors is the tool's worst footgun. Single is how one talks to a
+// full-screen app, and fleet is the explicit every-host escape hatch — it
+// already renders as a warning and stays literal.
+func (r *Router) excludesAltScreen() bool {
+	return r.mode == ModeAll || r.mode == ModeSelected
+}
+
+// AltScreenSkipped returns the connected hosts in scope that are excluded from
+// the targets because a full-screen app is running there. Empty in modes that
+// do not exclude them.
+func (r *Router) AltScreenSkipped() []string {
+	if r.sessions == nil || !r.excludesAltScreen() {
+		return nil
+	}
+	var out []string
+	for _, id := range r.Scope() {
+		if r.sessions.Connected(id) && r.sessions.AltScreen(id) {
 			out = append(out, id)
 		}
 	}
@@ -509,6 +543,10 @@ func (r *Router) Describe() string {
 			unit = "host"
 		}
 		return fmt.Sprintf("BROADCAST %s (%d %s)", r.label(), scope, unit)
+	}
+	if n := len(r.AltScreenSkipped()); n > 0 {
+		return fmt.Sprintf("BROADCAST %s (%d/%d up, %d alt-screen skipped)",
+			r.label(), r.Count(), r.ScopeCount(), n)
 	}
 	return fmt.Sprintf("BROADCAST %s (%d/%d up)", r.label(), r.Count(), r.ScopeCount())
 }

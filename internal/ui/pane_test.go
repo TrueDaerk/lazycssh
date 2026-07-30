@@ -298,6 +298,21 @@ func TestScrollIsNoOpOnAltScreen(t *testing.T) {
 	}
 }
 
+// The status bar names the alt-screen exclusion: a broadcast keystroke never
+// silently skips a vim host.
+func TestStatusBarNamesTheAltScreenSkip(t *testing.T) {
+	a, fleet, router, _ := statusApp(t, "web-01", "web-02")
+	router.Attach(fleet)
+	fleet.connect(t, "web-01")
+	fleet.connect(t, "web-02")
+	fleet.sessions["web-02"].Emit("\x1b[?1049h")
+
+	view := plain(a.View().Content)
+	if !strings.Contains(view, "1 alt-screen skipped") {
+		t.Fatalf("status bar does not name the excluded vim host:\n%s", view)
+	}
+}
+
 // The scrollback is preserved, not wiped: scrolling up reaches the pre-clear
 // history, with a marker where the clear happened.
 func TestClearedHistoryStaysScrollable(t *testing.T) {
