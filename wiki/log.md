@@ -2,6 +2,12 @@
 
 ## 2026-07-30
 
+- Broadcast drives full-screen apps when every target is one (issue #191): the alt-screen
+  exclusion in `all`/`selected` mode now applies only while the scope is mixed. Open `vim`
+  on the fleet through the broadcast line and the next keystrokes reach all of them; one
+  shell among the editors restores the protection, and the skip label with it.
+  `core/broadcast-scope.md` and `core/terminal.md` updated. Version 0.9.36.
+
 - Host panes show the remote cursor (issue #190): a connected pane following the tail draws
   the cursor where the scrollback's line discipline says it is - prompt end, mid-edit after
   backspaces, the correct row of a wrapped pending line, or the empty row after a line feed.
