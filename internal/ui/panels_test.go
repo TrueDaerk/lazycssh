@@ -237,7 +237,9 @@ func TestFlagsAreAbsentWhenDefaultsHold(t *testing.T) {
 	}
 }
 
-func TestOnlyTheSelectedPanelOpens(t *testing.T) {
+// A roomy sidebar previews the unselected panels: selecting another panel must
+// not blank the ones that lost the selection (issue #186).
+func TestUnselectedPanelsKeepAPreview(t *testing.T) {
 	a, _, _, _ := statusApp(t, "web-01")
 
 	if !strings.Contains(plain(a.View().Content), "session: prod-web") {
@@ -246,11 +248,26 @@ func TestOnlyTheSelectedPanelOpens(t *testing.T) {
 
 	a = pressKey(t, a, "2")
 	view := plain(a.View().Content)
-	if strings.Contains(view, "session: prod-web") {
-		t.Fatalf("an unselected panel is still open:\n%s", view)
-	}
 	if !strings.Contains(view, "1 web-01") {
-		t.Fatalf("the Hosts panel says nothing:\n%s", view)
+		t.Fatalf("the selected panel says nothing:\n%s", view)
+	}
+	if !strings.Contains(view, "session: prod-web") {
+		t.Fatalf("the unselected Status panel lost its preview:\n%s", view)
+	}
+}
+
+// A sidebar too short even for the collapsed boxes falls back to bare titles:
+// the preview is a bonus, never a squeeze.
+func TestTightSidebarDropsThePreviews(t *testing.T) {
+	a, _, _, _ := statusApp(t, "web-01")
+	// Height 10 leaves a 9-row sidebar: below the four collapsed boxes, so the
+	// unselected panels are one-line titles with no body at all.
+	a = resize(t, a, 120, 10)
+
+	a = pressKey(t, a, "2")
+	view := plain(a.View().Content)
+	if strings.Contains(view, "session: prod-web") {
+		t.Fatalf("a bare-title panel still shows content:\n%s", view)
 	}
 }
 

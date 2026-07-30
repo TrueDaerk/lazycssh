@@ -924,8 +924,9 @@ func (a App) View() tea.View {
 }
 
 // renderSidebar draws the panel column the way lazygit does: every panel is
-// its own titled box, the selected one holds its body and everything that is
-// left of the height, the others collapse to their titles.
+// its own titled box, the selected one holds everything the others leave, and
+// the unselected ones show as much of their own body as their height allows —
+// a preview when the sidebar is roomy, a bare title when it is not.
 func (a App) renderSidebar() string {
 	r := a.layout.Sidebar
 	focused := a.focus == AreaSidebar
@@ -940,15 +941,13 @@ func (a App) renderSidebar() string {
 			continue
 		}
 		title := fmt.Sprintf("%s [%d]", panel.Title(), panel.Number())
-		if panel != a.panel {
-			boxes = append(boxes, titledBox(a.theme, false, r.Width, h, title, ""))
-			continue
-		}
-		// The selected panel is "focused"-styled only while the sidebar has
-		// focus; its expansion alone says "selected" when the grid does.
-		// The body's width budget is the box minus its border and padding.
+		// Every panel renders its body into whatever height it was dealt;
+		// titledBox clips the overflow, so a preview is simply the top of the
+		// same content. The selected panel is "focused"-styled only while the
+		// sidebar has focus; its expansion alone says "selected" when the grid
+		// does. The body's width budget is the box minus border and padding.
 		body := a.panelBody(panel, max(1, r.Width-4), max(1, h-2))
-		boxes = append(boxes, titledBox(a.theme, focused, r.Width, h, title, body))
+		boxes = append(boxes, titledBox(a.theme, focused && panel == a.panel, r.Width, h, title, body))
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, boxes...)

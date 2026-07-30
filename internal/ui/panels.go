@@ -5,10 +5,10 @@ import (
 	"strings"
 )
 
-// panelBody renders the content of the selected panel.
+// panelBody renders the content of a panel into the height it was dealt.
 //
-// Only the selected panel has a body: a sidebar that showed five open panels at
-// once on an 80-column terminal would show none of them usefully.
+// It serves the selected panel and the unselected previews alike: the height
+// budget, not the selection, decides how much of the content survives.
 func (a App) panelBody(panel Panel, width, height int) string {
 	switch panel {
 	case PanelStatus:

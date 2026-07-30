@@ -2,6 +2,11 @@
 
 ## 2026-07-30
 
+- Unselected sidebar panels preview their content (issue #186): every panel renders its body
+  into the height it was dealt instead of collapsing to an empty box, and on a roomy sidebar
+  `SidebarHeights` grows the unselected boxes with half the surplus, capped at 8 rows. Tight
+  sidebars degrade exactly as before. `core/tui.md` updated. Version 0.9.32.
+
 - The broadcast line answers every prompting host again (issue #184): auth keystrokes are
   mirrored against the broadcast *scope*, not `Targets()` — the liveness filter in `Targets()`
   drops exactly the sessions that are waiting at a password prompt, so with a transport
