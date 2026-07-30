@@ -2,6 +2,12 @@
 
 ## 2026-07-31
 
+- Terminal query replies reach the host (issue #157, epic #44): both session implementations
+  wire the emulator's reply handler to their own stdin, so device-attribute and
+  cursor-position answers go to exactly the session that asked — never through broadcast.
+  A session that is not connected drops the reply instead of queueing it. Full-screen apps
+  that wait for these answers now start cleanly. `core/terminal.md` updated. Version 0.9.19.
+
 - Alt-screen panes render the live emulator grid (issue #156, epic #44): a session whose
   emulator reports the alternate screen draws the emulator's screen — clipped to the pane
   body, with the remote app's cursor drawn and `?25l` respected — instead of scrollback text.

@@ -38,8 +38,11 @@ the answer is consumed**. The wrapper therefore runs its own drain goroutine fro
 it, the first `vim` would freeze the session's reader goroutine mid-`Write`.
 
 With no handler registered, replies are drained and dropped. `SetReplyHandler` hands them to a
-callback (called from the drain goroutine, which owns the slice it passes) — piping them back
-into the session's stdin so apps actually start cleanly is #157.
+callback, called from the drain goroutine, which owns the slice it passes. Both session
+implementations wire the handler to their own stdin — and only their own: a reply answers the
+one host that asked and never travels through broadcast. Before the shell starts or after the
+session dies, the stdin write refuses and the reply is dropped rather than queued for the
+wrong moment.
 
 `Close` shuts the reply pipe down directly instead of calling the emulator's own `Close`, which
 flips an unsynchronized flag the drain goroutine is concurrently reading — an upstream data

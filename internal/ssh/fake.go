@@ -72,7 +72,7 @@ type Fake struct {
 
 // NewFake returns a fake session for the given host. Events are optional.
 func NewFake(id string, host hosts.Host, events chan<- Event) *Fake {
-	return &Fake{
+	f := &Fake{
 		id:     id,
 		host:   host,
 		events: events,
@@ -81,6 +81,10 @@ func NewFake(id string, host hosts.Host, events chan<- Event) *Fake {
 		width:  DefaultWidth,
 		height: DefaultHeight,
 	}
+	// Same wiring as the real session: emulator query replies land in this
+	// session's stdin, so a test can watch them arrive via Written().
+	f.emu.SetReplyHandler(func(p []byte) { _, _ = f.Write(p) })
+	return f
 }
 
 // UseScrollback adopts an existing buffer instead of the fake's own, which is

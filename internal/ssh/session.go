@@ -220,7 +220,7 @@ func New(id string, cfg Config, events chan<- Event) Session {
 		buf = scrollback.New(cfg.ScrollbackLines)
 	}
 
-	return &sshSession{
+	s := &sshSession{
 		id:     id,
 		cfg:    cfg,
 		events: events,
@@ -228,6 +228,13 @@ func New(id string, cfg Config, events chan<- Event) Session {
 		emu:    term.New(cfg.Width, cfg.Height),
 		closed: make(chan struct{}),
 	}
+	// The emulator's answers to terminal queries (device attributes, cursor
+	// position) go back to this session's stdin — and only this session's;
+	// they never travel through broadcast. Full-screen apps hang without them.
+	// Before the shell starts or after the session dies, Write refuses and the
+	// reply is dropped rather than queued for the wrong moment.
+	s.emu.SetReplyHandler(func(p []byte) { _, _ = s.Write(p) })
+	return s
 }
 
 func (s *sshSession) ID() string                     { return s.id }
