@@ -2,6 +2,14 @@
 
 ## 2026-07-31
 
+- Broadcast keeps its hands off full-screen apps (issue #158, closing epic #44): `all` and
+  `selected` mode exclude hosts whose remote app is on the alternate screen from the target
+  set — a keystroke meant for one `vim` must not reach twenty of them — while `single` still
+  types into the app and `fleet` stays the literal every-host escape hatch. The router's
+  `Sessions` interface gained `AltScreen`, `AltScreenSkipped()` names the excluded hosts, and
+  `Describe` spells the skip out in the status bar ("6/8 up, 1 alt-screen skipped").
+  `core/broadcast-scope.md` and `core/terminal.md` updated. Version 0.9.20.
+
 - Terminal query replies reach the host (issue #157, epic #44): both session implementations
   wire the emulator's reply handler to their own stdin, so device-attribute and
   cursor-position answers go to exactly the session that asked — never through broadcast.

@@ -129,6 +129,11 @@ func (s fleetSessions) Connected(id string) bool {
 	return ok && sess.State() == ssh.StateConnected
 }
 
+func (s fleetSessions) AltScreen(id string) bool {
+	sess, ok := s.f.sessions[id]
+	return ok && sess.State() == ssh.StateConnected && sess.Terminal().IsAltScreen()
+}
+
 func (s fleetSessions) Writer(id string) (io.Writer, bool) {
 	sess, present := s.f.sessions[id]
 	if !present {

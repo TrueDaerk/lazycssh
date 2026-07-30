@@ -324,6 +324,9 @@ type fakeSessions struct {
 	// writerless hosts report connected but have no writer - the race where
 	// a session drops between Targets() and the write (issue #133).
 	writerless map[string]bool
+	// altScreen hosts run a full-screen app (vim); all and selected mode
+	// must keep their keystrokes out of them.
+	altScreen map[string]bool
 }
 
 func newFakeSessions(ids ...string) *fakeSessions {
@@ -332,6 +335,7 @@ func newFakeSessions(ids ...string) *fakeSessions {
 		writes:     make(map[string]string),
 		failing:    make(map[string]bool),
 		writerless: make(map[string]bool),
+		altScreen:  make(map[string]bool),
 	}
 	for _, id := range ids {
 		f.up[id] = true
@@ -340,6 +344,8 @@ func newFakeSessions(ids ...string) *fakeSessions {
 }
 
 func (f *fakeSessions) Connected(id string) bool { return f.up[id] }
+
+func (f *fakeSessions) AltScreen(id string) bool { return f.altScreen[id] }
 
 func (f *fakeSessions) Writer(id string) (io.Writer, bool) {
 	if !f.up[id] || f.writerless[id] {
@@ -386,6 +392,84 @@ func TestTargetsExcludeHostsThatAreDown(t *testing.T) {
 	}
 	if got := r.Describe(); got != "BROADCAST all (7/8 up)" {
 		t.Fatalf("Describe() = %q", got)
+	}
+}
+
+// A keystroke meant for one vim must not reach twenty of them: all and
+// selected mode exclude hosts whose remote app is on the alternate screen.
+func TestTargetsExcludeAltScreenHosts(t *testing.T) {
+	tests := []struct {
+		name     string
+		mode     Mode
+		selected []string
+		want     string
+	}{
+		{"all skips the vim host", ModeAll, nil, "web-01,web-03"},
+		{"selected skips the vim host", ModeSelected, []string{"web-01", "web-02"}, "web-01"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, _ := router(t, 3)
+			sessions := newFakeSessions("web-01", "web-02", "web-03")
+			sessions.altScreen["web-02"] = true
+			r.Attach(sessions)
+
+			if err := r.SetMode(tt.mode); err != nil {
+				t.Fatalf("SetMode: %v", err)
+			}
+			for _, id := range tt.selected {
+				r.Toggle(id)
+			}
+
+			if got := strings.Join(r.Targets(), ","); got != tt.want {
+				t.Fatalf("Targets() = %q, want %q", got, tt.want)
+			}
+			if got := strings.Join(r.AltScreenSkipped(), ","); got != "web-02" {
+				t.Fatalf("AltScreenSkipped() = %q, want %q", got, "web-02")
+			}
+		})
+	}
+}
+
+// Single mode is how one talks to the full-screen app, and fleet mode is the
+// explicit every-host escape hatch: neither excludes alt-screen hosts.
+func TestSingleAndFleetStillReachAltScreenHosts(t *testing.T) {
+	for _, mode := range []Mode{ModeSingle, ModeFleet} {
+		r, _ := router(t, 3)
+		sessions := newFakeSessions("web-01", "web-02", "web-03")
+		sessions.altScreen["web-02"] = true
+		r.Attach(sessions)
+
+		if err := r.SetMode(mode); err != nil {
+			t.Fatalf("SetMode: %v", err)
+		}
+		r.SetFocus("web-02")
+
+		targets := strings.Join(r.Targets(), ",")
+		if !strings.Contains(targets, "web-02") {
+			t.Fatalf("mode %v: Targets() = %q, web-02 missing", mode, targets)
+		}
+		if got := r.AltScreenSkipped(); got != nil {
+			t.Fatalf("mode %v: AltScreenSkipped() = %v, want nil", mode, got)
+		}
+	}
+}
+
+// The exclusion is visible where the target count is read: the status label.
+func TestDescribeNamesTheAltScreenSkip(t *testing.T) {
+	r, _ := router(t, 3)
+	sessions := newFakeSessions("web-01", "web-02", "web-03")
+	sessions.altScreen["web-02"] = true
+	r.Attach(sessions)
+
+	if got := r.Describe(); got != "BROADCAST all (2/3 up, 1 alt-screen skipped)" {
+		t.Fatalf("Describe() = %q", got)
+	}
+
+	sessions.altScreen["web-02"] = false
+	if got := r.Describe(); got != "BROADCAST all (3/3 up)" {
+		t.Fatalf("Describe() after the app quit = %q", got)
 	}
 }
 
