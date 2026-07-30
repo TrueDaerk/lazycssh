@@ -102,6 +102,10 @@ func (a App) scrollHostBy(index, delta int) App {
 	if id == "" {
 		return a
 	}
+	if a.paneAltScreen(id) {
+		// The remote app owns the screen; there is no scrollback view to move.
+		return a
+	}
 	if a.scroll == nil {
 		a.scroll = make(map[string]int)
 	}

@@ -2,6 +2,13 @@
 
 ## 2026-07-31
 
+- Alt-screen panes render the live emulator grid (issue #156, epic #44): a session whose
+  emulator reports the alternate screen draws the emulator's screen — clipped to the pane
+  body, with the remote app's cursor drawn and `?25l` respected — instead of scrollback text.
+  Scroll, search and text selection are no-ops while the grid is active; leaving the alternate
+  screen returns to the scrollback view with the pre-app history still scrollable.
+  `internal/term` gained `CursorVisible()`. `core/terminal.md` updated. Version 0.9.18.
+
 - Per-session terminal emulator (issue #155, first slice of epic #44): new `internal/term`
   wraps the charmbracelet `x/vt` emulator; every session — real and fake — owns one, fed by
   the same output pump as the scrollback and resized in lockstep with the PTY, exposed via

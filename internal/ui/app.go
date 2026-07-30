@@ -1006,7 +1006,13 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 	// remains.
 	content := a.paneHeader(host, cell.Width-2, focused)
 	if body := a.paneBody(id, cell.Width-2, cell.Height-3); body != "" {
-		content = content + "\n" + a.highlightSelection(id, cell.Width-2, body)
+		if a.paneAltScreen(id) {
+			// A full-screen app owns the grid; a text selection over a live
+			// screen would highlight cells that repaint under it.
+			content = content + "\n" + body
+		} else {
+			content = content + "\n" + a.highlightSelection(id, cell.Width-2, body)
+		}
 	}
 
 	return a.frame(a.theme.PaneFrame(focused, a.commandFailed(id)), cell, content)

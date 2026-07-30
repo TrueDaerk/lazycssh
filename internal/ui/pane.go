@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/TrueDaerk/lazycssh/internal/scrollback"
+	"github.com/TrueDaerk/lazycssh/internal/term"
 )
 
 // paneCloseButton is the clickable close control at the right end of a pane
@@ -166,12 +167,76 @@ func (a App) wrappedLinesTail(id string, width int) ([]string, int) {
 	return append(head, tail...), len(head)
 }
 
+// altScreenTerminal returns the session's emulator when the remote app is on
+// the alternate screen — the signal that a full-screen app (vim, htop, less)
+// owns the pane — and nil otherwise.
+func (a App) altScreenTerminal(id string) *term.Emulator {
+	if a.cfg.Fleet == nil {
+		return nil
+	}
+	session, ok := a.cfg.Fleet.Session(id)
+	if !ok {
+		return nil
+	}
+	t := session.Terminal()
+	if t == nil || !t.IsAltScreen() {
+		return nil
+	}
+	return t
+}
+
+// paneAltScreen reports whether the pane currently shows a full-screen app's
+// live grid instead of scrollback text.
+func (a App) paneAltScreen(id string) bool { return a.altScreenTerminal(id) != nil }
+
+// terminalGrid renders the emulator's live screen into the pane body: the
+// grid clipped to the area, with the remote app's cursor drawn where it says
+// it is. No tail, no scroll offset, no search — the remote app owns the whole
+// screen, exactly as it would in a plain terminal.
+func (a App) terminalGrid(t *term.Emulator, width, height int) string {
+	lines := strings.Split(t.Render(), "\n")
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	for i := range lines {
+		lines[i] = ansi.Truncate(lines[i], width, "")
+	}
+
+	if t.CursorVisible() {
+		x, y := t.CursorPosition()
+		if y >= 0 && y < len(lines) && x >= 0 && x < width {
+			lines[y] = overlayCursor(lines[y], x, a.theme.Cursor)
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// overlayCursor draws the cursor style over column x of a rendered line,
+// keeping the surrounding ANSI colours intact.
+func overlayCursor(line string, x int, style lipgloss.Style) string {
+	if w := ansi.StringWidth(line); w <= x {
+		line += strings.Repeat(" ", x-w)
+		return line + style.Render(" ")
+	}
+	left := ansi.Cut(line, 0, x)
+	ch := ansi.Strip(ansi.Cut(line, x, x+1))
+	if ch == "" {
+		ch = " "
+	}
+	right := ansi.Cut(line, x+1, ansi.StringWidth(line))
+	return left + style.Render(ch) + right
+}
+
 // paneBody renders one host's scrollback into an area of width columns and
 // height rows, following the tail unless the pane is scrolled back, and
-// highlighting the lines the active search matches.
+// highlighting the lines the active search matches. A pane whose remote app
+// is on the alternate screen renders the live emulator grid instead.
 func (a App) paneBody(id string, width, height int) string {
 	if height <= 0 {
 		return ""
+	}
+	if t := a.altScreenTerminal(id); t != nil {
+		return a.terminalGrid(t, width, height)
 	}
 	wrapped, tailStart := a.wrappedLinesTail(id, width)
 	if len(wrapped) == 0 {

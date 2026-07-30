@@ -189,14 +189,112 @@ func TestPaneBodyShowsOnlyPostClearOutput(t *testing.T) {
 	}
 }
 
-// Entering the alternate screen - `screen`, `vim` - shows a fresh panel too.
+// Entering the alternate screen - `screen`, `vim` - shows a fresh panel too:
+// the pane switches to the emulator's live grid, which is blank until the
+// full-screen app draws.
 func TestPaneBodyClearsOnAlternateScreen(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01")
 	fleet.sessions["web-01"].Emit("$ screen\n")
 	fleet.sessions["web-01"].Emit("\x1b[?1049h")
 
-	if body := plain(a.paneBody("web-01", 40, 5)); body != "" {
+	if body := strings.TrimSpace(plain(a.paneBody("web-01", 40, 5))); body != "" {
 		t.Fatalf("entering the alternate screen left old output on show:\n%s", body)
+	}
+}
+
+// A pane whose remote app is on the alternate screen renders the emulator's
+// live grid: what the app drew, where it drew it — not scrollback text.
+func TestPaneBodyRendersAltScreenGrid(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.sessions["web-01"].Emit("$ vim notes\n")
+	fleet.sessions["web-01"].Resize(40, 5)
+	fleet.sessions["web-01"].Emit("\x1b[?1049h\x1b[2;3HEDITOR")
+
+	body := plain(a.paneBody("web-01", 40, 5))
+	lines := strings.Split(body, "\n")
+	if len(lines) < 2 || !strings.Contains(lines[1], "EDITOR") {
+		t.Fatalf("grid content missing or misplaced:\n%s", body)
+	}
+	if strings.Contains(body, "$ vim") {
+		t.Fatalf("scrollback text bleeds into the grid view:\n%s", body)
+	}
+}
+
+// Leaving the alternate screen returns to the scrollback view. The tail shows
+// the post-app screen (cleared, like a terminal after vim quits); the history
+// from before the app stays reachable by scrolling, per the clear semantics.
+func TestPaneBodyRestoresScrollbackAfterAltScreen(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	for i := 1; i <= 10; i++ {
+		fleet.sessions["web-01"].Emitf("old-%02d\n", i)
+	}
+	fleet.sessions["web-01"].Emit("$ vim notes\n")
+	fleet.sessions["web-01"].Emit("\x1b[?1049hEDITOR\x1b[?1049l")
+
+	if a.paneAltScreen("web-01") {
+		t.Fatal("pane still in grid view after the app quit")
+	}
+	a.scroll = map[string]int{"web-01": 5}
+	body := plain(a.paneBody("web-01", 40, 5))
+	if !strings.Contains(body, "old-") {
+		t.Fatalf("scrollback history lost after the app quit:\n%s", body)
+	}
+}
+
+// The grid never exceeds the pane body, even when the emulator is larger —
+// a resize can lag one frame behind the layout.
+func TestAltScreenGridIsClippedToThePane(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.sessions["web-01"].Resize(80, 24)
+	fleet.sessions["web-01"].Emit("\x1b[?1049hwide")
+
+	body := a.paneBody("web-01", 10, 3)
+	lines := strings.Split(body, "\n")
+	if len(lines) > 3 {
+		t.Fatalf("grid is %d lines high, want at most 3", len(lines))
+	}
+	for i, line := range lines {
+		if w := len([]rune(plain(line))); w > 10 {
+			t.Fatalf("grid line %d is %d columns wide, want at most 10:\n%s", i, w, body)
+		}
+	}
+}
+
+// The remote app's cursor is drawn in the grid, and hidden when the app hides
+// it (CSI ?25l) — vim hides the cursor while repainting.
+func TestAltScreenGridShowsCursor(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.sessions["web-01"].Resize(40, 5)
+	fleet.sessions["web-01"].Emit("\x1b[?1049h\x1b[1;1Hab")
+
+	withCursor := a.paneBody("web-01", 40, 5)
+	fleet.sessions["web-01"].Emit("\x1b[?25l")
+	withoutCursor := a.paneBody("web-01", 40, 5)
+
+	if withCursor == withoutCursor {
+		t.Fatal("hiding the cursor changed nothing; it is not being drawn")
+	}
+	// The cursor may pad its own cell with a styled space, so trailing
+	// whitespace is the one honest difference in the plain text.
+	got := strings.TrimRight(plain(withCursor), " \n")
+	want := strings.TrimRight(plain(withoutCursor), " \n")
+	if got != want {
+		t.Fatalf("the cursor changed the text, not just the styling:\n%q\n%q", got, want)
+	}
+}
+
+// Scrolling is a no-op while a full-screen app owns the pane: there is no
+// scrollback view to move, and the offset must not jump when the app exits.
+func TestScrollIsNoOpOnAltScreen(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	for i := 1; i <= 30; i++ {
+		fleet.sessions["web-01"].Emitf("line-%02d\n", i)
+	}
+	fleet.sessions["web-01"].Emit("\x1b[?1049h")
+
+	a = a.scrollHostBy(0, 10)
+	if got := a.scrollOffset("web-01"); got != 0 {
+		t.Fatalf("scroll offset = %d on the alternate screen, want 0", got)
 	}
 }
 
