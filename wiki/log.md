@@ -2,6 +2,10 @@
 
 ## 2026-07-31
 
+- Makefile added (issue #163): `make build` / `make install` / `make test` / `make vet` wrap
+  the go commands from CLAUDE.md; `make install` runs `go install ./cmd/lazycssh`.
+  Version 0.9.21.
+
 - Broadcast keeps its hands off full-screen apps (issue #158, closing epic #44): `all` and
   `selected` mode exclude hosts whose remote app is on the alternate screen from the target
   set — a keystroke meant for one `vim` must not reach twenty of them — while `single` still
