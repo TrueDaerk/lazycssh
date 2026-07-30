@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-30T16:00:00Z
+timestamp: 2026-07-30T18:00:00Z
 ---
 
 # TUI shell
@@ -118,7 +118,12 @@ keystroke — that is the entire reason the two are separate concepts.
 narrows the broadcast with it: the visible set is pushed into the router's
 [visibility limit](./broadcast-scope.md), so `all`/`selected` reach only what is on screen.
 The filter is a view over live state, not a removal: a host that reconnects reappears without a
-keypress. While it is on, the status bar carries `CONNECTED HOSTS ONLY`; a filter that hides
+keypress. Live means concurrent: session goroutines flip states while a frame is being drawn,
+so `View` freezes the visible host list once per frame (`App.frameHosts`) and every render
+helper reads that snapshot through `hostIDs()`. Two computations inside one render used to
+disagree — a mass disconnect under the filter shrank the list between a bounds check and the
+index it guarded, and `renderPane` panicked (issue #135). Outside `View`, code that indexes
+into `hostIDs()` fetches the list once and uses that one slice. While it is on, the status bar carries `CONNECTED HOSTS ONLY`; a filter that hides
 every pane renders `no connected hosts` rather than an empty run. While typing into a pane,
 `ctrl+a` stays a keystroke for the hosts — readline start-of-line. In the broadcast bar it is
 the csshx-style escape prefix instead: the literal is `ctrl+a a`, and the toggle is reachable

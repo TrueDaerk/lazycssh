@@ -279,3 +279,64 @@ func TestCtrlSIsForwardedWhileTyping(t *testing.T) {
 		t.Fatalf("the host received %q, want the raw ctrl+s byte", got)
 	}
 }
+
+// flakySession wraps a fake session and, once armed, answers a bounded number
+// of State() queries with StateConnected before flipping to StateClosed - the
+// shape of a session goroutine disconnecting between two reads of the same
+// render.
+type flakySession struct {
+	ssh.Session
+	fleet *flakyFleet
+}
+
+func (s flakySession) State() ssh.State {
+	s.fleet.queries++
+	if s.fleet.queries > s.fleet.flipAfter {
+		return ssh.StateClosed
+	}
+	return ssh.StateConnected
+}
+
+// flakyFleet is a fakeFleet whose named host changes state mid-render once
+// armed. Counting starts at arm time so the test controls exactly which
+// hostIDs() computation sees the shrink.
+type flakyFleet struct {
+	*fakeFleet
+	flaky     string
+	armed     bool
+	queries   int
+	flipAfter int
+}
+
+func (f *flakyFleet) Session(id string) (ssh.Session, bool) {
+	s, ok := f.fakeFleet.Session(id)
+	if !ok || id != f.flaky || !f.armed {
+		return s, ok
+	}
+	return flakySession{Session: s, fleet: f}, true
+}
+
+// The regression for issue #135: with the connected-only filter on, a host
+// disconnecting between two hostIDs() computations of the same View call
+// shrank the list under an index that was guarded against the longer one,
+// and renderPane panicked with index out of range. View must render from one
+// consistent host list per frame.
+func TestViewSurvivesHostListShrinkingMidRender(t *testing.T) {
+	a, fleet, router, _ := statusApp(t, "web-01", "web-02", "web-03")
+	router.Attach(fleetSessions{fleet})
+	for _, id := range fleet.IDs() {
+		fleet.connect(t, id)
+	}
+
+	flaky := &flakyFleet{fakeFleet: fleet, flaky: "web-03", flipAfter: 2}
+	a.cfg.Fleet = flaky
+
+	a = pressKey(t, a, "ctrl+a") // connected-only: the list reads live state
+	a.fullScreen = true
+	a.paneIndex = 2 // the pane whose host is about to vanish
+
+	flaky.armed = true
+	if got := a.View().Content; got == "" {
+		t.Fatal("View rendered nothing")
+	}
+}

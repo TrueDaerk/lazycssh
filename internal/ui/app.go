@@ -171,6 +171,14 @@ type App struct {
 	// Status panel until the fleet changes.
 	connectErr string
 
+	// frameHosts is the host list frozen for the duration of one View call.
+	// The visible list is otherwise recomputed from live session state on
+	// every hostIDs() call, and a session goroutine flipping a state between
+	// two calls inside the same frame shrinks the list under an index that
+	// was guarded against the longer one (issue #135). View sets it, every
+	// render helper reads it through hostIDs(); outside View it is nil.
+	frameHosts []string
+
 	// scroll is each pane's scrollback offset in wrapped lines from the
 	// bottom; a missing entry is the tail. searchTerm is the one term every
 	// pane highlights.
@@ -809,6 +817,13 @@ func (a App) View() tea.View {
 		return tea.NewView("")
 	}
 
+	// One consistent host list per frame: every hostIDs() call below reads
+	// this snapshot instead of recomputing from live session state, so a
+	// mid-render disconnect cannot shrink the list between a bounds check
+	// and the index it guarded. The copy is never nil, so an empty list is
+	// still a frozen one.
+	a.frameHosts = append([]string{}, a.visibleHosts()...)
+
 	body := a.renderMain()
 	if a.layout.SidebarVisible() {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, a.renderSidebar(), body)
@@ -948,20 +963,22 @@ func (a App) renderMain() string {
 // renderPane draws one host's pane: a one-line header naming the host, then
 // the session's scrollback following its tail.
 func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
-	if host < 0 || host >= len(a.hostIDs()) {
+	ids := a.hostIDs()
+	if host < 0 || host >= len(ids) {
 		return a.frame(a.theme.Pane, cell, "")
 	}
+	id := ids[host]
 
 	focused := gridFocused && host == a.paneIndex
 
 	// The border eats two columns and rows, the header the top line of what
 	// remains.
 	content := a.paneHeader(host, cell.Width-2, focused)
-	if body := a.paneBody(a.hostIDs()[host], cell.Width-2, cell.Height-3); body != "" {
+	if body := a.paneBody(id, cell.Width-2, cell.Height-3); body != "" {
 		content = content + "\n" + body
 	}
 
-	return a.frame(a.theme.PaneFrame(focused, a.commandFailed(a.hostIDs()[host])), cell, content)
+	return a.frame(a.theme.PaneFrame(focused, a.commandFailed(id)), cell, content)
 }
 
 // renderStatusBar draws the bottom line: what is selected, how many hosts are in

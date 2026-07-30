@@ -2,6 +2,15 @@
 
 ## 2026-07-30
 
+- Fixed the render crash under the connected-only filter (issue #135): a mass disconnect could
+  shrink the visible host list between two `hostIDs()` computations of the same frame, and
+  `renderPane` indexed past the end. `View` now freezes the list once per frame
+  (`App.frameHosts`); guard-then-recompute call sites (`renderPane`, `paneHeader`,
+  `FocusedHost`, `refocus`) fetch the list once. Follow-up for moving session state fully into
+  the model is filed separately. `core/tui.md` updated. Version 0.9.5.
+
+## 2026-07-30
+
 - The broadcast bar is modal, csshx style: edit mode (default) sends every keystroke to the
   targets; `ctrl+a` `esc` switches to view mode, where keys are app-level commands and nothing
   is sent, and `enter` returns to edit. `ctrl+a` `a` sends a literal `ctrl+a` for remote
