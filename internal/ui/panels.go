@@ -34,6 +34,10 @@ func (a App) panelBody(panel Panel, width, height int) string {
 func (a App) statusPanel(width int) string {
 	var lines []string
 
+	// The host key question outranks everything: it owns the keyboard while
+	// it is open, and a security decision must be visible while it is made.
+	lines = append(lines, a.hostKeyQuestionLines()...)
+
 	// The open new-host prompt comes first: while it has the keyboard it is
 	// the thing being interacted with, and its hints must not be pushed off a
 	// short panel.

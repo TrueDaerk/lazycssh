@@ -200,6 +200,10 @@ type App struct {
 	cmdHistoryPos int
 	lastDelivery  string
 
+	// keyQuestion is the open host key question, nil when none is; see
+	// internal/ui/hostkey.go.
+	keyQuestion *HostKeyQuestionMsg
+
 	groupList        []groupRow
 	groupsErr        error
 	saveErr          error
@@ -344,6 +348,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SessionsChangedMsg:
 		return a.loadGroups(), nil
 
+	case HostKeyQuestionMsg:
+		return a.showHostKeyQuestion(msg), nil
+
 	case SessionOpenedMsg:
 		if msg.Patterns != nil {
 			a.cfg.RunPatterns = msg.Patterns
@@ -434,8 +441,15 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "ctrl+q" &&
 		(a.cmdInput.Focused() || a.hostInput.Focused() ||
 			a.searchInput.Focused() || a.Saving() || a.splitInput.Focused() ||
-			a.GroupDialogOpen() || a.deleteGroup != "" || a.endSession != "") {
+			a.GroupDialogOpen() || a.deleteGroup != "" || a.endSession != "" ||
+			a.keyQuestion != nil) {
 		return a, tea.Quit
+	}
+
+	// The host key question owns the keyboard while it is open: a keystroke
+	// meant for a host must not accept a key it was never asked about.
+	if a.keyQuestion != nil {
+		return a.handleHostKeyQuestionKey(msg)
 	}
 
 	// The command line has the keyboard while it is open: a command containing

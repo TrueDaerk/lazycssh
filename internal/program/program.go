@@ -66,6 +66,12 @@ type Model struct {
 	// order. Saving the run writes patterns, so they must track every change.
 	patterns []string
 
+	// prompter carries host key questions out of dialling sessions; nil when
+	// a test injected its own session factory. pendingKey is the question the
+	// UI is showing right now, waiting for its answer.
+	prompter   *keyPrompter
+	pendingKey *keyQuestion
+
 	// ctx bounds every dial. Cancelled when the program shuts down.
 	ctx context.Context
 
@@ -90,8 +96,13 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 	}
 
 	factory := cfg.NewSession
+	var prompter *keyPrompter
 	if factory == nil {
-		factory, err = realFactory(ctx, cfg.Insecure)
+		// The prompter is unbuffered on purpose: a dialling session blocks
+		// until the UI has asked its question, so questions arrive one at a
+		// time (issue #173).
+		prompter = &keyPrompter{questions: make(chan *keyQuestion)}
+		factory, err = realFactory(ctx, cfg.Insecure, prompter)
 		if err != nil {
 			return nil, err
 		}
@@ -151,19 +162,18 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 		router:   router,
 		resolver: resolver,
 		store:    cfg.Store,
+		prompter: prompter,
 		patterns: append([]string(nil), cfg.Patterns...),
 		ctx:      ctx,
 	}, nil
 }
 
 // realFactory builds sessions that dial, with agent and identity-file
-// authentication and known_hosts verification.
-//
-// There is no prompter yet: a host that needs a password, a passphrase for a
-// key the agent does not hold, or an unknown host key fails its own pane with
-// a clear error instead of hanging. The interactive prompt inside the TUI is
-// its own issue.
-func realFactory(ctx context.Context, insecure bool) (ssh.Factory, error) {
+// authentication and known_hosts verification. An unknown host key is asked
+// about through the prompter (issue #173); auth prompts - passwords, key
+// passphrases - are still their own issue (#87), and a host that needs one
+// fails its own pane with a clear error instead of hanging.
+func realFactory(ctx context.Context, insecure bool, prompter ssh.HostKeyPrompter) (ssh.Factory, error) {
 	creds := &ssh.Credentials{}
 
 	callback := func(host hosts.Host) cryptossh.HostKeyCallback {
@@ -174,7 +184,7 @@ func realFactory(ctx context.Context, insecure bool) (ssh.Factory, error) {
 		if err != nil {
 			return nil, err
 		}
-		known, err := ssh.NewKnownHosts(files, nil)
+		known, err := ssh.NewKnownHosts(files, prompter)
 		if err != nil {
 			return nil, err
 		}
@@ -224,10 +234,10 @@ func (m *Model) pump() tea.Cmd {
 	}
 }
 
-// Init starts the fleet dialling and arms the event pump.
+// Init starts the fleet dialling and arms the event and host-key pumps.
 func (m *Model) Init() tea.Cmd {
 	m.mgr.Start(m.ctx)
-	return tea.Batch(m.app.Init(), m.pump())
+	return tea.Batch(m.app.Init(), m.pump(), m.promptPump())
 }
 
 // Update routes messages: transport events into the UI, UI requests into the
@@ -271,6 +281,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ws.SetHosts(m.mgr.IDs())
 		m.resizePTYs()
 		return m, m.forward(ui.HostsChangedMsg{Hosts: m.mgr.IDs(), Patterns: m.patterns})
+
+	case keyQuestionMsg:
+		return m.askHostKey(msg)
+
+	case ui.HostKeyAnswerMsg:
+		return m.answerHostKey(msg)
 
 	case ui.GroupOpenMsg:
 		return m.openGroup(msg)
