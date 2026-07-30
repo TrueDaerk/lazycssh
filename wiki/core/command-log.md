@@ -4,7 +4,7 @@ title: Command log
 description: The in-memory audit trail of what this run sent, to how many hosts, in which mode — and what it deliberately never records.
 resource: internal/commandlog
 tags: [audit, broadcast, security, ui]
-timestamp: 2026-07-29T15:00:00Z
+timestamp: 2026-07-30T20:00:00Z
 ---
 
 # Command log
@@ -47,6 +47,12 @@ type takes no path and the panel offers no way to name one.
 The log is bounded (1000 entries by default) and drops the oldest first. Dropping is **visible**:
 the panel renders `(N older entries dropped)` at the top, because an audit trail that quietly
 forgets is worse than one that says it forgot.
+
+The panel's window is budgeted in **visual lines**, not entries: a command longer than the panel
+wraps, and counting a wrapped entry as one row pushed the rows below it — the cursor among them —
+past the box's clip (issue #132). Entries are wrapped individually, the window grows from the
+cursor outward while it fits, and up/down always moves exactly one entry; the dropped-entries
+notice gives up its line before the cursor entry ever does.
 
 ## Resending
 
