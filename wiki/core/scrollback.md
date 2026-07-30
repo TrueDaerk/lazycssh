@@ -4,7 +4,7 @@ title: Scrollback buffer
 description: The bounded per-session ring buffer that keeps a chatty host from stalling the UI.
 resource: internal/scrollback/scrollback.go
 tags: [backpressure, concurrency, output]
-timestamp: 2026-07-30T22:00:00Z
+timestamp: 2026-07-30T23:00:00Z
 ---
 
 # Scrollback buffer
@@ -62,8 +62,10 @@ all output.
   are consumed and dropped — they carry metadata, never text, and flushing their payload into
   the line is how it would corrupt the scrollback.
 - **Clear-screen sequences plant a marker** (issue #131). `ESC[2J` / `ESC[3J` (erase display),
-  `ESC[1J` (erase above) and the alternate-screen switches `ESC[?1049h/l`, `ESC[?1047h/l`,
-  `ESC[?47h/l` store a `ClearMark` line where the visible area restarted; the whole-screen
+  `ESC[1J` (erase above), the alternate-screen switches `ESC[?1049h/l`, `ESC[?1047h/l`,
+  `ESC[?47h/l`, a full reset (`ESC c`, RIS) and the minimal-termcap clear idiom `ESC[H`
+  immediately followed by `ESC[J` — cursor-home + erase-below, what busybox `clear` emits
+  (issue #189) — store a `ClearMark` line where the visible area restarted; the whole-screen
   forms also discard the line being assembled, the erase-above form keeps it. Consecutive
   markers collapse, so a program clearing every frame cannot fill the ring with markers.
   The history is **preserved, not wiped** — deliberately including `ESC[3J`, whose strict

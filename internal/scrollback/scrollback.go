@@ -65,6 +65,7 @@ type Buffer struct {
 	esc      []byte // an escape sequence being assembled, nil outside one
 	inString bool   // the sequence in esc is an OSC/DCS-style string sequence
 	runeBuf  []byte // a UTF-8 rune split across writes
+	homed    bool   // the last completed action was cursor-to-origin (ESC[H)
 
 	// memo caches one cell → byte-offset mapping into pending, so a readline
 	// overwriting a long recalled line does not rescan the prefix for every
@@ -149,6 +150,12 @@ func (b *Buffer) Write(p []byte) (int, error) {
 			// the current byte take its normal path below.
 			b.placeLocked(b.runeBuf)
 			b.runeBuf = b.runeBuf[:0]
+		}
+
+		if c != 0x1b {
+			// Any action other than starting an escape sequence means the
+			// remote moved on: cursor-to-origin no longer describes the state.
+			b.homed = false
 		}
 
 		switch {
@@ -394,6 +401,12 @@ func (b *Buffer) consumeEscapeLocked(c byte) bool {
 		case ']', 'P', 'X', '^', '_':
 			b.inString = true
 			return true
+		case 'c':
+			// RIS, full terminal reset: `printf '\ec'` and some termcap clear
+			// entries. Everything visible is gone; the history stays.
+			b.markClearedLocked(true)
+			b.esc = nil
+			return true
 		default:
 			// A short escape (charset selection, keypad modes): not
 			// interpreted; hand the bytes to the line and stop collecting.
@@ -405,7 +418,20 @@ func (b *Buffer) consumeEscapeLocked(c byte) bool {
 	if len(b.esc) >= 3 && c >= 0x40 && c <= 0x7e {
 		// The final byte of a CSI sequence.
 		params := string(b.esc[2 : len(b.esc)-1])
+		homed := b.homed
+		b.homed = false
 		switch c {
+		case 'H', 'f': // cursor position
+			// Only the move to the origin is remembered, and only because of
+			// what may follow: home + erase-below is the clear idiom of the
+			// smaller termcap entries (busybox, ncurses minimal), where
+			// ESC[2J never appears. Any other position is screen-absolute
+			// addressing this model cannot map, and passes through.
+			if cursorAtOrigin(params) {
+				b.homed = true
+				b.esc = nil
+				return true
+			}
 		case 'A', 'B': // cursor up / down: ± n screen rows
 			n, ok := escapeParam(params)
 			if !ok {
@@ -495,6 +521,13 @@ func (b *Buffer) consumeEscapeLocked(c byte) bool {
 			// than strict emulation.
 			switch params {
 			case "", "0":
+				if homed {
+					// Home + erase-below: the clear idiom of the smaller
+					// termcap entries (issue #189), equivalent to ESC[2J.
+					b.markClearedLocked(true)
+					b.esc = nil
+					return true
+				}
 				start, _ := b.cellRangeLocked(b.cursor)
 				b.pending = b.pending[:start]
 				if b.cells > b.cursor {
@@ -528,6 +561,17 @@ func (b *Buffer) consumeEscapeLocked(c byte) bool {
 
 	if len(b.esc) >= maxEscapeLength {
 		b.flushEscapeLocked()
+	}
+	return true
+}
+
+// cursorAtOrigin reports whether a CUP parameter string addresses row 1,
+// column 1 — "", "1", "1;1" and the forms with omitted halves all do.
+func cursorAtOrigin(params string) bool {
+	for _, p := range strings.Split(params, ";") {
+		if p != "" && p != "1" {
+			return false
+		}
 	}
 	return true
 }

@@ -2,6 +2,12 @@
 
 ## 2026-07-30
 
+- `clear` works on hosts whose termcap clears via cursor-home + erase-below (issue #189):
+  `ESC[H` immediately followed by `ESC[J` — what busybox/minimal terminfo entries emit instead
+  of `ESC[2J` — now plants the `ClearMark`, as does a full reset (`ESC c`). An `ESC[J` without
+  the preceding home keeps its cleanup meaning. Verified against a captured byte stream from
+  the test containers. `core/scrollback.md` updated. Version 0.9.34.
+
 - Arrow-key history navigation no longer corrupts the scrollback (issue #178): the pending
   line carries a cursor mapped through the remote terminal's width, printable runes overwrite
   instead of append, cursor movement (`ESC[A/B/C/D/G`) and per-row erase (`ESC[K`) are
