@@ -154,3 +154,49 @@ func TestBroadcastBarPanelKeyResetsViewMode(t *testing.T) {
 		t.Fatal("5 did not return the bar to edit mode")
 	}
 }
+
+// Issue #148: ctrl+a is a general "the next key is for lazycssh" prefix. An
+// app chord after it runs the app command - ctrl+a ctrl+a toggles
+// connected-only - and sends nothing to the hosts.
+func TestBroadcastBarPrefixDispatchesAppCommands(t *testing.T) {
+	a, sender := barApp(t, "web-01", "web-02")
+
+	a = pressKey(t, a, "ctrl+a")
+	a = pressKey(t, a, "ctrl+a")
+	if !a.ConnectedOnly() {
+		t.Fatal("ctrl+a ctrl+a did not reach the connected-only toggle")
+	}
+	if len(sender.sent) != 0 {
+		t.Fatalf("the prefixed command was forwarded: %q", sender.sent)
+	}
+	if a.broadcastPending {
+		t.Fatal("the prefix survived its second key")
+	}
+}
+
+// The prefix is one-shot: after ctrl+a ctrl+a the next key is a keystroke for
+// the hosts again, not a chained prefix resolution.
+func TestBroadcastBarPrefixDoesNotChain(t *testing.T) {
+	a, sender := barApp(t, "web-01")
+
+	a = pressKey(t, a, "ctrl+a")
+	a = pressKey(t, a, "ctrl+a")
+	a = pressKey(t, a, "a")
+	if got := strings.Join(sender.sent, ","); got != "a" {
+		t.Fatalf("sent = %q, want the plain letter after the one-shot prefix", got)
+	}
+}
+
+// ctrl+a ? opens the help overlay from inside the bar.
+func TestBroadcastBarPrefixOpensHelp(t *testing.T) {
+	a, sender := barApp(t, "web-01")
+
+	a = pressKey(t, a, "ctrl+a")
+	a = pressKey(t, a, "?")
+	if !a.showHelp {
+		t.Fatal("ctrl+a ? did not open the help overlay")
+	}
+	if len(sender.sent) != 0 {
+		t.Fatalf("the help chord was forwarded: %q", sender.sent)
+	}
+}

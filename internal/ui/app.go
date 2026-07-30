@@ -1007,7 +1007,7 @@ func (a App) renderStatusBar() string {
 			}
 			label := fmt.Sprintf("BROADCASTING EDIT → %d host%s — %s leaves", count, plural(count), escapeKeystroke)
 			if a.broadcastPending {
-				label = fmt.Sprintf("BROADCASTING → %d host%s — ctrl+a… esc = view · a = literal ctrl+a",
+				label = fmt.Sprintf("BROADCASTING → %d host%s — ctrl+a… next key = command · a = literal · esc = view",
 					count, plural(count))
 			}
 			parts = append(parts, a.theme.StatusWarning.Render(label))

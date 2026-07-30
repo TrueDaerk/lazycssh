@@ -89,8 +89,14 @@ func (a App) handleBroadcastViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 // resolveBroadcastEscape is the key after ctrl+a: esc switches to view mode, a
-// sends a literal ctrl+a to the targets, and anything else cancels the prefix
-// — saying so, because a silently swallowed keystroke reads as a hung bar.
+// sends a literal ctrl+a to the targets, and **any other key is a one-shot
+// lazycssh command** (issue #148) — dispatched to the app keymap exactly as if
+// the bar did not have the keyboard, so ctrl+a ctrl+a toggles connected-only
+// and ctrl+a ? opens the help without leaving the bar. The prefix is cleared
+// before the second key is handled, so it cannot chain. A key with no app
+// binding is a no-op that says so, because a silently swallowed keystroke
+// reads as a hung bar; nothing after the prefix ever reaches the hosts except
+// the literal `a`.
 func (a App) resolveBroadcastEscape(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	a.broadcastPending = false
 	switch msg.String() {
@@ -100,8 +106,11 @@ func (a App) resolveBroadcastEscape(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "a":
 		return a.sendBroadcastRaw([]byte{0x01})
 	}
-	a.lastDelivery = "ctrl+a " + msg.String() + " is not a sequence — nothing was sent"
-	return a, nil
+	if !a.keys.matchesAppBinding(msg) {
+		a.lastDelivery = "ctrl+a " + msg.String() + " has no lazycssh binding — nothing was sent"
+		return a, nil
+	}
+	return a.handleAppKey(msg)
 }
 
 // sendBroadcastRaw fans raw bytes out to the targets — the same path a typed

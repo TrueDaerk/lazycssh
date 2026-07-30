@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-31T14:00:00Z
+timestamp: 2026-07-31T15:00:00Z
 ---
 
 # TUI shell
@@ -413,18 +413,23 @@ Mode switching is modeled on csshx, with `ctrl+a` as the escape prefix inside th
   re-enters it in edit mode.
 - `ctrl+a` `a` — send one literal `ctrl+a` to the targets, which is how a remote `screen` or
   `tmux` behind the broadcast stays reachable. The literal is never echoed into the bar's line.
-- `ctrl+a` anything else — the prefix is cancelled, nothing is sent, and the status bar says so
-  rather than silently swallowing the keystroke.
+- `ctrl+a` anything else — a **one-shot lazycssh command** (issue #148): the key is dispatched
+  to the app keymap exactly as if the bar did not have the keyboard — `ctrl+a` `ctrl+a` toggles
+  connected-only, `ctrl+a` `?` opens the help, `ctrl+a` `→` pages, `ctrl+a` `q` quits. The
+  prefix is cleared before the second key is handled, so it cannot chain, and a key with no app
+  binding is a no-op the status bar names rather than a silently swallowed keystroke. Nothing
+  after the prefix reaches the hosts except the literal `a`.
 
 The mode is unmissable: the status bar carries `BROADCASTING EDIT → 7 hosts` in the warning
 style, or `BROADCAST VIEW — keys are commands` in the calm typing style, and an armed prefix
-shows as `ctrl+a… esc = view · a = literal ctrl+a`. The modal state does not outlive the bar's
+shows as `ctrl+a… next key = command · a = literal · esc = view`. The modal state does not outlive the bar's
 focus — leaving in view mode and coming back lands in edit mode.
 
 The `ctrl+a` prefix shadows the global connected-only toggle (and the readline start-of-line
 the bar used to forward) while edit mode has the keyboard. That is deliberate: the global
-binding itself is unchanged, and it is reachable from inside the bar as `ctrl+a` `esc`
-`ctrl+a`, since view mode routes to the app-level commands.
+binding itself is unchanged, and it is reachable from inside the bar as `ctrl+a` `ctrl+a` —
+the prefixed key runs the app binding directly — or from view mode, which routes every key to
+the app-level commands.
 
 ## Mouse
 
