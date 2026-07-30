@@ -55,7 +55,7 @@ func (p CommandPrompter) Password(ctx context.Context, host hosts.Host) (string,
 }
 
 // Passphrase runs the configured command, or falls back.
-func (p CommandPrompter) Passphrase(ctx context.Context, keyPath string) (string, error) {
+func (p CommandPrompter) Passphrase(ctx context.Context, host hosts.Host, keyPath string) (string, error) {
 	cmd := secret.Command{}
 	if p.PassphraseCommand != nil {
 		cmd = p.PassphraseCommand(keyPath)
@@ -64,7 +64,7 @@ func (p CommandPrompter) Passphrase(ctx context.Context, keyPath string) (string
 		if p.Fallback == nil {
 			return "", fmt.Errorf("passphrase for %s: %w", keyPath, ErrNoPrompter)
 		}
-		return p.Fallback.Passphrase(ctx, keyPath)
+		return p.Fallback.Passphrase(ctx, host, keyPath)
 	}
 
 	value, err := cmd.Run(ctx)

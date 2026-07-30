@@ -32,7 +32,7 @@ func TestCommandPrompterRunsTheConfiguredCommand(t *testing.T) {
 		t.Fatalf("Password() = %q", got)
 	}
 
-	got, err = p.Passphrase(context.Background(), "~/.ssh/id_prod")
+	got, err = p.Passphrase(context.Background(), hosts.Host{Alias: "web-01"}, "~/.ssh/id_prod")
 	if err != nil {
 		t.Fatalf("Passphrase: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestCommandPrompterRunsTheConfiguredCommand(t *testing.T) {
 func TestCommandPrompterFallsBackWhenNoCommandIsConfigured(t *testing.T) {
 	fallback := FuncPrompter{
 		PasswordFunc:   func(context.Context, hosts.Host) (string, error) { return "typed", nil },
-		PassphraseFunc: func(context.Context, string) (string, error) { return "typed-passphrase", nil },
+		PassphraseFunc: func(context.Context, hosts.Host, string) (string, error) { return "typed-passphrase", nil },
 		QuestionFunc: func(_ context.Context, _ hosts.Host, q string, _ bool) (string, error) {
 			return "answer to " + q, nil
 		},
@@ -54,7 +54,7 @@ func TestCommandPrompterFallsBackWhenNoCommandIsConfigured(t *testing.T) {
 	if got, err := p.Password(context.Background(), hosts.Host{Alias: "web-01"}); err != nil || got != "typed" {
 		t.Fatalf("Password() = %q, %v", got, err)
 	}
-	if got, err := p.Passphrase(context.Background(), "key"); err != nil || got != "typed-passphrase" {
+	if got, err := p.Passphrase(context.Background(), hosts.Host{Alias: "web-01"}, "key"); err != nil || got != "typed-passphrase" {
 		t.Fatalf("Passphrase() = %q, %v", got, err)
 	}
 	if got, err := p.Question(context.Background(), hosts.Host{}, "otp?", true); err != nil || got != "answer to otp?" {
@@ -66,7 +66,7 @@ func TestCommandPrompterWithoutFallbackOrCommand(t *testing.T) {
 	p := CommandPrompter{}
 	for _, call := range []func() (string, error){
 		func() (string, error) { return p.Password(context.Background(), hosts.Host{Alias: "web-01"}) },
-		func() (string, error) { return p.Passphrase(context.Background(), "key") },
+		func() (string, error) { return p.Passphrase(context.Background(), hosts.Host{Alias: "web-01"}, "key") },
 		func() (string, error) { return p.Question(context.Background(), hosts.Host{}, "q", false) },
 	} {
 		if _, err := call(); !errors.Is(err, ErrNoPrompter) {

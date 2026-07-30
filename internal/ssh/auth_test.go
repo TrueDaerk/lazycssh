@@ -191,7 +191,7 @@ func TestCredentialsLoadsEncryptedIdentityOncePerFile(t *testing.T) {
 	creds := &Credentials{
 		DisableAgent: true,
 		Prompter: FuncPrompter{
-			PassphraseFunc: func(_ context.Context, path string) (string, error) {
+			PassphraseFunc: func(_ context.Context, _ hosts.Host, path string) (string, error) {
 				calls.Add(1)
 				if path != keyPath {
 					t.Errorf("asked for %q, want the key path %q", path, keyPath)
@@ -222,7 +222,7 @@ func TestCredentialsUnencryptedIdentityNeedsNoPrompt(t *testing.T) {
 	creds := &Credentials{
 		DisableAgent: true,
 		Prompter: FuncPrompter{
-			PassphraseFunc: func(context.Context, string) (string, error) {
+			PassphraseFunc: func(context.Context, hosts.Host, string) (string, error) {
 				t.Error("an unencrypted key must not produce a passphrase prompt")
 				return "", errors.New("unexpected prompt")
 			},
@@ -245,7 +245,7 @@ func TestCredentialsWrongPassphraseIsForgotten(t *testing.T) {
 	creds := &Credentials{
 		DisableAgent: true,
 		Prompter: FuncPrompter{
-			PassphraseFunc: func(context.Context, string) (string, error) {
+			PassphraseFunc: func(context.Context, hosts.Host, string) (string, error) {
 				if calls.Add(1) == 1 {
 					return "wrong-on-purpose", nil
 				}
@@ -414,7 +414,7 @@ func TestNoSecretEverAppearsInAnError(t *testing.T) {
 	creds := &Credentials{
 		DisableAgent: true,
 		Prompter: FuncPrompter{
-			PassphraseFunc: func(context.Context, string) (string, error) { return "wrong-" + testPassphrase, nil },
+			PassphraseFunc: func(context.Context, hosts.Host, string) (string, error) { return "wrong-" + testPassphrase, nil },
 			PasswordFunc:   func(context.Context, hosts.Host) (string, error) { return testPassword, nil },
 			QuestionFunc: func(context.Context, hosts.Host, string, bool) (string, error) {
 				return testPassword, nil
@@ -496,7 +496,7 @@ func TestAuthAgainstServer(t *testing.T) {
 		creds := &Credentials{
 			DisableAgent: true,
 			Prompter: FuncPrompter{
-				PassphraseFunc: func(context.Context, string) (string, error) {
+				PassphraseFunc: func(context.Context, hosts.Host, string) (string, error) {
 					prompts.Add(1)
 					return testPassphrase, nil
 				},

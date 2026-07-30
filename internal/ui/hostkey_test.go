@@ -18,25 +18,77 @@ func questionApp(t *testing.T) App {
 	return model.(App)
 }
 
-// The question renders where the user is looking: the Status panel is
-// selected and carries the host, the key type and the full fingerprint.
-func TestHostKeyQuestionRenders(t *testing.T) {
+// The question renders where the user is looking: the host's pane is focused
+// and carries the host, the key type and the full fingerprint (issue #177).
+func TestHostKeyQuestionRendersInThePane(t *testing.T) {
 	a := questionApp(t)
 
-	if a.Panel() != PanelStatus {
-		t.Fatalf("Panel() = %v, want the Status panel", a.Panel())
+	if a.Focus() != AreaGrid {
+		t.Fatalf("Focus() = %v, want the grid", a.Focus())
+	}
+	if got := a.FocusedHost(); got != "web-01" {
+		t.Fatalf("FocusedHost() = %q, want web-01", got)
 	}
 	if got := a.HostKeyQuestionPending(); got != "web-01" {
 		t.Fatalf("HostKeyQuestionPending() = %q", got)
 	}
-	// The panel wraps at its width; compare with the whitespace squeezed out
+	// The pane wraps at its width; compare with the whitespace squeezed out
 	// so the assertion does not depend on where the breaks fall.
-	squeezed := strings.NewReplacer(" ", "", "\n", "").Replace(plain(a.statusPanel(28)))
+	lines := a.paneQuestionLines("web-01", 60)
+	squeezed := strings.NewReplacer(" ", "", "\n", "").Replace(plain(strings.Join(lines, "\n")))
 	for _, want := range []string{"unknownecdsa-sha2-nistp256keyforweb-01",
 		"SHA256:H1rWNMxFHHGXdxzBXKZIRZnMSoJ4ZyVy8N187uFr1yg"} {
 		if !strings.Contains(squeezed, want) {
-			t.Fatalf("the Status panel is missing %q:\n%s", want, plain(a.statusPanel(28)))
+			t.Fatalf("the pane is missing %q:\n%s", want, strings.Join(lines, "\n"))
 		}
+	}
+	// Every other pane stays clean, and the Status panel does not repeat a
+	// question the pane already shows.
+	if got := a.paneQuestionLines("web-02", 60); got != nil {
+		t.Fatalf("web-02 renders someone else's question:\n%s", strings.Join(got, "\n"))
+	}
+	if squeezed := strings.NewReplacer(" ", "", "\n", "").Replace(plain(a.statusPanel(28))); strings.Contains(squeezed, "unknown") {
+		t.Fatalf("the Status panel repeats the in-pane question:\n%s", plain(a.statusPanel(28)))
+	}
+	// The status bar says a question owns the keyboard.
+	if bar := plain(a.renderStatusBar()); !strings.Contains(bar, "AUTH web-01") {
+		t.Fatalf("the status bar is missing AUTH web-01:\n%s", bar)
+	}
+}
+
+// A question about a host without a pane - hidden by a filter, or a passphrase
+// question without a host - falls back to the Status panel, as before.
+func TestHostKeyQuestionFallsBackToTheStatusPanel(t *testing.T) {
+	a := resize(t, testApp(), 120, 40)
+	model, _ := a.Update(HostKeyQuestionMsg{
+		Host:        "not-in-the-run",
+		KeyType:     "ecdsa-sha2-nistp256",
+		Fingerprint: "SHA256:H1rWNMxFHHGXdxzBXKZIRZnMSoJ4ZyVy8N187uFr1yg",
+	})
+	a = model.(App)
+
+	if a.Panel() != PanelStatus {
+		t.Fatalf("Panel() = %v, want the Status panel", a.Panel())
+	}
+	squeezed := strings.NewReplacer(" ", "", "\n", "").Replace(plain(a.statusPanel(28)))
+	if !strings.Contains(squeezed, "unknownecdsa-sha2-nistp256keyfornot-in-the-run") {
+		t.Fatalf("the Status panel is missing the question:\n%s", plain(a.statusPanel(28)))
+	}
+	if bar := plain(a.renderStatusBar()); !strings.Contains(bar, "AUTH not-in-the-run — see [1] Status") {
+		t.Fatalf("the status bar does not point at the Status panel:\n%s", bar)
+	}
+}
+
+// Answering clears the in-pane rendering with the question.
+func TestHostKeyQuestionLeavesThePaneOnAnswer(t *testing.T) {
+	a := questionApp(t)
+	model, _ := a.Update(keyMsgFor(t, "y"))
+	a = model.(App)
+	if got := a.paneQuestionLines("web-01", 60); got != nil {
+		t.Fatalf("the pane still renders the answered question:\n%s", strings.Join(got, "\n"))
+	}
+	if bar := plain(a.renderStatusBar()); strings.Contains(bar, "AUTH") {
+		t.Fatalf("the status bar still says AUTH after the answer:\n%s", bar)
 	}
 }
 

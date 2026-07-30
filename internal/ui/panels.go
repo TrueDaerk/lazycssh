@@ -34,13 +34,14 @@ func (a App) panelBody(panel Panel, width, height int) string {
 func (a App) statusPanel(width int) string {
 	var lines []string
 
-	// The host key question outranks everything: it owns the keyboard while
-	// it is open, and a security decision must be visible while it is made.
-	lines = append(lines, a.hostKeyQuestionLines()...)
-
-	// The secret prompt likewise: what is being asked for must be readable
-	// while the masked answer is typed.
-	lines = append(lines, a.secretPromptLines()...)
+	// An auth question renders in the host's own pane; the Status panel is
+	// its fallback for a host without a visible pane. It outranks everything:
+	// it owns the keyboard while it is open, and a security decision must be
+	// visible while it is made.
+	if !a.questionPaneVisible() {
+		lines = append(lines, a.hostKeyQuestionLines()...)
+		lines = append(lines, a.secretPromptLines()...)
+	}
 
 	// The open new-host prompt comes first: while it has the keyboard it is
 	// the thing being interacted with, and its hints must not be pushed off a

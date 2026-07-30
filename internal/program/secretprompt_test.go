@@ -52,7 +52,7 @@ func TestSecretPrompterCancel(t *testing.T) {
 
 	got := make(chan error, 1)
 	go func() {
-		_, err := p.Passphrase(context.Background(), "/home/u/.ssh/id_ed25519")
+		_, err := p.Passphrase(context.Background(), hosts.Host{Alias: "db1"}, "/home/u/.ssh/id_ed25519")
 		got <- err
 	}()
 
@@ -77,7 +77,7 @@ func TestSecretPrompterHonoursTheContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if _, err := p.ask(ctx, "password for x", false); err == nil {
+	if _, err := p.ask(ctx, "x", "password for x", false); err == nil {
 		t.Fatal("ask returned no error under a cancelled context")
 	}
 }

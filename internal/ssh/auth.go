@@ -30,8 +30,10 @@ const (
 // implementation reads into a masked text input and keeps the value in memory
 // only.
 type Prompter interface {
-	// Passphrase asks for the passphrase protecting a private key file.
-	Passphrase(ctx context.Context, keyPath string) (string, error)
+	// Passphrase asks for the passphrase protecting a private key file. The
+	// host is the one whose dial hit the encrypted key - the answer is cached
+	// per key file, but the question belongs to a host the user can see.
+	Passphrase(ctx context.Context, host hosts.Host, keyPath string) (string, error)
 	// Password asks for the login password of a host.
 	Password(ctx context.Context, host hosts.Host) (string, error)
 	// Question asks a free-form keyboard-interactive question. echo reports
@@ -200,7 +202,7 @@ func (c *Credentials) identitySigners(ctx context.Context, host hosts.Host) ([]s
 	)
 
 	for _, path := range host.IdentityFiles {
-		signer, err := c.loadIdentity(ctx, path)
+		signer, err := c.loadIdentity(ctx, host, path)
 		if err != nil {
 			// A missing or unusable key is not fatal on its own: ssh config
 			// files routinely list keys that do not exist on every machine.
@@ -218,7 +220,7 @@ func (c *Credentials) identitySigners(ctx context.Context, host hosts.Host) ([]s
 
 // loadIdentity reads one private key, asking for a passphrase if it is
 // encrypted.
-func (c *Credentials) loadIdentity(ctx context.Context, path string) (ssh.Signer, error) {
+func (c *Credentials) loadIdentity(ctx context.Context, host hosts.Host, path string) (ssh.Signer, error) {
 	pem, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read identity %s: %w", path, err)
@@ -234,7 +236,7 @@ func (c *Credentials) loadIdentity(ctx context.Context, path string) (ssh.Signer
 		return nil, fmt.Errorf("parse identity %s: %w", path, err)
 	}
 
-	passphrase, err := c.passphrase(ctx, path)
+	passphrase, err := c.passphrase(ctx, host, path)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +252,7 @@ func (c *Credentials) loadIdentity(ctx context.Context, path string) (ssh.Signer
 }
 
 // passphrase returns the cached passphrase for a key file, asking for it once.
-func (c *Credentials) passphrase(ctx context.Context, path string) (string, error) {
+func (c *Credentials) passphrase(ctx context.Context, host hosts.Host, path string) (string, error) {
 	c.mu.Lock()
 	if v, ok := c.passphrases[path]; ok {
 		c.mu.Unlock()
@@ -263,7 +265,7 @@ func (c *Credentials) passphrase(ctx context.Context, path string) (string, erro
 		return "", fmt.Errorf("identity %s is encrypted: %w", path, ErrNoPrompter)
 	}
 
-	v, err := prompter.Passphrase(ctx, path)
+	v, err := prompter.Passphrase(ctx, host, path)
 	if err != nil {
 		return "", fmt.Errorf("passphrase for %s: %w", path, err)
 	}
@@ -371,16 +373,16 @@ func looksLikePasswordPrompt(question string) bool {
 // FuncPrompter adapts plain functions to [Prompter], which is convenient for
 // tests and for a non-interactive front end.
 type FuncPrompter struct {
-	PassphraseFunc func(ctx context.Context, keyPath string) (string, error)
+	PassphraseFunc func(ctx context.Context, host hosts.Host, keyPath string) (string, error)
 	PasswordFunc   func(ctx context.Context, host hosts.Host) (string, error)
 	QuestionFunc   func(ctx context.Context, host hosts.Host, question string, echo bool) (string, error)
 }
 
-func (p FuncPrompter) Passphrase(ctx context.Context, keyPath string) (string, error) {
+func (p FuncPrompter) Passphrase(ctx context.Context, host hosts.Host, keyPath string) (string, error) {
 	if p.PassphraseFunc == nil {
 		return "", ErrNoPrompter
 	}
-	return p.PassphraseFunc(ctx, keyPath)
+	return p.PassphraseFunc(ctx, host, keyPath)
 }
 
 func (p FuncPrompter) Password(ctx context.Context, host hosts.Host) (string, error) {
