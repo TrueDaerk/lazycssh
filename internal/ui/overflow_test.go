@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// overflowApp is more hosts than a 120x40 terminal can tile at the 24x6
+// overflowApp is more hosts than statusApp's terminal can tile at the pane
 // floor, so the grid pages.
 func overflowApp(t *testing.T) App {
 	t.Helper()

@@ -91,7 +91,7 @@ func statusApp(t *testing.T, names ...string) (App, *fakeFleet, *broadcast.Route
 		WorkingSet:  ws,
 		Panes:       fleet,
 		Theme:       Options{Dark: true},
-	}), 120, 40)
+	}), 200, 60)
 
 	return a, fleet, router, ws
 }

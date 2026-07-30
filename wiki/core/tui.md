@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-30T21:00:00Z
+timestamp: 2026-07-30T22:00:00Z
 ---
 
 # TUI shell
@@ -72,9 +72,12 @@ same state cannot disagree about where a pane is.
 | 12 | 4×3 |
 | 20 | 5×4 |
 
-A pane is never smaller than 24×6 including its border. When the hosts do not fit at that size
-the grid **pages** rather than shrinking further — four readable panes and a page indicator beat
-twelve unreadable ones. `Grid.Pages`, `Grid.Page(i)` and `Grid.Cell(i)` say how many pages there
+A pane never shows its host less than a 45×16 terminal (issue #139) — a 47×19 cell once the
+border and the header line are counted in, and the remote PTY is sized to the same content, so
+remote line wrapping always matches what is rendered. The guideline value is tuned in one place
+(`MinPaneContentWidth`/`MinPaneContentHeight` in `internal/ui/grid.go`). When the hosts do not
+fit at that size the grid **pages** rather than shrinking further — four readable panes and a
+page indicator beat twelve unreadable ones. `Grid.Pages`, `Grid.Page(i)` and `Grid.Cell(i)` say how many pages there
 are and where a host sits on its own.
 
 An empty slot on the last page — three hosts in a 2×2 — is drawn as an empty frame rather than
@@ -185,9 +188,12 @@ same state cannot disagree about where a pane is.
 | 12 | 4×3 |
 | 20 | 5×4 |
 
-A pane is never smaller than 24×6 including its border. When the hosts do not fit at that size
-the grid **pages** rather than shrinking further — four readable panes and a page indicator beat
-twelve unreadable ones. `Grid.Pages`, `Grid.Page(i)` and `Grid.Cell(i)` say how many pages there
+A pane never shows its host less than a 45×16 terminal (issue #139) — a 47×19 cell once the
+border and the header line are counted in, and the remote PTY is sized to the same content, so
+remote line wrapping always matches what is rendered. The guideline value is tuned in one place
+(`MinPaneContentWidth`/`MinPaneContentHeight` in `internal/ui/grid.go`). When the hosts do not
+fit at that size the grid **pages** rather than shrinking further — four readable panes and a
+page indicator beat twelve unreadable ones. `Grid.Pages`, `Grid.Page(i)` and `Grid.Cell(i)` say how many pages there
 are and where a host sits on its own.
 
 An empty slot on the last page — three hosts in a 2×2 — is drawn as an empty frame rather than

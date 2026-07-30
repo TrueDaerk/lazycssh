@@ -5,11 +5,23 @@ import "math"
 // Pane size floors. Below these a pane shows too little output to be worth
 // looking at, so the grid pages instead of shrinking further: four readable
 // panes and a page indicator beat twelve unreadable ones.
+//
+// The floor is set on the terminal the host sees, not on the cell: the remote
+// PTY is sized to the pane's content (the cell minus its border and header, see
+// resizePTYs), so these two constants are the smallest width and height a
+// remote shell is ever told it has. 45x16 is a starting guideline (issue #139),
+// tuned here in one place.
 const (
-	// MinPaneWidth is the narrowest a pane may be, borders included.
-	MinPaneWidth = 24
-	// MinPaneHeight is the shortest a pane may be, borders included.
-	MinPaneHeight = 6
+	// MinPaneContentWidth is the narrowest terminal a host pane shows.
+	MinPaneContentWidth = 45
+	// MinPaneContentHeight is the shortest terminal a host pane shows.
+	MinPaneContentHeight = 16
+	// MinPaneWidth is the narrowest a pane cell may be: the content plus the
+	// border column on each side.
+	MinPaneWidth = MinPaneContentWidth + 2
+	// MinPaneHeight is the shortest a pane cell may be: the content plus the
+	// border rows and the header line.
+	MinPaneHeight = MinPaneContentHeight + 3
 )
 
 // Grid is a tiling of the main area.

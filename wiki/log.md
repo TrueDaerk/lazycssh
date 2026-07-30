@@ -2,6 +2,14 @@
 
 ## 2026-07-30
 
+- Raised the pane floor to a 45×16 terminal per host (issue #139): the grid never hands a host
+  less content than that — a 47×19 cell with border and header — and pages the overflow as
+  before. The value is a guideline tuned in one place (`MinPaneContentWidth`/`Height` in
+  `internal/ui/grid.go`); the PTY floor follows automatically because the remote is sized to
+  the same content arithmetic. `core/tui.md` updated. Version 0.9.9.
+
+## 2026-07-30
+
 - Text can be copied out of a pane (issue #134): `alt+y` puts the focused pane's visible text
   into the system clipboard, `alt+d` the whole retained scrollback, both over OSC 52 so they
   work through SSH and degrade silently on terminals without support — the status line reports

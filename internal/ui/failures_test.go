@@ -33,7 +33,9 @@ func TestPaneHeaderKeepsTheFailureOverTheState(t *testing.T) {
 	fleet.connect(t, "web-production-01")
 	fleet.sessions["web-production-01"].ReportExit(1)
 
-	got := plain(a.paneHeader(0, MinPaneWidth-2, false))
+	// A width the header cannot fit everything into: the old pane floor,
+	// narrower than any pane the grid tiles today.
+	got := plain(a.paneHeader(0, 22, false))
 	if strings.Contains(got, "connected") {
 		t.Fatalf("the state crowded out the failure: %q", got)
 	}
@@ -47,6 +49,8 @@ func TestPaneHeaderKeepsTheFailureOverTheState(t *testing.T) {
 // carries no meaning.
 func TestFailingPaneIsVisuallyDistinct(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01", "web-02")
+	// Two panes at the 45x16 floor need more room than statusApp's default.
+	a = resize(t, a, 200, 60)
 	fleet.sessions["web-02"].ReportExit(1)
 
 	healthy := a.theme.PaneFrame(false, false).GetBorderTopForeground()

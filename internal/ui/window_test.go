@@ -100,9 +100,9 @@ func TestPagingDoesNotChangeTheHostList(t *testing.T) {
 }
 
 func TestPageIndicatorOnlyWhenItPages(t *testing.T) {
-	one := resize(t, fleetApp(t, 4), 120, 40)
+	one := resize(t, fleetApp(t, 4), 200, 60)
 	if one.Pages() != 1 {
-		t.Fatalf("setup: 4 hosts need %d pages at 120x40", one.Pages())
+		t.Fatalf("setup: 4 hosts need %d pages at 200x60", one.Pages())
 	}
 	if strings.Contains(plain(one.View().Content), "page ") {
 		t.Fatalf("a single page rendered a page indicator:\n%s", plain(one.View().Content))
@@ -124,9 +124,9 @@ func TestPageClampsWhenTheTerminalChanges(t *testing.T) {
 	}
 	last := a.Page()
 
-	a = resize(t, a, 200, 60)
+	a = resize(t, a, 240, 62)
 	if a.Pages() != 1 {
-		t.Fatalf("12 hosts still need %d pages at 200x60", a.Pages())
+		t.Fatalf("12 hosts still need %d pages at 240x62", a.Pages())
 	}
 	if a.Page() != 0 {
 		t.Fatalf("Page() = %d after the window grew, want 0", a.Page())
@@ -159,7 +159,7 @@ func TestWindowWithNoHosts(t *testing.T) {
 }
 
 func TestPagingWithASinglePageDoesNothing(t *testing.T) {
-	a := resize(t, fleetApp(t, 4), 120, 40)
+	a := resize(t, fleetApp(t, 4), 200, 60)
 	before := a.View().Content
 
 	a = pressKey(t, a, "alt+n")
