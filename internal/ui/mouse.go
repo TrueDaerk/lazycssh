@@ -27,6 +27,11 @@ func (a App) handleClick(x, y int) (tea.Model, tea.Cmd) {
 			}
 			return a, nil
 		}
+		if a.hostIDAt(index) == "" {
+			// A hole or an empty last-page slot: nothing to focus, nothing
+			// to type into.
+			return a, nil
+		}
 		a.paneIndex = index
 		a = a.enterPane().followFocus()
 		// The press also arms a text selection; only motion makes it one.

@@ -79,9 +79,10 @@ func (a App) ActiveSession() string {
 	return a.open[a.active].Name
 }
 
-// sessionHosts returns the foreground session's hosts that are still in the
-// fleet, in session order. With nothing open it falls back to the whole fleet,
-// which is also how the views are tested without sessions.
+// sessionHosts returns the foreground session's hosts in session order, with
+// a hole ("") where a host left the run: the pane grid keeps its positions
+// until an explicit retile (issue #169). With nothing open it falls back to
+// the whole fleet, which is also how the views are tested without sessions.
 func (a App) sessionHosts() []string {
 	if a.active < 0 || a.active >= len(a.open) {
 		return a.fleetIDs()
@@ -92,7 +93,21 @@ func (a App) sessionHosts() []string {
 	}
 	var out []string
 	for _, id := range a.open[a.active].Hosts {
-		if fleet[id] {
+		if id != "" && fleet[id] {
+			out = append(out, id)
+			continue
+		}
+		out = append(out, "")
+	}
+	return out
+}
+
+// nonHoles returns ids without the "" hole markers: the hosts that actually
+// exist, which is what broadcast limits and counts are about.
+func nonHoles(ids []string) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id != "" {
 			out = append(out, id)
 		}
 	}
@@ -109,7 +124,9 @@ func (a App) openSessionAt(name string, hosts []string) App {
 		}
 		known := make(map[string]bool, len(a.open[i].Hosts))
 		for _, id := range a.open[i].Hosts {
-			known[id] = true
+			if id != "" {
+				known[id] = true
+			}
 		}
 		merged := append([]string(nil), a.open[i].Hosts...)
 		for _, id := range hosts {
@@ -137,7 +154,8 @@ func (a App) foregroundSession(index int) App {
 	a.paneIndex = 0
 	a.fullScreen = false
 	// A session switch is an explicit view change: it tiles for what the new
-	// session actually holds, kept shape or not.
+	// session actually holds - holes compacted, kept shape dropped.
+	a.open[index].Hosts = nonHoles(a.open[index].Hosts)
 	return a.resetGridSlots().syncBroadcastLimit().syncFocusTarget()
 }
 
@@ -152,13 +170,15 @@ func (a App) syncBroadcastLimit() App {
 		a.cfg.Targets.SetLimit(nil)
 		return a
 	}
-	a.cfg.Targets.SetLimit(a.visibleHosts())
+	// Holes are grid positions, not hosts: a keystroke cannot go to one.
+	a.cfg.Targets.SetLimit(nonHoles(a.visibleHosts()))
 	return a
 }
 
-// pruneSessions drops hosts that left the fleet from every open session, and
-// drops sessions that lost their last host. The foreground session is kept by
-// identity, the way pane focus is kept by host.
+// pruneSessions turns hosts that left the fleet into holes ("") in every open
+// session - the pane positions must survive a departure until an explicit
+// retile (issue #169) - and drops sessions that lost their last real host. The
+// foreground session is kept by identity, the way pane focus is kept by host.
 func (a App) pruneSessions() App {
 	fleet := make(map[string]bool)
 	for _, id := range a.fleetIDs() {
@@ -168,13 +188,17 @@ func (a App) pruneSessions() App {
 	activeName := a.ActiveSession()
 	kept := a.open[:0]
 	for _, s := range a.open {
-		var hosts []string
+		hosts := make([]string, 0, len(s.Hosts))
+		real := 0
 		for _, id := range s.Hosts {
-			if fleet[id] {
+			if id != "" && fleet[id] {
 				hosts = append(hosts, id)
+				real++
+				continue
 			}
+			hosts = append(hosts, "")
 		}
-		if len(hosts) == 0 {
+		if real == 0 {
 			continue
 		}
 		s.Hosts = hosts
@@ -243,11 +267,11 @@ func gridChanged() tea.Cmd {
 // session - and with it the program - alive after every other host was
 // logged out (issue #146).
 func (a App) sessionOver(s openSession) bool {
-	if len(s.Hosts) == 0 {
+	if len(nonHoles(s.Hosts)) == 0 {
 		return true
 	}
 	sawClose, doneAll := s.SawClose, true
-	for _, id := range s.Hosts {
+	for _, id := range nonHoles(s.Hosts) {
 		st := a.state(id)
 		if st == ssh.StateClosed {
 			sawClose = true

@@ -43,14 +43,15 @@ func (a App) overflowFooter() string {
 
 	g := a.grid()
 	if g.Pages > 1 {
-		hidden := len(a.hostIDs()) - len(a.WindowHosts())
+		// Holes are not hosts: only real machines are worth announcing.
+		hidden := len(nonHoles(a.hostIDs())) - len(nonHoles(a.WindowHosts()))
 		parts = append(parts, a.theme.StatusWarning.Render(fmt.Sprintf(
 			"+%d more host%s — ctrl+→ · page %d/%d",
 			hidden, plural(hidden), a.clampedPage(g)+1, g.Pages)))
 	}
 
 	if chunks := a.splitChunks(); chunks > 1 {
-		hidden := len(a.filteredHosts()) - len(a.visibleHosts())
+		hidden := len(nonHoles(a.filteredHosts())) - len(nonHoles(a.visibleHosts()))
 		parts = append(parts, a.theme.StatusWarning.Render(fmt.Sprintf(
 			"+%d host%s in other chunks — ctrl+→", hidden, plural(hidden))))
 	}

@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-31T18:00:00Z
+timestamp: 2026-07-31T19:00:00Z
 ---
 
 # TUI shell
@@ -90,11 +90,16 @@ An empty slot on the last page — three hosts in a 2×2 — is drawn as an empt
 being reflowed, so the panes stay the size they were as hosts come and go.
 
 The same rule covers departures entirely: **a host leaving the run does not reflow the grid**.
-The shape is kept, the freed cell renders empty, and `ctrl+r` re-tiles on request (and resizes
-the PTYs). Growth is immediate — a new pane has to appear somewhere — and an explicit view
-change (session switch, `ctrl+a`, `ctrl+s`) tiles for the new view rather than keeping a museum
-of the old one. A terminal resize reflows as always: the user caused that change. While typing,
-`ctrl+r` belongs to the host (readline reverse-search).
+Its slot becomes a **hole** — an empty frame exactly where the pane was, held in the session's
+host list as a `""` marker (issue #169) — so a host closing in the middle of the grid moves
+nothing: the survivors keep their positions and their numbers. A hole is a grid position, not a
+host: pane movement steps over it, a click on it selects nothing, focus never rests on it, and
+the broadcast set and every host count exclude it (`nonHoles`). `ctrl+r` closes the holes and
+re-tiles on request (and resizes the PTYs). Growth is immediate — a new pane has to appear
+somewhere, appended after the existing slots — and an explicit view change (session switch,
+`ctrl+a`, `ctrl+s`) compacts and tiles for the new view rather than keeping a museum of the old
+one. A terminal resize reflows the cells but keeps the slots as they are: the user changed the
+window, not the run. While typing, `ctrl+r` belongs to the host (readline reverse-search).
 
 `f` full-screens the focused pane and `f` again returns to the grid. The issue proposed `1`/`2`/`3`
 for this, but the epic gives the number keys to the sidebar panels; a key cannot mean both, so

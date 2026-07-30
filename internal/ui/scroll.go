@@ -255,7 +255,7 @@ func (a App) searchReport() string {
 	}
 
 	var matched []string
-	for _, id := range a.hostIDs() {
+	for _, id := range nonHoles(a.hostIDs()) {
 		if len(a.matchAnywhere(id)) > 0 {
 			matched = append(matched, id)
 		}
@@ -271,7 +271,7 @@ func (a App) searchReport() string {
 			fmt.Sprintf(" and %d more", len(matched)-most)
 	}
 	return fmt.Sprintf("%q found on %d/%d hosts: %s",
-		a.searchTerm, len(matched), len(a.hostIDs()), names)
+		a.searchTerm, len(matched), len(nonHoles(a.hostIDs())), names)
 }
 
 // matchAnywhere searches a host's raw scrollback rather than its wrapped

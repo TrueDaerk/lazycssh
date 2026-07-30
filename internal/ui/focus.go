@@ -75,14 +75,42 @@ func (a App) refocus(focused string) App {
 		}
 	}
 	a.paneIndex = clamp(a.paneIndex, 0, max(0, len(ids)-1))
+	// The clamped position may be the departed host's own hole; the nearest
+	// real pane is the machine closest to where the user was.
+	if a.paneIndex < len(ids) && ids[a.paneIndex] == "" {
+		for d := 1; d < len(ids); d++ {
+			if i := a.paneIndex + d; i < len(ids) && ids[i] != "" {
+				a.paneIndex = i
+				break
+			}
+			if i := a.paneIndex - d; i >= 0 && ids[i] != "" {
+				a.paneIndex = i
+				break
+			}
+		}
+	}
 	return a
 }
 
 // movePane moves the pane focus by delta, stopping at the ends rather than
 // wrapping. Wrapping from the last pane to the first is how a user ends up
-// typing into the machine at the other end of the fleet.
+// typing into the machine at the other end of the fleet. Holes are grid
+// positions, not hosts: the focus steps over them, and when only holes lie in
+// the direction of travel it stays where it is.
 func (a App) movePane(delta int) App {
-	a.paneIndex = clamp(a.paneIndex+delta, 0, len(a.hostIDs())-1)
+	ids := a.hostIDs()
+	i := clamp(a.paneIndex+delta, 0, len(ids)-1)
+	step := 1
+	if delta < 0 {
+		step = -1
+	}
+	for i >= 0 && i < len(ids) && ids[i] == "" {
+		i += step
+	}
+	if i < 0 || i >= len(ids) || ids[i] == "" {
+		return a
+	}
+	a.paneIndex = i
 	return a
 }
 
