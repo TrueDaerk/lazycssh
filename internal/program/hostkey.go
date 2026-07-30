@@ -73,9 +73,12 @@ func (m *Model) promptPump() tea.Cmd {
 	}
 }
 
-// askHostKey shows the question in the UI and remembers whose it is.
+// askHostKey shows the question in the UI and remembers whose it is. The
+// question is also written into the host's scrollback in ssh's own wording, so
+// the pane reads like a plain terminal (issue #180).
 func (m *Model) askHostKey(msg keyQuestionMsg) (tea.Model, tea.Cmd) {
 	m.pendingKey = msg.q
+	echoPrompt(m.promptScrollback(msg.q.host.Alias), hostKeyPromptText(msg.q))
 	return m, m.forward(ui.HostKeyQuestionMsg{
 		Host:        msg.q.host.Alias,
 		KeyType:     msg.q.keyType,
@@ -89,6 +92,11 @@ func (m *Model) answerHostKey(msg ui.HostKeyAnswerMsg) (tea.Model, tea.Cmd) {
 	if m.pendingKey == nil {
 		return m, nil
 	}
+	shown := "no"
+	if msg.Accept {
+		shown = "yes"
+	}
+	echoAnswer(m.promptScrollback(m.pendingKey.host.Alias), shown)
 	m.pendingKey.answer <- msg.Accept
 	m.pendingKey = nil
 	return m, m.promptPump()

@@ -546,6 +546,9 @@ func (s *sshSession) setState(state State, err error) {
 	}
 	s.mu.Unlock()
 
+	if state == StateFailed {
+		writeFailureNotice(s.buf, err)
+	}
 	s.emit(StateEvent{ID: s.id, State: state, Err: err})
 }
 

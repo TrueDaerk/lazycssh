@@ -4,7 +4,7 @@ title: Host key verification
 description: How lazycssh verifies server keys against known_hosts, why a changed key is never a prompt, and the one explicit way out.
 resource: internal/ssh/knownhosts.go
 tags: [ssh, security, known-hosts]
-timestamp: 2026-07-30T12:00:00Z
+timestamp: 2026-07-30T15:00:00Z
 ---
 
 # Host key verification
@@ -38,16 +38,25 @@ There is no code path from a changed key to a connection.
 
 The prompt is live since issue #173. A dialling session that meets an unknown key blocks in
 `keyPrompter.ConfirmHostKey` (`internal/program/hostkey.go`); the question travels over an
-unbuffered channel into the event loop, and the UI shows it **in the host's own pane** (issue
-#177): the pane is focused, the question — key type, the full SHA256 fingerprint — renders at
-the bottom of its body, and the status bar carries an `AUTH <host>` segment while it is open. A
-host whose pane is not visible (hidden by a filter or a split, or already gone) is asked in the
-Status panel instead, and the status bar segment points there. Either way the question owns the
-keyboard while open: `y` accepts and
-remembers, `n`/`esc` rejects and fails that pane, every other key is swallowed (`ctrl+q` still
-quits). Questions arrive **one at a time, per host**: the pump re-arms only after the answer,
-so twenty new hosts ask twenty times in order. A session closed or cancelled while its question
-is open withdraws it via its context instead of leaking a goroutine.
+unbuffered channel into the event loop, and the pane behaves like a plain terminal running
+`ssh` (issues #177, #180): the host's pane is focused, ssh's own question is written into its
+scrollback —
+
+```
+The authenticity of host 'web-01 (10.0.0.1)' can't be established.
+ssh-ed25519 key fingerprint is SHA256:… .
+Are you sure you want to continue connecting (yes/no)?
+```
+
+— and the answer is typed inline after it: `yes`/`y` + enter accepts and remembers, `no`/`n` +
+enter (or `esc`) rejects and fails that pane, anything else entered clears and asks again. The
+typed answer echoes at the prompt and stays in the history, the way a terminal leaves it. The
+status bar carries an `AUTH <host>` segment while the question is open; a host whose pane is
+not visible (hidden by a filter or a split, or already gone) is asked in the Status panel
+instead, and the segment points there. The question owns the keyboard while open (`ctrl+q`
+still quits). Questions arrive **one at a time, per host**: the pump re-arms only after the
+answer, so twenty new hosts ask twenty times in order. A session closed or cancelled while its
+question is open withdraws it via its context instead of leaking a goroutine.
 
 ## Accepting an unknown key
 

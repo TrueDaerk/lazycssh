@@ -340,6 +340,9 @@ func (f *Fake) setState(state State, err error) {
 	}
 	f.mu.Unlock()
 
+	if state == StateFailed {
+		writeFailureNotice(f.Scrollback(), err)
+	}
 	f.emit(StateEvent{ID: f.id, State: state, Err: err})
 }
 

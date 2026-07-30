@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -48,31 +50,53 @@ func (a App) HostKeyQuestionPending() string {
 func (a App) showHostKeyQuestion(msg HostKeyQuestionMsg) App {
 	q := msg
 	a.keyQuestion = &q
+	a.keyAnswer = nil
 	return a.focusQuestionPane(msg.Host)
 }
 
-// handleHostKeyQuestionKey answers the question: y accepts and remembers the
-// key, n or esc rejects it and fails the pane. Everything else is swallowed -
-// a keystroke meant for a host must not accidentally answer for one.
+// handleHostKeyQuestionKey answers the question the way ssh does (issue #180):
+// the answer is typed - yes/y accepts and remembers the key, no/n rejects and
+// fails the pane - and enter sends it. Anything else typed and entered clears
+// and asks again, so a keystroke meant for a host cannot accidentally answer.
+// esc rejects, the way interrupting ssh at the question does.
 func (a App) handleHostKeyQuestionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	q := *a.keyQuestion
 	switch msg.String() {
-	case "y", "Y":
+	case "enter":
+		answer := strings.ToLower(strings.TrimSpace(string(a.keyAnswer)))
+		a.keyAnswer = nil
+		switch answer {
+		case "yes", "y":
+			a.keyQuestion = nil
+			a.questionPaneID = ""
+			return a, func() tea.Msg { return HostKeyAnswerMsg{Host: q.Host, Accept: true} }
+		case "no", "n":
+			a.keyQuestion = nil
+			a.questionPaneID = ""
+			return a, func() tea.Msg { return HostKeyAnswerMsg{Host: q.Host, Accept: false} }
+		}
+		return a, nil
+	case "esc":
 		a.keyQuestion = nil
-		a.questionPaneID = ""
-		return a, func() tea.Msg { return HostKeyAnswerMsg{Host: q.Host, Accept: true} }
-	case "n", "N", "esc":
-		a.keyQuestion = nil
+		a.keyAnswer = nil
 		a.questionPaneID = ""
 		return a, func() tea.Msg { return HostKeyAnswerMsg{Host: q.Host, Accept: false} }
+	case "backspace":
+		if n := len(a.keyAnswer); n > 0 {
+			a.keyAnswer = a.keyAnswer[:n-1]
+		}
+		return a, nil
+	}
+	if msg.Text != "" {
+		a.keyAnswer = append(a.keyAnswer, []rune(msg.Text)...)
 	}
 	return a, nil
 }
 
-// hostKeyQuestionLines renders the open question - in the host's pane, or in
-// the Status panel when the pane is not visible. The
-// fingerprint is the substance of the decision, so it gets its own line and is
-// never truncated into prettiness.
+// hostKeyQuestionLines renders the open question for the Status panel - the
+// fallback for a host without a visible pane; a visible pane shows ssh's own
+// wording in its scrollback instead. The fingerprint is the substance of the
+// decision, so it gets its own line and is never truncated into prettiness.
 func (a App) hostKeyQuestionLines() []string {
 	if a.keyQuestion == nil {
 		return nil
@@ -81,6 +105,7 @@ func (a App) hostKeyQuestionLines() []string {
 	return []string{
 		a.theme.StatusWarning.Render("unknown " + q.KeyType + " key for " + q.Host),
 		a.theme.Base.Render(q.Fingerprint),
-		a.theme.Muted.Render("y accepts and remembers it · n rejects and fails the pane"),
+		a.theme.Base.Render("continue connecting (yes/no)? " + string(a.keyAnswer)),
+		a.theme.Muted.Render("yes accepts and remembers it · no rejects and fails the pane"),
 	}
 }

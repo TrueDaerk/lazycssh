@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-31T19:00:00Z
+timestamp: 2026-07-30T15:00:00Z
 ---
 
 # TUI shell
@@ -219,10 +219,10 @@ The transport reports each command's exit status through a prompt hook — see
   must be as reachable as one ahead;
 - a shell that never ran the hook reports nothing, and the interface shows nothing rather than
   a made-up zero;
-- a pane whose *connection* failed says why (issue #167): the session's error — DNS, refused,
-  auth, host key — renders in the failure style at the bottom of the body, wrapped to the pane
-  and capped at half its height so the output that led up to the failure stays visible. The
-  text comes from the fleet snapshot (`hostState.errText`), never from live session state.
+- a pane whose *connection* failed says why (issue #167): the session writes its error — DNS,
+  refused, auth, host key — into its own scrollback the way a plain terminal prints it (issue
+  #180), so it scrolls with the history and is reachable like any other output. The snapshot
+  (`hostState.errText`) still feeds the Status panel and the failure counts.
 
 Below the header the pane renders its session's [scrollback](./scrollback.md), following the
 tail: the newest output is what the user is watching for. Rendering is a pure

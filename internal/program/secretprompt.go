@@ -64,16 +64,19 @@ func (p *secretPrompter) ask(ctx context.Context, host, prompt string, echo bool
 	}
 }
 
+// The prompts use ssh's own wording (issue #180): the pane must read like the
+// terminal the user already knows.
+
 func (p *secretPrompter) Password(ctx context.Context, host hosts.Host) (string, error) {
-	return p.ask(ctx, host.Alias, fmt.Sprintf("password for %s@%s", host.User, host.Alias), false)
+	return p.ask(ctx, host.Alias, fmt.Sprintf("%s@%s's password: ", host.User, host.Alias), false)
 }
 
 func (p *secretPrompter) Passphrase(ctx context.Context, host hosts.Host, keyPath string) (string, error) {
-	return p.ask(ctx, host.Alias, "passphrase for "+keyPath, false)
+	return p.ask(ctx, host.Alias, "Enter passphrase for key '"+keyPath+"': ", false)
 }
 
 func (p *secretPrompter) Question(ctx context.Context, host hosts.Host, question string, echo bool) (string, error) {
-	return p.ask(ctx, host.Alias, host.Alias+": "+question, echo)
+	return p.ask(ctx, host.Alias, question, echo)
 }
 
 // secretQuestionMsg delivers one question into the event loop.
@@ -97,17 +100,28 @@ func (m *Model) secretPump() tea.Cmd {
 	}
 }
 
-// askSecret shows the prompt in the UI and remembers whose it is.
+// askSecret shows the prompt in the UI and remembers whose it is. The prompt
+// is also written into the host's scrollback, so the pane reads like a plain
+// terminal (issue #180).
 func (m *Model) askSecret(msg secretQuestionMsg) (tea.Model, tea.Cmd) {
 	m.pendingSecret = msg.q
+	echoPrompt(m.promptScrollback(msg.q.host), msg.q.prompt)
 	return m, m.forward(ui.SecretQuestionMsg{Host: msg.q.host, Prompt: msg.q.prompt, Echo: msg.q.echo})
 }
 
-// answerSecret releases the blocked session and re-arms the pump.
+// answerSecret releases the blocked session and re-arms the pump. The
+// scrollback's prompt line is finished the way a terminal would: an echoing
+// answer is shown, a masked one leaves only the newline - the secret itself is
+// never written anywhere.
 func (m *Model) answerSecret(msg ui.SecretAnswerMsg) (tea.Model, tea.Cmd) {
 	if m.pendingSecret == nil {
 		return m, nil
 	}
+	shown := ""
+	if msg.Ok && m.pendingSecret.echo {
+		shown = msg.Value
+	}
+	echoAnswer(m.promptScrollback(m.pendingSecret.host), shown)
 	m.pendingSecret.answer <- secretAnswer{value: msg.Value, ok: msg.Ok}
 	m.pendingSecret = nil
 	return m, m.secretPump()

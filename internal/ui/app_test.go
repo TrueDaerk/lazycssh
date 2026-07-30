@@ -53,7 +53,8 @@ func keyMsgFor(t *testing.T, keystroke string) tea.KeyPressMsg {
 base:
 	special := map[string]rune{
 		"tab": tea.KeyTab, "shift+tab": tea.KeyTab, "enter": tea.KeyEnter,
-		"esc": tea.KeyEscape, "left": tea.KeyLeft, "right": tea.KeyRight,
+		"esc": tea.KeyEscape, "backspace": tea.KeyBackspace,
+		"left": tea.KeyLeft, "right": tea.KeyRight,
 		"up": tea.KeyUp, "down": tea.KeyDown, "pgup": tea.KeyPgUp,
 		"pgdown": tea.KeyPgDown, "home": tea.KeyHome, "end": tea.KeyEnd,
 	}

@@ -2,6 +2,16 @@
 
 ## 2026-07-30
 
+- Auth prompts and connect errors behave like a plain terminal (issue #180): the question is
+  written into the blocked host's scrollback in ssh's own wording — `test@db1's password: `,
+  `Enter passphrase for key '…': `, the known-hosts block ending in `(yes/no)? ` — and the
+  answer is typed inline after it; the host key question now takes a typed `yes`/`no` + enter.
+  Masked answers echo nothing and write only the newline; echoing answers and the yes/no stay
+  in the history. A failed session prints its error into its own scrollback instead of the
+  styled overlay at the pane bottom. The `AUTH <host>` status bar segment and the Status-panel
+  fallback stay. `core/host-keys.md`, `core/authentication.md` and `core/tui.md` updated.
+  Version 0.9.29.
+
 - Auth questions render in the host's own pane (issue #177): an unknown-host-key question or a
   secret prompt focuses the affected pane and draws the question at the bottom of its body, so
   it cannot be missed and its host is never in doubt; the status bar says `AUTH <host>` for as

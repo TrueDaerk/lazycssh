@@ -30,6 +30,16 @@ func writeReconnectSeparator(buf *scrollback.Buffer, host hosts.Host) {
 	buf.Write([]byte(line))
 }
 
+// writeFailureNotice prints a failed session's error into its scrollback the
+// way a plain terminal would show it (issue #180): as output, where the eye
+// already is, scrolling with the history rather than floating over it.
+func writeFailureNotice(buf *scrollback.Buffer, err error) {
+	if buf == nil || err == nil {
+		return
+	}
+	buf.Write([]byte("\r\n" + err.Error() + "\r\n"))
+}
+
 // Defaults for a manager that does not configure them.
 const (
 	// DefaultMaxParallelDials bounds how many connections are opened at once.

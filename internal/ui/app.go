@@ -200,9 +200,10 @@ type App struct {
 	cmdHistoryPos int
 	lastDelivery  string
 
-	// keyQuestion is the open host key question, nil when none is; see
-	// internal/ui/hostkey.go.
+	// keyQuestion is the open host key question, nil when none is, and
+	// keyAnswer the yes/no being typed for it; see internal/ui/hostkey.go.
 	keyQuestion *HostKeyQuestionMsg
+	keyAnswer   []rune
 
 	// secretQuestion is the open secret prompt and secretInput its masked
 	// input; see internal/ui/secretprompt.go.
@@ -1062,11 +1063,9 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 	focused := gridFocused && host == a.paneIndex
 
 	// The border eats two columns and rows, the header the top line of what
-	// remains. An open auth question for this host takes the bottom lines; the
-	// body gives up that height rather than pushing the question off the pane.
+	// remains.
 	content := a.paneHeader(host, cell.Width-2, focused)
-	question := a.paneQuestionLines(id, cell.Width-2)
-	if body := a.paneBody(id, cell.Width-2, cell.Height-3-len(question)); body != "" {
+	if body := a.paneBody(id, cell.Width-2, cell.Height-3); body != "" {
 		if a.paneAltScreen(id) {
 			// A full-screen app owns the grid; a text selection over a live
 			// screen would highlight cells that repaint under it.
@@ -1074,9 +1073,6 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 		} else {
 			content = content + "\n" + a.highlightSelection(id, cell.Width-2, body)
 		}
-	}
-	if len(question) > 0 {
-		content = content + "\n" + strings.Join(question, "\n")
 	}
 
 	return a.frame(a.theme.PaneFrame(focused, a.commandFailed(id)), cell, content)

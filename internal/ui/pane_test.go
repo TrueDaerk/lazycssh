@@ -369,9 +369,10 @@ func TestFailedPaneWithoutOutputShowsTheError(t *testing.T) {
 	}
 }
 
-// A long error wraps but cannot flood the pane: at most half the height, so
-// the output that led up to the failure stays visible.
-func TestFailedPaneErrorIsCapped(t *testing.T) {
+// The error is part of the scrollback, like a terminal prints it (issue #180):
+// a long one scrolls the earlier output up, and scrolling back still reaches
+// it - nothing floats over the history, nothing is capped away.
+func TestFailedPaneErrorScrollsLikeOutput(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01")
 	fleet.sessions["web-01"].Emit("kept\n")
 	fleet.sessions["web-01"].Disconnect(errors.New(strings.Repeat("very long failure text ", 30)))
@@ -382,8 +383,11 @@ func TestFailedPaneErrorIsCapped(t *testing.T) {
 	if got := len(strings.Split(body, "\n")); got > 8 {
 		t.Fatalf("body is %d lines, want at most 8:\n%s", got, body)
 	}
-	if !strings.Contains(body, "kept") {
-		t.Fatalf("the error flooded the output away:\n%s", body)
+	if !strings.Contains(body, "failure text") {
+		t.Fatalf("the failure is not in the output:\n%s", body)
+	}
+	if history := plain(strings.Join(a.wrappedLines("web-01", 20), "\n")); !strings.Contains(history, "kept") {
+		t.Fatalf("the earlier output is gone from the history:\n%s", history)
 	}
 }
 
