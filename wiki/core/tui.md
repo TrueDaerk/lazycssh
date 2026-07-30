@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-30T22:00:00Z
+timestamp: 2026-07-30T23:00:00Z
 ---
 
 # TUI shell
@@ -120,13 +120,14 @@ keystroke — that is the entire reason the two are separate concepts.
 `ctrl+a` narrows the grid to the hosts that can take input right now, and — unlike paging — it
 narrows the broadcast with it: the visible set is pushed into the router's
 [visibility limit](./broadcast-scope.md), so `all`/`selected` reach only what is on screen.
-The filter is a view over live state, not a removal: a host that reconnects reappears without a
-keypress. Live means concurrent: session goroutines flip states while a frame is being drawn,
-so `View` freezes the visible host list once per frame (`App.frameHosts`) and every render
-helper reads that snapshot through `hostIDs()`. Two computations inside one render used to
+The filter is a view, not a removal: a host that reconnects reappears without a keypress — its
+state change is a fleet event, the event refreshes the model's **fleet snapshot** inside
+`Update` (`App.snapshotFleet`, issue #136), and the redraw recomputes the visible list from it.
+Render helpers never read live session state: `hostIDs()` is a pure function of model fields,
+so every computation inside one frame agrees. Two computations inside one render used to
 disagree — a mass disconnect under the filter shrank the list between a bounds check and the
-index it guarded, and `renderPane` panicked (issue #135). Outside `View`, code that indexes
-into `hostIDs()` fetches the list once and uses that one slice. While it is on, the status bar carries `CONNECTED HOSTS ONLY`; a filter that hides
+index it guarded, and `renderPane` panicked (issue #135); the snapshot removes the class of bug,
+and a spy-fleet test plus a `-race` state-flip hammer pin it down. While it is on, the status bar carries `CONNECTED HOSTS ONLY`; a filter that hides
 every pane renders `no connected hosts` rather than an empty run. While typing into a pane,
 `ctrl+a` stays a keystroke for the hosts — readline start-of-line. In the broadcast bar it is
 the csshx-style escape prefix instead: the literal is `ctrl+a a`, and the toggle is reachable
@@ -227,8 +228,11 @@ keystroke — that is the entire reason the two are separate concepts.
 ## Pane output
 
 Each pane carries a one-line header — pane number, host name, connection state and the last exit
-code (`ok` / `exit 1`) — all read from live state at render time, so a change is on screen the
-moment the redraw happens. When the width cannot hold everything the state gives up its space
+code (`ok` / `exit 1`) — all read from the model's fleet snapshot, which the fleet event that
+changed them refreshed, so a change is on screen the moment the redraw happens. The scrollback
+body is the one deliberate live read left in the render path: the buffer is internally
+synchronized and `Lines()` returns a copy, and snapshotting whole scrollbacks per output event
+would copy far more than a redraw reads. When the width cannot hold everything the state gives up its space
 first and the exit code second — a failure must outlive the state label — and the host name
 truncates **from the left** (`…-1a-40.example.com`): in a fleet of near-identical names the
 suffix is the distinguishing part.
@@ -338,11 +342,11 @@ focused host, the broadcast targets, or lazycssh itself — then the session nam
 scope with its live target count, the working set, hosts up/total, and every flag that weakens a
 default.
 
-Every number is read from live state **at render time**. A cached target count is a lie waiting
-to be told: the fleet changes under the user, and the one moment the count matters is the moment
-it changed. `FleetUpdatedMsg` carries no payload for the same reason — it asks for a redraw, and
-the redraw reads the truth. That also survives the transport dropping event hints when the UI is
-behind, which it does by design (see [Session manager](./manager.md)).
+Every number is read from the model's fleet snapshot, refreshed by the fleet event that changed
+it — as fresh as the redraw showing it, with no way to go stale silently. `FleetUpdatedMsg`
+carries no payload: it makes `Update` re-read the whole fleet in one pass, so the counts and the
+per-host states can never disagree with each other, and one surviving event repairs anything the
+transport dropped while the UI was behind (see [Session manager](./manager.md)).
 
 Flags — `HOST KEYS UNVERIFIED`, `SESSION LOGGING ON`, `BROADCASTING TO EVERY HOST` — are rendered
 in the warning style **and** repeated on the status bar, so switching panels or scrolling cannot
@@ -521,8 +525,8 @@ typed, and the audit trail is for commands.
 | `tea.WindowSizeMsg` | recompute the layout and resize the help |
 | `tea.BackgroundColorMsg` | rebuild the theme for a light or dark terminal |
 | `tea.KeyPressMsg` | dispatch by focus |
-| `FleetUpdatedMsg` | redraw; the panels read the fleet's live state themselves |
-| `SessionOutputMsg` | redraw; the pane reads the live scrollback itself |
+| `FleetUpdatedMsg` | re-read the fleet into the model snapshot, then redraw from it |
+| `SessionOutputMsg` | redraw; the pane reads the internally synchronized scrollback itself |
 | `HostsChangedMsg` | replace the host list, keeping the focused host |
 | `SessionsChangedMsg` | re-read the group directory |
 | `GroupOpenMsg` | emitted, not handled: the program resolves and connects a saved group's hosts |

@@ -57,6 +57,15 @@ func (f *fakeFleet) Counts() ssh.Counts {
 	return c
 }
 
+// syncFleet delivers the fleet event a state change would have produced, so
+// the model's snapshot catches up with the fakes - the render path reads the
+// snapshot, never the live sessions (issue #136).
+func syncFleet(t *testing.T, a App) App {
+	t.Helper()
+	model, _ := a.Update(FleetUpdatedMsg{})
+	return model.(App)
+}
+
 // connect drives a fake session to connected.
 func (f *fakeFleet) connect(t *testing.T, id string) {
 	t.Helper()
@@ -96,8 +105,8 @@ func statusApp(t *testing.T, names ...string) (App, *fakeFleet, *broadcast.Route
 	return a, fleet, router, ws
 }
 
-// The acceptance criterion: the target count is derived from live session state,
-// never cached.
+// The acceptance criterion: the counts follow the fleet through its events -
+// a state change plus its FleetUpdatedMsg is on screen, with no keypress.
 func TestStatusPanelCountsAreLive(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01", "web-02", "web-03")
 
@@ -108,13 +117,15 @@ func TestStatusPanelCountsAreLive(t *testing.T) {
 	fleet.connect(t, "web-01")
 	fleet.connect(t, "web-02")
 
-	// No message is needed to make the numbers true: the panel reads the fleet
-	// when it renders. The message only asks for a redraw.
+	// The fleet event carries the change into the model; the panel renders
+	// from that snapshot (issue #136).
+	a = syncFleet(t, a)
 	if got := plain(a.View().Content); !strings.Contains(got, "hosts: 2/3 up") {
 		t.Fatalf("after connecting two hosts:\n%s", got)
 	}
 
 	fleet.fail(t, "web-03")
+	a = syncFleet(t, a)
 	view := plain(a.View().Content)
 	if !strings.Contains(view, "hosts: 2/3 up") || !strings.Contains(view, "1 failed") {
 		t.Fatalf("after a failure:\n%s", view)
@@ -275,6 +286,7 @@ func TestStateReadsTheFleet(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01", "web-02")
 
 	fleet.connect(t, "web-01")
+	a = syncFleet(t, a)
 	if got := a.state("web-01"); got != ssh.StateConnected {
 		t.Fatalf("state(web-01) = %v", got)
 	}

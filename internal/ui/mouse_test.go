@@ -140,6 +140,7 @@ func TestClickFocusesThePane(t *testing.T) {
 func TestClickOnTheCloseButton(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01")
 	fleet.connect(t, "web-01")
+	a = syncFleet(t, a)
 
 	cell, _ := a.Grid().Cell(0)
 	_, msg := click(t, a, cell.X+cell.Width-2, cell.Y+1)
@@ -148,6 +149,7 @@ func TestClickOnTheCloseButton(t *testing.T) {
 	}
 
 	fleet.fail(t, "web-01")
+	a = syncFleet(t, a)
 	_, msg = click(t, a, cell.X+cell.Width-2, cell.Y+1)
 	if _, ok := msg.(RemoveHostMsg); !ok {
 		t.Fatalf("clicking [x] on a dead host produced %T, want RemoveHostMsg", msg)

@@ -16,14 +16,15 @@ func TestPaneHeaderShowsNumberNameAndState(t *testing.T) {
 		t.Fatalf("paneHeader = %q", got)
 	}
 
-	// The acceptance criterion: state changes are reflected immediately. No
-	// message is processed between connect and render; the header reads live
-	// state.
+	// State changes arrive as fleet events; the event refreshes the model's
+	// snapshot and the redraw shows the new state (issue #136).
 	fleet.connect(t, "web-01")
+	a = syncFleet(t, a)
 	if got := plain(a.paneHeader(0, 40, false)); !strings.HasPrefix(got, "1 web-01 connected") {
 		t.Fatalf("after connecting: %q", got)
 	}
 	fleet.fail(t, "web-02")
+	a = syncFleet(t, a)
 	if got := plain(a.paneHeader(1, 40, false)); !strings.HasPrefix(got, "2 web-02 failed") {
 		t.Fatalf("after failing: %q", got)
 	}
@@ -81,6 +82,7 @@ func TestPaneHeaderDegenerateCases(t *testing.T) {
 func TestPaneHeaderReachesTheFrame(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01")
 	fleet.connect(t, "web-01")
+	a = syncFleet(t, a)
 
 	if view := plain(a.View().Content); !strings.Contains(view, "web-01 connected") {
 		t.Fatalf("the frame does not carry the header:\n%s", view)

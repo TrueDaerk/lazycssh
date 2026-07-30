@@ -17,6 +17,7 @@ func TestConnectedOnlyHidesTheDownHosts(t *testing.T) {
 	fleet.connect(t, "web-01")
 	fleet.connect(t, "web-03")
 	fleet.fail(t, "web-02")
+	a = syncFleet(t, a)
 
 	a = pressKey(t, a, "ctrl+a")
 	if !a.ConnectedOnly() {
@@ -45,6 +46,7 @@ func TestReconnectingHostReappearsUnderTheFilter(t *testing.T) {
 	a, fleet, router, _ := statusApp(t, "web-01", "web-02")
 	router.Attach(fleetSessions{fleet})
 	fleet.connect(t, "web-01")
+	a = syncFleet(t, a)
 
 	a = pressKey(t, a, "ctrl+a")
 	if got := strings.Join(a.hostIDs(), ","); got != "web-01" {
@@ -239,6 +241,7 @@ func TestSplitEscKeepsTheSplit(t *testing.T) {
 func TestSplitComposesWithConnectedOnly(t *testing.T) {
 	a, fleet, _ := splitApp(t)
 	fleet.sessions["web-02"].Disconnect(ssh.ErrDisconnected())
+	a = syncFleet(t, a)
 
 	a = pressKey(t, a, "ctrl+a")
 	a = applySplitSize(t, a, "5")
@@ -319,19 +322,21 @@ func (f *flakyFleet) Session(id string) (ssh.Session, bool) {
 // The regression for issue #135: with the connected-only filter on, a host
 // disconnecting between two hostIDs() computations of the same View call
 // shrank the list under an index that was guarded against the longer one,
-// and renderPane panicked with index out of range. View must render from one
-// consistent host list per frame.
+// and renderPane panicked with index out of range. Since issue #136 the
+// render path reads only the model's snapshot, so the flip cannot even be
+// observed mid-frame - the flaky fleet stays as the tripwire proving it.
 func TestViewSurvivesHostListShrinkingMidRender(t *testing.T) {
 	a, fleet, router, _ := statusApp(t, "web-01", "web-02", "web-03")
 	router.Attach(fleetSessions{fleet})
 	for _, id := range fleet.IDs() {
 		fleet.connect(t, id)
 	}
+	a = syncFleet(t, a)
 
 	flaky := &flakyFleet{fakeFleet: fleet, flaky: "web-03", flipAfter: 2}
 	a.cfg.Fleet = flaky
 
-	a = pressKey(t, a, "ctrl+a") // connected-only: the list reads live state
+	a = pressKey(t, a, "ctrl+a") // connected-only: the list follows liveness
 	a.fullScreen = true
 	a.paneIndex = 2 // the pane whose host is about to vanish
 

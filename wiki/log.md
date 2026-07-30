@@ -2,6 +2,18 @@
 
 ## 2026-07-30
 
+- Session state renders from the model, not the transport (issue #136): `FleetUpdatedMsg` makes
+  `Update` re-read the whole fleet into a model snapshot (`App.snapshotFleet` — host list,
+  per-session state, last exit, counts in one consistent pass), and every render helper reads
+  those fields. No `Session.State()`/`LastExit()`/`Counts()` call is reachable from `View`; a
+  spy-fleet test and a `-race` state-flip hammer pin that down. The connected-only filter stays
+  a live view — the fleet event refreshes the snapshot and the redraw follows. The scrollback
+  body stays a live read on purpose (internally synchronized buffer, documented). The per-frame
+  `frameHosts` freeze from #135 is gone: `hostIDs()` is now a pure function of the model.
+  `core/tui.md` and `core/program.md` updated. Version 0.9.10.
+
+## 2026-07-30
+
 - Raised the pane floor to a 45×16 terminal per host (issue #139): the grid never hands a host
   less content than that — a 47×19 cell with border and header — and pages the overflow as
   before. The value is a guideline tuned in one place (`MinPaneContentWidth`/`Height` in

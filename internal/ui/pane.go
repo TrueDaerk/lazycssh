@@ -16,8 +16,9 @@ import (
 const paneCloseButton = "[x]"
 
 // paneHeader renders the one line that identifies a pane: its number, its
-// host, the connection state and the last exit code, all read from live state
-// at render time so a change is on screen the moment the redraw happens.
+// host, the connection state and the last exit code, all read from the model's
+// fleet snapshot - the fleet event that changed them refreshed it, so a change
+// is on screen the moment the redraw happens.
 //
 // When the width cannot hold everything, the state goes first and the exit
 // code second - a failure must outlive the state label - and the host name is
@@ -112,6 +113,12 @@ func (a App) wrappedLines(id string, width int) []string {
 // wrapped line after the last clear-screen marker, 0 when the host never
 // cleared. A pane following the tail starts there, so "clear" leaves an
 // apparently empty pane while the history above it stays scrollable.
+//
+// This is the one live read left in the render path, deliberately: the
+// scrollback buffer is internally synchronized (scrollback.Buffer holds its
+// own mutex and Lines returns a copy), and snapshotting whole scrollbacks
+// into the model on every output event would copy far more than a redraw
+// reads. Session state, by contrast, renders only from the model's snapshot.
 func (a App) wrappedLinesTail(id string, width int) ([]string, int) {
 	if width <= 0 || a.cfg.Fleet == nil {
 		return nil, 0
