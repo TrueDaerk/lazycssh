@@ -213,7 +213,11 @@ The transport reports each command's exit status through a prompt hook — see
   is deliberate, unlike pane movement, because this is a search and a failure behind the cursor
   must be as reachable as one ahead;
 - a shell that never ran the hook reports nothing, and the interface shows nothing rather than
-  a made-up zero.
+  a made-up zero;
+- a pane whose *connection* failed says why (issue #167): the session's error — DNS, refused,
+  auth, host key — renders in the failure style at the bottom of the body, wrapped to the pane
+  and capped at half its height so the output that led up to the failure stays visible. The
+  text comes from the fleet snapshot (`hostState.errText`), never from live session state.
 
 Below the header the pane renders its session's [scrollback](./scrollback.md), following the
 tail: the newest output is what the user is watching for. Rendering is a pure

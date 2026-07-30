@@ -2,6 +2,12 @@
 
 ## 2026-07-31
 
+- Failed panes say why (issue #167): a pane whose connection failed renders the session's
+  error — DNS, refused, auth, host key — at the bottom of its body in the failure style,
+  wrapped and capped at half the pane height. The error is snapshotted into the model
+  (`hostState.errText`) so View keeps its hands off live session state. `core/tui.md` updated.
+  Version 0.9.24.
+
 - The emptied run stays open (issue #168): losing the last host no longer quits the program —
   the TUI falls back to the neutral argumentless start (sidebar focus, no kept grid shape, no
   filters) and waits for the next group or connect. Quitting stays what `q`/`ctrl+q` are for.
