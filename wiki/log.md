@@ -2,6 +2,13 @@
 
 ## 2026-07-31
 
+- Passwords, passphrases and keyboard-interactive answers are asked for in the TUI (issue
+  #175, closing the interactive half of #87): a masked input in the Status panel, one question
+  at a time over the same channel bridge as the host key question; enter submits, esc cancels
+  and fails that attempt. The transport's caches keep it to one password per login user and one
+  passphrase per key file for the whole fleet; nothing is logged or written to disk.
+  `core/authentication.md` updated. Version 0.9.27.
+
 - Unknown host keys are asked about in the TUI (issue #173): a dialling session that meets a
   key not in known_hosts blocks while the Status panel shows the alias, key type and SHA256
   fingerprint — `y` accepts and appends to `~/.ssh/known_hosts`, `n`/`esc` rejects and fails

@@ -66,11 +66,15 @@ type Model struct {
 	// order. Saving the run writes patterns, so they must track every change.
 	patterns []string
 
-	// prompter carries host key questions out of dialling sessions; nil when
-	// a test injected its own session factory. pendingKey is the question the
-	// UI is showing right now, waiting for its answer.
-	prompter   *keyPrompter
-	pendingKey *keyQuestion
+	// prompter carries host key questions out of dialling sessions and
+	// secrets does the same for passwords, passphrases and
+	// keyboard-interactive answers; both nil when a test injected its own
+	// session factory. pendingKey and pendingSecret are the questions the UI
+	// is showing right now, waiting for their answers.
+	prompter      *keyPrompter
+	pendingKey    *keyQuestion
+	secrets       *secretPrompter
+	pendingSecret *secretQuestion
 
 	// ctx bounds every dial. Cancelled when the program shuts down.
 	ctx context.Context
@@ -97,12 +101,14 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 
 	factory := cfg.NewSession
 	var prompter *keyPrompter
+	var secrets *secretPrompter
 	if factory == nil {
-		// The prompter is unbuffered on purpose: a dialling session blocks
+		// The channels are unbuffered on purpose: a dialling session blocks
 		// until the UI has asked its question, so questions arrive one at a
-		// time (issue #173).
+		// time (issues #173, #175).
 		prompter = &keyPrompter{questions: make(chan *keyQuestion)}
-		factory, err = realFactory(ctx, cfg.Insecure, prompter)
+		secrets = &secretPrompter{questions: make(chan *secretQuestion)}
+		factory, err = realFactory(ctx, cfg.Insecure, prompter, secrets)
 		if err != nil {
 			return nil, err
 		}
@@ -163,6 +169,7 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 		resolver: resolver,
 		store:    cfg.Store,
 		prompter: prompter,
+		secrets:  secrets,
 		patterns: append([]string(nil), cfg.Patterns...),
 		ctx:      ctx,
 	}, nil
@@ -170,11 +177,12 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 
 // realFactory builds sessions that dial, with agent and identity-file
 // authentication and known_hosts verification. An unknown host key is asked
-// about through the prompter (issue #173); auth prompts - passwords, key
-// passphrases - are still their own issue (#87), and a host that needs one
-// fails its own pane with a clear error instead of hanging.
-func realFactory(ctx context.Context, insecure bool, prompter ssh.HostKeyPrompter) (ssh.Factory, error) {
-	creds := &ssh.Credentials{}
+// about through the key prompter (issue #173); passwords, key passphrases and
+// keyboard-interactive answers through the secret prompter (issue #175). The
+// transport caches what it asked for - once per user, once per key file - so
+// a fleet asks once, not forty times.
+func realFactory(ctx context.Context, insecure bool, prompter ssh.HostKeyPrompter, secrets ssh.Prompter) (ssh.Factory, error) {
+	creds := &ssh.Credentials{Prompter: secrets}
 
 	callback := func(host hosts.Host) cryptossh.HostKeyCallback {
 		return ssh.InsecureIgnoreHostKey()
@@ -237,7 +245,7 @@ func (m *Model) pump() tea.Cmd {
 // Init starts the fleet dialling and arms the event and host-key pumps.
 func (m *Model) Init() tea.Cmd {
 	m.mgr.Start(m.ctx)
-	return tea.Batch(m.app.Init(), m.pump(), m.promptPump())
+	return tea.Batch(m.app.Init(), m.pump(), m.promptPump(), m.secretPump())
 }
 
 // Update routes messages: transport events into the UI, UI requests into the
@@ -287,6 +295,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ui.HostKeyAnswerMsg:
 		return m.answerHostKey(msg)
+
+	case secretQuestionMsg:
+		return m.askSecret(msg)
+
+	case ui.SecretAnswerMsg:
+		return m.answerSecret(msg)
 
 	case ui.GroupOpenMsg:
 		return m.openGroup(msg)
