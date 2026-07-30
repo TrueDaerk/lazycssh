@@ -617,6 +617,43 @@ func TestClearScreenPlantsAMarker(t *testing.T) {
 			writes: []string{"a\x1b[?25lb\n"},
 			want:   []string{"a\x1b[?25lb"},
 		},
+		{
+			// The busybox / minimal-termcap clear (issue #189): no ESC[2J in
+			// sight, just cursor-home and erase-below.
+			name:   "home plus erase-below clears like erase-screen",
+			writes: []string{"old\n\x1b[H\x1b[J$ \n"},
+			want:   []string{"old", ClearMark, "$ "},
+		},
+		{
+			name:   "home with explicit origin parameters counts too",
+			writes: []string{"old\n\x1b[1;1H\x1b[0J$ \n"},
+			want:   []string{"old", ClearMark, "$ "},
+		},
+		{
+			name:   "home split across writes still pairs with the erase",
+			writes: []string{"old\n\x1b[H", "\x1b[J$ \n"},
+			want:   []string{"old", ClearMark, "$ "},
+		},
+		{
+			name:   "output between home and erase-below defuses the pair",
+			writes: []string{"keep\x1b[Hx\x1b[J\n"},
+			want:   []string{"keepx"},
+		},
+		{
+			name:   "a cursor move to anywhere but the origin does not arm it",
+			writes: []string{"old\n\x1b[5;10H\x1b[J$ \n"},
+			want:   []string{"old", "\x1b[5;10H$ "},
+		},
+		{
+			name:   "erase-below after a carriage return stays a line cleanup",
+			writes: []string{"progress\r\x1b[0Jdone\n"},
+			want:   []string{"done"},
+		},
+		{
+			name:   "a full terminal reset clears",
+			writes: []string{"old\n\x1bcfresh\n"},
+			want:   []string{"old", ClearMark, "fresh"},
+		},
 	}
 
 	for _, tt := range tests {
