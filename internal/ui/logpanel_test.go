@@ -1,11 +1,13 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 	"github.com/TrueDaerk/lazycssh/internal/commandlog"
@@ -185,4 +187,55 @@ func TestLogPanelHasNoPathToDisk(t *testing.T) {
 		}
 	}
 	_ = a
+}
+
+// The regression for issue 132: an entry wrapping over several visual lines
+// must not push the window past the panel's height - the box clips the
+// bottom, and the cursor entry was the first thing to vanish. The window is
+// budgeted in visual lines, and up/down still moves exactly one entry.
+func TestLogPanelBudgetsWrappedEntriesByVisualLines(t *testing.T) {
+	a, log := logApp(t, 0)
+	log.Record(strings.Repeat("very-long-command ", 6), broadcast.ModeAll, 2) // wraps
+	for i := 0; i < 5; i++ {
+		log.Record(fmt.Sprintf("short-%d", i), broadcast.ModeAll, 2)
+	}
+
+	const width, height = 40, 5
+	for cursor := 0; cursor < 6; cursor++ {
+		a.logCursor = cursor
+		panel := a.logPanel(width, height)
+		if got := lipgloss.Height(panel); got > height {
+			t.Fatalf("cursor %d: panel is %d lines high, want at most %d:\n%s",
+				cursor, got, height, plain(panel))
+		}
+		want := a.logEntries()[cursor].Command
+		want = strings.TrimSpace(want[:min(20, len(want))]) // the wrapped head identifies it
+		if !strings.Contains(plain(panel), want) {
+			t.Fatalf("cursor %d: the entry under the cursor is not visible:\n%s",
+				cursor, plain(panel))
+		}
+	}
+}
+
+// Up/down moves one entry per keypress regardless of wrapping: the cursor is
+// an entry index, never a visual line.
+func TestLogCursorStepsOneEntryAcrossWrappedNeighbours(t *testing.T) {
+	a, log := logApp(t, 0)
+	log.Record("first", broadcast.ModeAll, 2)
+	log.Record(strings.Repeat("wrapped ", 10), broadcast.ModeAll, 2)
+	log.Record("last", broadcast.ModeAll, 2)
+
+	a.logCursor = 0
+	a = pressKey(t, a, "down")
+	if got := a.SelectedCommand(); !strings.HasPrefix(got, "wrapped") {
+		t.Fatalf("one down from the top selects %q", got)
+	}
+	a = pressKey(t, a, "down")
+	if got := a.SelectedCommand(); got != "last" {
+		t.Fatalf("two down from the top selects %q", got)
+	}
+	a = pressKey(t, a, "up")
+	if got := a.SelectedCommand(); !strings.HasPrefix(got, "wrapped") {
+		t.Fatalf("one up from the bottom selects %q", got)
+	}
 }

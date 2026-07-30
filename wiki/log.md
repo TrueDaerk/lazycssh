@@ -2,6 +2,13 @@
 
 ## 2026-07-30
 
+- The Command log panel budgets its window in visual lines (issue #132): a command wrapping
+  over several lines no longer pushes the cursor row past the box's clip, so up/down stays one
+  entry per keypress with the cursor always on screen. The dropped-entries notice yields its
+  line before the cursor entry does. `core/command-log.md` updated. Version 0.9.7.
+
+## 2026-07-30
+
 - `clear`, `screen` and friends now clear the pane (issue #131): erase-display sequences and
   alternate-screen switches plant a `ClearMark` in the scrollback; the pane following the tail
   starts after the last marker, so the view is empty while the history stays scrollable above

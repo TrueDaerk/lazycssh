@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 	"github.com/TrueDaerk/lazycssh/internal/commandlog"
@@ -79,23 +80,69 @@ func (a App) logPanel(width, height int) string {
 	}
 
 	cursor := clamp(a.logCursor, 0, len(entries)-1)
-	first, last := visibleRange(cursor, len(entries), max(1, height-1))
 
-	var b strings.Builder
-	if dropped := a.cfg.CommandLog.Dropped(); dropped > 0 && first == 0 {
-		// A log that quietly forgets is worse than one that says it forgot.
-		b.WriteString(a.theme.Muted.Render(fmt.Sprintf("(%d older entries dropped)", dropped)))
-		b.WriteString("\n")
+	// The window is budgeted in visual lines, not entries: a command longer
+	// than the panel wraps over several lines, and counting it as one row
+	// would push the rows below it - the cursor among them - past the box's
+	// clip (issue #132). Each entry is wrapped on its own so its height is
+	// known before it is admitted.
+	rendered := make(map[int]string, height)
+	line := func(i int) string {
+		if s, ok := rendered[i]; ok {
+			return s
+		}
+		s := a.theme.Base.Width(max(0, width)).Render(a.logLine(entries[i], i == cursor))
+		rendered[i] = s
+		return s
 	}
 
+	avail := max(1, height)
+	first, last := cursor, cursor+1
+	lines := lipgloss.Height(line(cursor))
+	for {
+		grew := false
+		if last < len(entries) && lines+lipgloss.Height(line(last)) <= avail {
+			lines += lipgloss.Height(line(last))
+			last++
+			grew = true
+		}
+		if first > 0 && lines+lipgloss.Height(line(first-1)) <= avail {
+			lines += lipgloss.Height(line(first - 1))
+			first--
+			grew = true
+		}
+		if !grew {
+			break
+		}
+	}
+
+	notice := ""
+	if dropped := a.cfg.CommandLog.Dropped(); dropped > 0 && first == 0 {
+		// A log that quietly forgets is worse than one that says it forgot.
+		notice = a.theme.Muted.Render(fmt.Sprintf("(%d older entries dropped)", dropped))
+		// The notice takes its line back from the bottom of the window; the
+		// cursor entry is never given up - past that, the notice is.
+		for lines+1 > avail && last-1 > cursor {
+			last--
+			lines -= lipgloss.Height(line(last))
+		}
+		if lines+1 > avail {
+			notice = ""
+		}
+	}
+
+	var b strings.Builder
+	if notice != "" {
+		b.WriteString(notice)
+		b.WriteString("\n")
+	}
 	for i := first; i < last; i++ {
 		if i > first {
 			b.WriteString("\n")
 		}
-		b.WriteString(a.logLine(entries[i], i == cursor))
+		b.WriteString(line(i))
 	}
-
-	return a.theme.Base.Width(max(0, width)).Render(b.String())
+	return b.String()
 }
 
 // logLine renders one entry. A command that went to every host is drawn in the
