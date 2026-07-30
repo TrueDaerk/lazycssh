@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-30T15:00:00Z
+timestamp: 2026-07-30T21:00:00Z
 ---
 
 # TUI shell
@@ -49,6 +49,14 @@ hand from the border's character set; the body supplies the other three sides.
 everything the collapsed boxes (3 rows each) leave, tighter sidebars collapse the others to bare
 one-line titles, and tighter still leaves only the selected panel. Sums and signs are asserted at
 hostile sizes.
+
+Unselected panels are previews, not blanks (issue #186): every panel renders its body into
+whatever height it was dealt, and `titledBox` clips the overflow, so an unselected Status,
+Groups or Sessions box shows the top of its content. When the sidebar has height to spare
+beyond the collapsed boxes, half of the surplus is split between the unselected panels — capped
+at `PreviewPanelMaxHeight` (8 rows) — and the selected panel keeps the rest, so it always
+dominates. The tight-sidebar degradation is unchanged: collapsed boxes, bare titles, selected
+panel only.
 
 Rules:
 

@@ -89,7 +89,9 @@ func TestSidebarHeights(t *testing.T) {
 		total, panels, selected int
 		want                    []int
 	}{
-		{"roomy", 40, 5, 1, []int{3, 28, 3, 3, 3}},
+		{"roomy grows previews", 40, 5, 1, []int{6, 16, 6, 6, 6}},
+		{"previews capped on a tall column", 100, 5, 1, []int{8, 68, 8, 8, 8}},
+		{"surplus below a full preview row stays with the selected", 17, 5, 0, []int{5, 3, 3, 3, 3}},
 		{"exact fit", 15, 5, 0, []int{3, 3, 3, 3, 3}},
 		{"tight collapses to titles", 12, 5, 2, []int{1, 1, 8, 1, 1}},
 		{"tiny leaves only the selected", 4, 5, 4, []int{0, 0, 0, 0, 4}},

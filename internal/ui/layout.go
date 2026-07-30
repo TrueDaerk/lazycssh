@@ -18,9 +18,12 @@ const (
 	// Smaller than this it renders a single message instead.
 	MinWidth  = 24
 	MinHeight = 4
-	// CollapsedPanelHeight is a titled sidebar box with no body: the title
-	// line, one empty row, the bottom border.
+	// CollapsedPanelHeight is the smallest titled sidebar box that still has a
+	// body row: the title line, one content row, the bottom border.
 	CollapsedPanelHeight = 3
+	// PreviewPanelMaxHeight caps how tall an unselected panel grows on a roomy
+	// sidebar. Previews orient, they do not compete with the selected panel.
+	PreviewPanelMaxHeight = 8
 	// BroadcastBarHeight is the always-visible broadcast input: a titled box
 	// with one content line.
 	BroadcastBarHeight = 3
@@ -29,6 +32,12 @@ const (
 // SidebarHeights divides the sidebar's height over the stacked panels, lazygit
 // style: every unselected panel collapses to a titled box and the selected one
 // takes everything that is left.
+//
+// When there is height to spare beyond the collapsed boxes, the unselected
+// panels grow into previews — half of the surplus is split between them, capped
+// at [PreviewPanelMaxHeight] — so Status, Groups and Sessions stay readable
+// while something else has the keyboard. The selected panel always keeps at
+// least the other half.
 //
 // When even the collapsed boxes do not fit, the unselected panels shrink to a
 // bare one-line title, and when that does not fit either they vanish and the
@@ -47,7 +56,13 @@ func SidebarHeights(total, panels, selected int) []int {
 	collapsed := CollapsedPanelHeight
 	switch {
 	case total >= CollapsedPanelHeight*panels:
-		// Room for every box plus a selected panel at least as tall.
+		// Room for every box plus a selected panel at least as tall. Any
+		// surplus beyond that buys preview rows for the unselected panels.
+		if panels > 1 {
+			surplus := total - CollapsedPanelHeight*panels
+			preview := surplus / 2 / (panels - 1)
+			collapsed = min(CollapsedPanelHeight+preview, PreviewPanelMaxHeight)
+		}
 	case total >= (panels-1)+CollapsedPanelHeight:
 		collapsed = 1
 	default:
