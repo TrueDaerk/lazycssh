@@ -152,6 +152,30 @@ func TestNewClampsSize(t *testing.T) {
 	}
 }
 
+func TestCursorVisibility(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{"visible by default", "", true},
+		{"hidden by ?25l", "\x1b[?25l", false},
+		{"shown again by ?25h", "\x1b[?25l\x1b[?25h", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := term.New(80, 24)
+			defer e.Close()
+
+			e.Write([]byte(tt.input))
+			if got := e.CursorVisible(); got != tt.want {
+				t.Errorf("CursorVisible() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestReplyHandlerAnswersDeviceAttributesQuery(t *testing.T) {
 	e := term.New(80, 24)
 	defer e.Close()

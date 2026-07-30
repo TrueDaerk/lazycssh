@@ -18,8 +18,9 @@ import (
 type Emulator struct {
 	vt *vt.SafeEmulator
 
-	mu      sync.Mutex
-	onReply func([]byte)
+	mu           sync.Mutex
+	onReply      func([]byte)
+	cursorHidden bool
 }
 
 // New returns an emulator with the given screen size in cells. Dimensions
@@ -33,6 +34,14 @@ func New(width, height int) *Emulator {
 		height = 1
 	}
 	e := &Emulator{vt: vt.NewSafeEmulator(width, height)}
+	// The vt emulator reports cursor visibility only through a callback, so it
+	// is mirrored here for the renderer to read. The callback runs inside
+	// Write, which never holds e.mu.
+	e.vt.SetCallbacks(vt.Callbacks{CursorVisibility: func(visible bool) {
+		e.mu.Lock()
+		e.cursorHidden = !visible
+		e.mu.Unlock()
+	}})
 	// The vt emulator answers terminal queries through an unbuffered pipe and
 	// Write blocks until the answer is consumed. Drain it unconditionally, or
 	// the first `vim` would freeze the session's reader goroutine.
@@ -74,6 +83,15 @@ func (e *Emulator) IsAltScreen() bool {
 // Render returns the visible screen as styled text, one line per row.
 func (e *Emulator) Render() string {
 	return e.vt.Render()
+}
+
+// CursorVisible reports whether the remote app wants the cursor drawn.
+// Full-screen apps hide it while repainting (CSI ?25l) and show it again when
+// they settle.
+func (e *Emulator) CursorVisible() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return !e.cursorHidden
 }
 
 // CursorPosition returns the cursor cell, zero-based, column then row.

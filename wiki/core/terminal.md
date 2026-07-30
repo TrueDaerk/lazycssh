@@ -1,10 +1,10 @@
 ---
 type: reference
 title: Terminal emulation
-description: The per-session vt emulator — what it tracks, why it drains its own reply pipe, and how it will carry full-screen apps.
+description: The per-session vt emulator — what it tracks, why it drains its own reply pipe, and how a pane renders a full-screen app's live grid.
 resource: internal/term
 tags: [terminal, vt, emulation, alt-screen]
-timestamp: 2026-07-30T00:00:00Z
+timestamp: 2026-07-31T00:00:00Z
 ---
 
 # Terminal emulation
@@ -49,8 +49,24 @@ race the race detector flags.
 
 Every `Session` — real and fake — owns an emulator and exposes it via `Terminal()`. The output
 pump tees each read into scrollback and emulator; `Resize` resizes both the remote PTY and the
-emulator. The emulator does not change what any pane renders yet: alt-screen grid rendering is
-#156, broadcast exclusion of alt-screen panes is #158.
+emulator. Broadcast exclusion of alt-screen panes is #158.
+
+## Grid rendering in the pane
+
+A pane whose emulator reports alt-screen renders the live grid instead of scrollback text:
+the emulator screen clipped to the pane body, with the remote app's cursor drawn where it says
+it is — and hidden when the app hides it (`CSI ?25l`), the way vim does while repainting. No
+tail, no scroll offset, no search, no text selection: the remote app owns the whole screen,
+exactly as it would in a plain terminal. Scrolling is a no-op while the grid is active, so the
+offset cannot jump when the app exits.
+
+Leaving the alternate screen returns to the scrollback view. The tail shows the post-app
+screen — cleared, like a terminal after vim quits, per the
+[scrollback](./scrollback.md) clear semantics — and the history from before the app stays
+reachable by scrolling.
+
+The grid clips defensively to the pane body: an emulator resize can lag one frame behind the
+layout, and a too-large grid must not push the frame apart.
 
 Legacy alternate-screen mode `?47` is not implemented by the vt emulator; every terminfo in
 current use emits `?1049` (or `?1047`), which are tracked.
