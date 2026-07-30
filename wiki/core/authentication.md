@@ -4,7 +4,7 @@ title: Authentication
 description: The order authentication methods are tried in, how secrets are cached across hosts, and the rules that keep them out of logs.
 resource: internal/ssh/auth.go
 tags: [ssh, auth, security, credentials]
-timestamp: 2026-07-29T19:00:00Z
+timestamp: 2026-07-31T21:00:00Z
 ---
 
 # Authentication
@@ -49,6 +49,18 @@ same typo. `ForgetPassword` does the same for a password.
 
 When no prompter is available — a non-interactive run — a method that needs a secret fails with
 `ErrNoPrompter` rather than hanging.
+
+## The prompt in the TUI
+
+Live since issue #175, over the same channel bridge as the [host key
+question](./host-keys.md): the dialling session blocks in `secretPrompter`
+(`internal/program/secretprompt.go`), the question crosses into the event loop, and the Status
+panel shows the label — `password for test@db1`, `passphrase for ~/.ssh/id_ed25519`, or the
+server's own keyboard-interactive text — over a **masked** input (`textinput.EchoPassword`;
+an echoing keyboard-interactive question shows what is typed, as the server asked). `enter`
+submits, `esc` cancels and fails that attempt with `cancelled at the prompt`, `ctrl+q` still
+quits. One question at a time; the caches above keep it to one password per user and one
+passphrase per key across the whole fleet.
 
 ## keyboard-interactive
 

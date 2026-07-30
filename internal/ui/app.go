@@ -204,6 +204,11 @@ type App struct {
 	// internal/ui/hostkey.go.
 	keyQuestion *HostKeyQuestionMsg
 
+	// secretQuestion is the open secret prompt and secretInput its masked
+	// input; see internal/ui/secretprompt.go.
+	secretQuestion *SecretQuestionMsg
+	secretInput    textinput.Model
+
 	groupList        []groupRow
 	groupsErr        error
 	saveErr          error
@@ -259,6 +264,10 @@ func NewApp(cfg Config) App {
 	split.Placeholder = "panes per view"
 	split.Prompt = ""
 
+	secret := textinput.New()
+	secret.Prompt = ""
+	secret.EchoMode = textinput.EchoPassword
+
 	a := App{
 		cfg:             cfg,
 		keys:            keys,
@@ -271,6 +280,7 @@ func NewApp(cfg Config) App {
 		groupNameInput:  groupName,
 		groupHostsInput: groupHosts,
 		splitInput:      split,
+		secretInput:     secret,
 		scroll:          make(map[string]int),
 		focus:           AreaSidebar,
 		panel:           PanelStatus,
@@ -350,6 +360,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case HostKeyQuestionMsg:
 		return a.showHostKeyQuestion(msg), nil
+
+	case SecretQuestionMsg:
+		return a.showSecretQuestion(msg), nil
 
 	case SessionOpenedMsg:
 		if msg.Patterns != nil {
@@ -442,7 +455,7 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		(a.cmdInput.Focused() || a.hostInput.Focused() ||
 			a.searchInput.Focused() || a.Saving() || a.splitInput.Focused() ||
 			a.GroupDialogOpen() || a.deleteGroup != "" || a.endSession != "" ||
-			a.keyQuestion != nil) {
+			a.keyQuestion != nil || a.secretQuestion != nil) {
 		return a, tea.Quit
 	}
 
@@ -450,6 +463,11 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// meant for a host must not accept a key it was never asked about.
 	if a.keyQuestion != nil {
 		return a.handleHostKeyQuestionKey(msg)
+	}
+
+	// So does the secret prompt: a password is typed, never broadcast.
+	if a.secretQuestion != nil {
+		return a.handleSecretPromptKey(msg)
 	}
 
 	// The command line has the keyboard while it is open: a command containing

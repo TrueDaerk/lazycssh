@@ -38,6 +38,10 @@ func (a App) statusPanel(width int) string {
 	// it is open, and a security decision must be visible while it is made.
 	lines = append(lines, a.hostKeyQuestionLines()...)
 
+	// The secret prompt likewise: what is being asked for must be readable
+	// while the masked answer is typed.
+	lines = append(lines, a.secretPromptLines()...)
+
 	// The open new-host prompt comes first: while it has the keyboard it is
 	// the thing being interacted with, and its hints must not be pushed off a
 	// short panel.
