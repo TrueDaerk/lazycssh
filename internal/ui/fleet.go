@@ -108,6 +108,10 @@ type hostState struct {
 	state        ssh.State
 	exit         int
 	exitReported bool
+	// errText is the session's failure rendered, empty while there is none.
+	// Snapshotted so View can say *why* a pane is failed without touching
+	// live session state.
+	errText string
 }
 
 // snapshotFleet re-reads the fleet into the model: the host list, every
@@ -143,7 +147,11 @@ func (a App) snapshotFleet() App {
 		}
 		st := session.State()
 		code, reported := session.LastExit()
-		states[id] = hostState{state: st, exit: code, exitReported: reported}
+		errText := ""
+		if err := session.Err(); err != nil {
+			errText = err.Error()
+		}
+		states[id] = hostState{state: st, exit: code, exitReported: reported, errText: errText}
 		switch st {
 		case ssh.StateConnected:
 			counts.Connected++
@@ -201,4 +209,15 @@ func (a App) state(id string) ssh.State {
 		return st.state
 	}
 	return ssh.StatePending
+}
+
+// stateErr returns the failure text behind a host's failed state from the
+// snapshot, empty for a host that is not failed. It is what lets a pane say
+// *why* instead of only "failed" (issue #167).
+func (a App) stateErr(id string) string {
+	st, ok := a.hostStates[id]
+	if !ok || st.state != ssh.StateFailed {
+		return ""
+	}
+	return st.errText
 }

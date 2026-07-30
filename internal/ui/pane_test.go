@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -331,5 +332,70 @@ func TestClearedHistoryStaysScrollable(t *testing.T) {
 	a.scroll["web-01"] = 1
 	if body := plain(a.paneBody("web-01", 40, 5)); !strings.Contains(body, "screen cleared") {
 		t.Fatalf("no marker where the clear happened:\n%s", body)
+	}
+}
+
+// A failed pane says why (issue #167): the dial or session error renders at
+// the bottom of the body, after whatever output preceded the failure.
+func TestFailedPaneShowsTheError(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.sessions["web-01"].Emit("last words\n")
+	fleet.sessions["web-01"].Disconnect(errors.New("connect to web-01: connection refused"))
+	model, _ := a.Update(FleetUpdatedMsg{})
+	a = model.(App)
+
+	body := plain(a.paneBody("web-01", 120, 6))
+	if !strings.Contains(body, "connection refused") {
+		t.Fatalf("the failure reason is missing:\n%s", body)
+	}
+	if !strings.Contains(body, "last words") {
+		t.Fatalf("the error pushed the output away:\n%s", body)
+	}
+	if got := len(strings.Split(body, "\n")); got > 6 {
+		t.Fatalf("body is %d lines, want at most 6:\n%s", got, body)
+	}
+}
+
+// A pane that never produced output still shows the reason it failed.
+func TestFailedPaneWithoutOutputShowsTheError(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.sessions["web-01"].Disconnect(errors.New("dial tcp: lookup web-01: no such host"))
+	model, _ := a.Update(FleetUpdatedMsg{})
+	a = model.(App)
+
+	body := plain(a.paneBody("web-01", 120, 6))
+	if !strings.Contains(body, "no such host") {
+		t.Fatalf("the failure reason is missing:\n%s", body)
+	}
+}
+
+// A long error wraps but cannot flood the pane: at most half the height, so
+// the output that led up to the failure stays visible.
+func TestFailedPaneErrorIsCapped(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.sessions["web-01"].Emit("kept\n")
+	fleet.sessions["web-01"].Disconnect(errors.New(strings.Repeat("very long failure text ", 30)))
+	model, _ := a.Update(FleetUpdatedMsg{})
+	a = model.(App)
+
+	body := plain(a.paneBody("web-01", 20, 8))
+	if got := len(strings.Split(body, "\n")); got > 8 {
+		t.Fatalf("body is %d lines, want at most 8:\n%s", got, body)
+	}
+	if !strings.Contains(body, "kept") {
+		t.Fatalf("the error flooded the output away:\n%s", body)
+	}
+}
+
+// A host that closed cleanly carries no failure line, whatever error the
+// session last recorded.
+func TestClosedPaneShowsNoError(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01", "web-02")
+	fleet.sessions["web-01"].ExitWithStatus(0)
+	model, _ := a.Update(FleetUpdatedMsg{})
+	a = model.(App)
+
+	if body := plain(a.paneBody("web-01", 60, 6)); strings.Contains(body, "✗") {
+		t.Fatalf("a closed pane renders a failure mark:\n%s", body)
 	}
 }

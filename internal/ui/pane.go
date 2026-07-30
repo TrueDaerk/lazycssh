@@ -238,9 +238,11 @@ func (a App) paneBody(id string, width, height int) string {
 	if t := a.altScreenTerminal(id); t != nil {
 		return a.terminalGrid(t, width, height)
 	}
+	fail := a.failureLines(id, width, height)
+	height -= len(fail)
 	wrapped, tailStart := a.wrappedLinesTail(id, width)
-	if len(wrapped) == 0 {
-		return ""
+	if len(wrapped) == 0 || height <= 0 {
+		return strings.Join(fail, "\n")
 	}
 
 	offset := clamp(a.scrollOffset(id), 0, max(0, len(wrapped)-height))
@@ -255,7 +257,7 @@ func (a App) paneBody(id string, width, height int) string {
 	window := wrapped[start:end]
 
 	if a.searchTerm == "" {
-		return strings.Join(window, "\n")
+		return strings.Join(append(window, fail...), "\n")
 	}
 
 	out := make([]string, len(window))
@@ -268,5 +270,26 @@ func (a App) paneBody(id string, width, height int) string {
 		}
 		out[i] = line
 	}
-	return strings.Join(out, "\n")
+	return strings.Join(append(out, fail...), "\n")
+}
+
+// failureLines renders a failed host's error into the pane, wrapped to the
+// width and capped so it augments the scrollback rather than replacing it. A
+// pane that says only "failed" leaves the user to guess between DNS, refused,
+// auth and host key (issue #167); these lines say which it was.
+func (a App) failureLines(id string, width, height int) []string {
+	text := a.stateErr(id)
+	if text == "" || width <= 0 {
+		return nil
+	}
+	wrapped := strings.Split(ansi.Hardwrap("✗ "+text, width, true), "\n")
+	// Cap at half the pane, minimum one line: the error must fit next to the
+	// output that led up to it, not push all of it off screen.
+	if limit := max(1, height/2); len(wrapped) > limit {
+		wrapped = wrapped[:limit]
+	}
+	for i := range wrapped {
+		wrapped[i] = a.theme.Failure.Render(wrapped[i])
+	}
+	return wrapped
 }
