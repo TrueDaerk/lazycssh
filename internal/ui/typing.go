@@ -112,6 +112,13 @@ func (a App) handlePaneKey(msg tea.KeyPressMsg) (App, tea.Cmd, bool) {
 		}
 		return a, nil, true
 
+	case key.Matches(msg, a.keys.CopyPane):
+		next, cmd := a.copyVisible()
+		return next, cmd, true
+	case key.Matches(msg, a.keys.CopyBuffer):
+		next, cmd := a.copyScrollback()
+		return next, cmd, true
+
 	case key.Matches(msg, a.keys.ScrollUp):
 		return a.scrollBy(+a.scrollPage()), nil, true
 	case key.Matches(msg, a.keys.ScrollDown):

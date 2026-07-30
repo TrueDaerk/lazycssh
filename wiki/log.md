@@ -2,6 +2,14 @@
 
 ## 2026-07-30
 
+- Text can be copied out of a pane (issue #134): `alt+y` puts the focused pane's visible text
+  into the system clipboard, `alt+d` the whole retained scrollback, both over OSC 52 so they
+  work through SSH and degrade silently on terminals without support — the status line reports
+  the attempt either way. Clipboard text is ANSI-stripped, clear markers excluded. Both chords
+  are in the `?` overlay. `core/keys.md` and `core/tui.md` updated. Version 0.9.8.
+
+## 2026-07-30
+
 - The Command log panel budgets its window in visual lines (issue #132): a command wrapping
   over several lines no longer pushes the cursor row past the box's clip, so up/down stays one
   entry per keypress with the cursor always on screen. The dropped-entries notice yields its
