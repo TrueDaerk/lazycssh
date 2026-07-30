@@ -4,15 +4,16 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-31T16:00:00Z
+timestamp: 2026-07-31T18:00:00Z
 ---
 
 # TUI shell
 
 `App` is the root bubbletea model. It owns the layout, the focus and the panel selection, and it
 draws the frame every other view renders into: a lazygit-style stack of titled panel boxes on the
-left, the pane grid on the right, the always-visible broadcast bar under them, a status bar along
-the bottom, and the `?` popup composited over the frame.
+left, the pane grid on the right, the always-visible broadcast bar under the grid — beside the
+sidebar, which keeps its full height — a status bar along the bottom, and the `?` popup
+composited over the frame.
 
 Model mutation happens only in `Update`. Nothing in `internal/ui` dials a host; the transport
 reports through messages — see [Session manager](./manager.md) — and the only bytes the UI
@@ -31,10 +32,15 @@ a TUI panics on a resize.
 ╰─────────────╯│        pane grid           │
 ╭ Groups [2] ─╮│                            │
 ╰─────────────╯│                            │
-╭ Sessions [3]╮│                            │
-╰─────────────╯│                            │
+╭ Sessions [3]╮└────────────────────────────┘
+│ …           │╭ Broadcast [5] → 7 hosts ──╮
+╰─────────────╯╰───────────────────────────╯
  status bar                      key hints
 ```
+
+The broadcast bar shares its rows with the sidebar instead of stretching under it (issue #164):
+the panel column runs down to the status bar, and the bar sits under the grid only. On a
+terminal too narrow for a sidebar the bar spans the full width.
 
 Every sidebar panel is its own bordered box with its title and number in the top border line —
 lazygit's look. lipgloss has no border-title support, so `titledBox` assembles the top line by
@@ -407,8 +413,10 @@ interrupts every target, `tab` completes on every target, and each pane shows it
 echo, so a divergent completion is visible as N panes disagreeing rather than as one garbled
 line.
 
-The bar keeps a local echo line — printable text appends, backspace trims — as a reminder of
-what was typed; the truth is on the hosts. `enter` sends a carriage return and records the
+The bar never mirrors what was typed — the panes carry each host's own echo, and the bar's copy
+would be a second, possibly divergent truth (issue #164). It still assembles the line internally
+— printable text appends, backspace trims — but only for the audit trail. `enter` sends a
+carriage return and records the
 assembled non-empty line in the [command log](./command-log.md) once; the individual keystrokes
 are never recorded, because this is where a password may be typed. The title always carries the
 live target count (`Broadcast [5] → 7 hosts`), and the status bar says
@@ -430,7 +438,7 @@ Mode switching is modeled on csshx, with `ctrl+a` as the escape prefix inside th
 - `enter` (in view mode) — back to edit mode; selecting the bar again (`5`, a click) also
   re-enters it in edit mode.
 - `ctrl+a` `a` — send one literal `ctrl+a` to the targets, which is how a remote `screen` or
-  `tmux` behind the broadcast stays reachable. The literal is never echoed into the bar's line.
+  `tmux` behind the broadcast stays reachable. The literal never enters the assembled line.
 - `ctrl+a` anything else — a **one-shot lazycssh command** (issue #148): the key is dispatched
   to the app keymap exactly as if the bar did not have the keyboard — `ctrl+a` `ctrl+a` toggles
   connected-only, `ctrl+a` `?` opens the help, `ctrl+a` `→` pages, `ctrl+a` `q` quits. The

@@ -36,9 +36,11 @@ func TestBroadcastBarForwardsEveryKeystroke(t *testing.T) {
 	}
 }
 
-// The bar's echo line tracks printable text and backspace, and clears on
-// enter; the enter itself reaches the hosts as a carriage return.
-func TestBroadcastBarEchoLine(t *testing.T) {
+// The bar assembles the typed line for the command log — printable text
+// appends, backspace trims, enter clears — but never displays it: the panes
+// show each host's own echo. The enter itself reaches the hosts as a carriage
+// return.
+func TestBroadcastBarTracksTheLineWithoutEchoingIt(t *testing.T) {
 	a, sender := barApp(t, "web-01")
 
 	for _, r := range "lss" {
@@ -48,8 +50,8 @@ func TestBroadcastBarEchoLine(t *testing.T) {
 	if a.BroadcastLine() != "ls" {
 		t.Fatalf("BroadcastLine() = %q", a.BroadcastLine())
 	}
-	if !strings.Contains(plain(a.View().Content), "ls▏") {
-		t.Fatalf("the bar does not echo the line:\n%s", plain(a.View().Content))
+	if strings.Contains(plain(a.View().Content), "ls▏") {
+		t.Fatalf("the bar echoes the typed line:\n%s", plain(a.View().Content))
 	}
 
 	a = press(t, a, tea.KeyPressMsg{Code: tea.KeyEnter})

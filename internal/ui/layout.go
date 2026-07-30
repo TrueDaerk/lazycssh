@@ -89,8 +89,10 @@ type Layout struct {
 	Sidebar Rect
 	// Main is the pane grid.
 	Main Rect
-	// Broadcast is the always-visible broadcast input between the body and
-	// the status bar. Empty when the terminal is too short to hold it.
+	// Broadcast is the always-visible broadcast input between the grid and
+	// the status bar. It shares its rows with the sidebar rather than
+	// stretching under it, so the panel column keeps its full height. Empty
+	// when the terminal is too short to hold it.
 	Broadcast Rect
 	// StatusBar is the bar along the bottom.
 	StatusBar Rect
@@ -125,21 +127,6 @@ func ComputeLayout(width, height int) Layout {
 	bodyHeight := height - StatusBarHeight
 	l.StatusBar = Rect{X: 0, Y: bodyHeight, Width: width, Height: StatusBarHeight}
 
-	// The broadcast bar sits above it and degrades before the body does: a
-	// titled box when there is room, a bare line when it is tight, gone when
-	// even the body barely fits.
-	barHeight := 0
-	switch {
-	case height >= MinHeight+BroadcastBarHeight:
-		barHeight = BroadcastBarHeight
-	case height >= MinHeight+1:
-		barHeight = 1
-	}
-	if barHeight > 0 {
-		bodyHeight -= barHeight
-		l.Broadcast = Rect{X: 0, Y: bodyHeight, Width: width, Height: barHeight}
-	}
-
 	sidebarWidth := 0
 	if width >= SidebarMinWidth+MainMinWidth {
 		sidebarWidth = width / 4
@@ -157,7 +144,24 @@ func ComputeLayout(width, height int) Layout {
 	}
 
 	if sidebarWidth > 0 {
+		// The sidebar runs the whole body height, down to the status bar: the
+		// broadcast bar sits beside it, under the grid only.
 		l.Sidebar = Rect{X: 0, Y: 0, Width: sidebarWidth, Height: bodyHeight}
+	}
+
+	// The broadcast bar is taken off the grid's rows and degrades before the
+	// grid does: a titled box when there is room, a bare line when it is
+	// tight, gone when even the grid barely fits.
+	barHeight := 0
+	switch {
+	case height >= MinHeight+BroadcastBarHeight:
+		barHeight = BroadcastBarHeight
+	case height >= MinHeight+1:
+		barHeight = 1
+	}
+	if barHeight > 0 {
+		bodyHeight -= barHeight
+		l.Broadcast = Rect{X: sidebarWidth, Y: bodyHeight, Width: width - sidebarWidth, Height: barHeight}
 	}
 	l.Main = Rect{X: sidebarWidth, Y: 0, Width: width - sidebarWidth, Height: bodyHeight}
 

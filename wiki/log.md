@@ -2,6 +2,12 @@
 
 ## 2026-07-31
 
+- Broadcast bar declutters (issue #164): the bar no longer mirrors typed text — the panes carry
+  each host's own echo, and the line is still assembled internally for the command log — and it
+  no longer stretches under the sidebar: the panel column runs down to the status bar and the
+  bar sits under the grid only, full-width only when the sidebar is hidden. `core/tui.md`
+  updated. Version 0.9.22.
+
 - Makefile added (issue #163): `make build` / `make install` / `make test` / `make vet` wrap
   the go commands from CLAUDE.md; `make install` runs `go install ./cmd/lazycssh`.
   Version 0.9.21.
