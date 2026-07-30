@@ -113,7 +113,17 @@ func (a App) fleetIDs() []string {
 // or the whole fleet when no session is open - after the visibility filters.
 // Everything pane-shaped - the grid, the focus, paging, hit-testing - indexes
 // into this list.
-func (a App) hostIDs() []string { return a.visibleHosts() }
+//
+// Inside View the list is a per-frame snapshot (see App.frameHosts): the
+// filters read live session state, and two computations inside one render
+// must not disagree. Callers that index into the result must still fetch it
+// once and use that one slice - a second call outside View recomputes.
+func (a App) hostIDs() []string {
+	if a.frameHosts != nil {
+		return a.frameHosts
+	}
+	return a.visibleHosts()
+}
 
 // counts summarises the fleet for the status panel. Without a transport only
 // the total is known, and it says so by leaving the rest at zero.

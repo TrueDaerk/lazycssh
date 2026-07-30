@@ -22,10 +22,11 @@ const paneCloseButton = "[x]"
 // truncated from the left: in a fleet of web-01…web-40 the suffix is the
 // distinguishing part, and a header full of identical prefixes says nothing.
 func (a App) paneHeader(host, width int, focused bool) string {
-	if host < 0 || host >= len(a.hostIDs()) || width <= 0 {
+	ids := a.hostIDs()
+	if host < 0 || host >= len(ids) || width <= 0 {
 		return ""
 	}
-	id := a.hostIDs()[host]
+	id := ids[host]
 	number := fmt.Sprintf("%d ", host+1)
 
 	state := a.state(id)

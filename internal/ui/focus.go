@@ -17,10 +17,11 @@ type HostsChangedMsg struct {
 // FocusedHost is the host whose pane has focus, or the empty string when the
 // run has no hosts.
 func (a App) FocusedHost() string {
-	if a.paneIndex < 0 || a.paneIndex >= len(a.hostIDs()) {
+	ids := a.hostIDs()
+	if a.paneIndex < 0 || a.paneIndex >= len(ids) {
 		return ""
 	}
-	return a.hostIDs()[a.paneIndex]
+	return ids[a.paneIndex]
 }
 
 // PaneIndex is the position of the focused pane in the host list.
@@ -61,15 +62,16 @@ func (a App) withHosts(hosts []string) App {
 // is session-scoped, so this runs after the sessions were pruned - an index
 // restored against the fleet would land on a different machine.
 func (a App) refocus(focused string) App {
+	ids := a.hostIDs()
 	if focused != "" {
-		for i, id := range a.hostIDs() {
+		for i, id := range ids {
 			if id == focused {
 				a.paneIndex = i
 				return a
 			}
 		}
 	}
-	a.paneIndex = clamp(a.paneIndex, 0, max(0, len(a.hostIDs())-1))
+	a.paneIndex = clamp(a.paneIndex, 0, max(0, len(ids)-1))
 	return a
 }
 
