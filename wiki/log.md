@@ -2,6 +2,12 @@
 
 ## 2026-07-31
 
+- One navigator for "the next screenful" (issue #147): `ctrl+→`/`ctrl+←` now step pages inside
+  the current split chunk, then the chunk, wrapping at both ends; with the split off they are
+  plain page navigation with wrap. `alt+n`/`alt+p` are removed from the keymap and the overflow
+  footer names `ctrl+→` instead. While a pane or the bar has the keyboard the chords stay
+  keystrokes for the hosts. `core/tui.md` updated. Version 0.9.14.
+
 - Closed two silent-drop holes in the broadcast path (issue #133): a target whose writer
   vanished between target resolution and the write now fails the delivery with an error instead
   of being skipped quietly, and the broadcast bar reports zero-delivery keystrokes

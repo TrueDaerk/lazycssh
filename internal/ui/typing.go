@@ -94,10 +94,6 @@ func (a App) handlePaneKey(msg tea.KeyPressMsg) (App, tea.Cmd, bool) {
 			a.cfg.Targets.Toggle(id)
 		}
 		return a, nil, true
-	case key.Matches(msg, a.keys.NextPage):
-		return a.pageBy(+1), nil, true
-	case key.Matches(msg, a.keys.PrevPage):
-		return a.pageBy(-1), nil, true
 	case key.Matches(msg, a.keys.FullScreen):
 		a.fullScreen = !a.fullScreen
 		return a, nil, true

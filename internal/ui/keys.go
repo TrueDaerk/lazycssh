@@ -113,8 +113,6 @@ type KeyMap struct {
 	FullScreen   key.Binding
 	Reconnect    key.Binding
 	ClosePane    key.Binding
-	NextPage     key.Binding
-	PrevPage     key.Binding
 
 	CopyPane   key.Binding
 	CopyBuffer key.Binding
@@ -173,9 +171,9 @@ func DefaultKeyMap() KeyMap {
 		Split: key.NewBinding(key.WithKeys("ctrl+s"),
 			key.WithHelp("ctrl+s", "split the grid into chunks of N panes")),
 		NextSplit: key.NewBinding(key.WithKeys("ctrl+right"),
-			key.WithHelp("ctrl+→", "next split chunk")),
+			key.WithHelp("ctrl+→", "next screenful (page, then chunk; wraps)")),
 		PrevSplit: key.NewBinding(key.WithKeys("ctrl+left"),
-			key.WithHelp("ctrl+←", "previous split chunk")),
+			key.WithHelp("ctrl+←", "previous screenful (page, then chunk; wraps)")),
 
 		SelectAll: key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "select every host")),
 		Invert:    key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "invert the selection")),
@@ -217,8 +215,6 @@ func DefaultKeyMap() KeyMap {
 		FullScreen: key.NewBinding(key.WithKeys("alt+z"), key.WithHelp("alt+z", "full screen this pane")),
 		Reconnect:  key.NewBinding(key.WithKeys("alt+r"), key.WithHelp("alt+r", "reconnect this host")),
 		ClosePane:  key.NewBinding(key.WithKeys("alt+x"), key.WithHelp("alt+x", "close this host, again to remove")),
-		NextPage:   key.NewBinding(key.WithKeys("alt+n"), key.WithHelp("alt+n", "next page of panes")),
-		PrevPage:   key.NewBinding(key.WithKeys("alt+p"), key.WithHelp("alt+p", "previous page of panes")),
 
 		// Copy goes through OSC 52, so it reaches the local clipboard even
 		// when lazycssh itself runs over SSH; a terminal without OSC 52
@@ -266,7 +262,7 @@ func (k KeyMap) grid() []key.Binding {
 	return []key.Binding{
 		k.LeaveTyping, k.ToggleSelect,
 		k.PaneLeft, k.PaneRight, k.PaneUp, k.PaneDown,
-		k.FullScreen, k.Reconnect, k.ClosePane, k.NextPage, k.PrevPage,
+		k.FullScreen, k.Reconnect, k.ClosePane,
 		k.CopyPane, k.CopyBuffer,
 		k.ScrollUp, k.ScrollDown, k.ScrollTop, k.ScrollBottom,
 		k.SearchPane, k.NextMatch, k.PrevMatch, k.ClearSearch,

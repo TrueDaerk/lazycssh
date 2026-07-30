@@ -30,7 +30,7 @@ func TestOverflowFooterNamesTheHiddenHosts(t *testing.T) {
 	hidden := 30 - len(a.WindowHosts())
 
 	view := plain(a.View().Content)
-	want := fmt.Sprintf("+%d more hosts — alt+n · page 1/%d", hidden, g.Pages)
+	want := fmt.Sprintf("+%d more hosts — ctrl+→ · page 1/%d", hidden, g.Pages)
 	if !strings.Contains(view, want) {
 		t.Fatalf("the grid does not carry %q:\n%s", want, view)
 	}
@@ -111,7 +111,7 @@ func TestFooterSurvivesNoColor(t *testing.T) {
 	}
 	a := resize(t, NewApp(Config{Hosts: names, Theme: Options{NoColor: true}}), 120, 40)
 
-	if !strings.Contains(plain(a.View().Content), "more hosts — alt+n") {
+	if !strings.Contains(plain(a.View().Content), "more hosts — ctrl+→") {
 		t.Fatalf("the indicator vanished without colour:\n%s", plain(a.View().Content))
 	}
 }

@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-31T00:00:00Z
+timestamp: 2026-07-31T14:00:00Z
 ---
 
 # TUI shell
@@ -100,15 +100,20 @@ The **window** is which hosts are on screen. It is not the [working set](./worki
 which is which hosts a command is about. Paging the window never changes who receives a
 keystroke — that is the entire reason the two are separate concepts.
 
-- `alt+n` and `alt+p` move the window a whole page and put the pane focus on the first host
-  of the new page, so the pane that receives a keystroke is one the user can see,
+- `ctrl+→` / `ctrl+←` are the **single navigator** for "the next screenful" (issue #147): they
+  move the window a whole page — and, at a chunk boundary of an active split, the chunk —
+  wrapping at both ends. Page-major: forward steps every page of the current chunk, then the
+  next chunk at its first page; backward mirrors that and lands on the previous chunk's last
+  page. The pane focus follows onto the new screenful, so the pane that receives a keystroke is
+  one the user can see. They are app-level commands: while a pane or the broadcast bar has the
+  keyboard, ctrl+arrows stay keystrokes for the hosts (readline word movement),
 - moving the pane focus off the edge of a page turns the page rather than focusing a pane that is
   not drawn,
 - the page indicator (`page 2/5`) appears in the status bar only when there is more than one page,
 - whenever the grid is showing a *part* — more pages, more split chunks, more open sessions — an
-  **overflow footer** takes the grid's bottom line and says so in place: `+12 more hosts — alt+n
-  · page 1/3 · 2 more sessions — [3]`. Each part names its own navigation, because "more" means
-  a different key depending on what hides it (page `alt+n`, chunk `ctrl+→`, session panel `3`).
+  **overflow footer** takes the grid's bottom line and says so in place: `+12 more hosts — ctrl+→
+  · page 1/3 · 2 more sessions — [3]`. Each part names its own navigation (page and chunk
+  `ctrl+→`, session panel `3`).
   The visible panes must never read as the whole run; a muted counter in the status bar alone is
   too easy to read past. Full screen skips the footer — `alt+z` is an explicit zoom with its own
   way back,
@@ -136,8 +141,8 @@ from the bar's view mode, where `ctrl+a` is a command again — see the broadcas
 ### Split
 
 `ctrl+s` asks for a number and splits the visible hosts into consecutive chunks of that size:
-ten hosts split by five shows the first five terminals. `ctrl+→`/`ctrl+←` show the next and
-previous chunk, stopping at the ends rather than wrapping. Broadcast follows the visible chunk
+ten hosts split by five shows the first five terminals. `ctrl+→`/`ctrl+←` page through the
+chunk and then show the next or previous chunk, wrapping at the ends (see The window above). Broadcast follows the visible chunk
 through the same [visibility limit](./broadcast-scope.md) the connected-only filter uses, and
 the status bar carries `SPLIT 1/2 (5 hosts)` in the warning style for as long as the split
 narrows anything. An empty prompt or `0` clears the split, `esc` keeps it; the split composes
@@ -167,11 +172,14 @@ bypassing the broadcast scope entirely: typing into a pane can never fan out.
   then the grid; once in the grid they are keystrokes for the host and `ctrl+]` is the way back,
 - `1`–`5` at the app level select a panel **and** move focus to the sidebar,
 - `alt+arrows` switch panes (they work while typing and from the app level alike), `alt+z`
-  full-screens, `alt+n`/`alt+p` page, `alt+x` closes/removes, `alt+r` reconnects,
+  full-screens, `alt+x` closes/removes, `alt+r` reconnects; paging is `ctrl+→`/`ctrl+←` at the
+  app level,
 - key presses are dispatched by area, so a key means one thing at a time — see
   [Keymap and help](./keys.md). Commands exist only while no input pane is focused,
-- nothing wraps. Stepping off the last pane onto the first is how a user ends up typing into the
-  machine at the other end of the fleet.
+- pane focus never wraps. Stepping off the last pane onto the first is how a user ends up typing
+  into the machine at the other end of the fleet. The window navigator (`ctrl+→`/`ctrl+←`) does
+  wrap — it changes what is on screen, never who receives a keystroke, and the page/SPLIT
+  indicators say where it landed.
 
 ## Pane output
 

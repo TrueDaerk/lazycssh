@@ -542,9 +542,9 @@ func (a App) handleAppKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, a.keys.Split):
 		return a.beginSplit(), nil
 	case key.Matches(msg, a.keys.NextSplit):
-		return a.stepSplit(+1)
+		return a.stepView(+1)
 	case key.Matches(msg, a.keys.PrevSplit):
-		return a.stepSplit(-1)
+		return a.stepView(-1)
 
 	case key.Matches(msg, a.keys.NextFailure):
 		// Global, not a grid key: "which host went wrong" is the question
