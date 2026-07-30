@@ -2,6 +2,13 @@
 
 ## 2026-07-30
 
+- Host panes show the remote cursor (issue #190): a connected pane following the tail draws
+  the cursor where the scrollback's line discipline says it is - prompt end, mid-edit after
+  backspaces, the correct row of a wrapped pending line, or the empty row after a line feed.
+  Hidden while scrolled back, on disconnected panes and on alt-screen panes (the grid keeps
+  its own). `scrollback.Buffer` gains `CursorTail`. `core/scrollback.md` updated.
+  Version 0.9.35.
+
 - `clear` works on hosts whose termcap clears via cursor-home + erase-below (issue #189):
   `ESC[H` immediately followed by `ESC[J` — what busybox/minimal terminfo entries emit instead
   of `ESC[2J` — now plants the `ClearMark`, as does a full reset (`ESC c`). An `ESC[J` without

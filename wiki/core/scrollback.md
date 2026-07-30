@@ -4,7 +4,7 @@ title: Scrollback buffer
 description: The bounded per-session ring buffer that keeps a chatty host from stalling the UI.
 resource: internal/scrollback/scrollback.go
 tags: [backpressure, concurrency, output]
-timestamp: 2026-07-30T23:00:00Z
+timestamp: 2026-07-31T01:00:00Z
 ---
 
 # Scrollback buffer
@@ -76,6 +76,11 @@ all output.
 - SGR and every unrecognized CSI sequence are stored verbatim at the cursor's position, zero
   cells wide, including sequences split across writes. Interpreting them is the renderer's
   job; full emulation is a separate idea (issue #44).
+- **The cursor is exported** (issue #190): `CursorTail` reports the cursor's wrapped row and
+  column relative to the end of the snapshot. A connected pane following the tail draws the
+  remote cursor from this — at the end of the prompt, inside a readline edit, or on the empty
+  row after a line feed — with no emulation involved. No cursor while scrolled back, on a
+  disconnected pane, or on the alternate screen, where the emulator grid draws its own.
 
 Chunk boundaries are handled: a line split across writes, a CRLF split between two writes, an
 escape sequence split anywhere, and a UTF-8 rune split mid-sequence all reassemble correctly.
