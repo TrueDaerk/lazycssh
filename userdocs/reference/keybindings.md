@@ -58,7 +58,9 @@ from the app level too.
 | Key | Action |
 |---|---|
 | ++ctrl+bracket-right++ | stop typing: back to the app level, on the Status panel |
-| ++alt+left++ ++alt+right++ ++alt+up++ ++alt+down++ | move between panes |
+| ++shift+alt+left++ ++shift+alt+right++ ++shift+alt+up++ ++shift+alt+down++ | move between panes |
+| ++alt+left++ / ++alt+right++ | word backward / forward on the remote line (sent as ++escape++ `b` / ++escape++ `f`) |
+| ++cmd+left++ / ++cmd+right++ | line start / end on the remote line (sent as home / end) |
 | ++alt+space++ | toggle this pane's host in the selection |
 | ++alt+z++ | full-screen this pane |
 | ++alt+r++ | reconnect this host |

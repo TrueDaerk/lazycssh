@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-31T22:00:00Z
+timestamp: 2026-07-31T22:30:00Z
 ---
 
 # TUI shell
@@ -199,7 +199,7 @@ bypassing the broadcast scope entirely: typing into a pane can never fan out.
 - `tab` / `shift+tab` at the app level walk the lazygit cycle: every sidebar panel in order,
   then the grid; once in the grid they are keystrokes for the host and `ctrl+]` is the way back,
 - `1`–`5` at the app level select a panel **and** move focus to the sidebar,
-- `alt+arrows` switch panes (they work while typing and from the app level alike), `alt+z`
+- `shift+alt+arrows` switch panes (they work while typing and from the app level alike; plain `alt+arrows` are the shell's word navigation and are forwarded), `alt+z`
   full-screens, `alt+x` closes/removes, `alt+r` reconnects; paging is `ctrl+→`/`ctrl+←` at the
   app level,
 - key presses are dispatched by area, so a key means one thing at a time — see
@@ -449,7 +449,7 @@ live target count (`Broadcast [5] → 7 hosts`), and the status bar says
 `BROADCASTING EDIT → 7 hosts` in the warning style while the bar has the keyboard. On short
 terminals the bar degrades to a bare line and then disappears before the grid gives up a row.
 
-The pane-management chords (`alt+arrows` and friends) keep working from the bar.
+The pane-management chords (`shift+alt+arrows` and friends) keep working from the bar.
 
 ### Edit and view mode
 

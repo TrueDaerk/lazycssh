@@ -23,9 +23,10 @@ type PaneWriter interface {
 // them is not a shell.
 //
 // lazycssh keeps only two kinds of keys for itself while typing: the one
-// reserved escape, ctrl+], and the alt/shift pane-management chords —
-// combinations [keystrokeBytes] never encoded, so intercepting them forwards
-// nothing a user could previously send.
+// reserved escape, ctrl+], and the pane-management chords. Plain alt+arrows
+// are not among them (issue #202): on macOS they are the shell's word
+// navigation, so pane movement takes shift as well and the bare chords are
+// forwarded by [keystrokeBytes].
 func (a App) handleTypingKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, a.keys.LeaveTyping) {
 		return a.leaveTyping(), nil

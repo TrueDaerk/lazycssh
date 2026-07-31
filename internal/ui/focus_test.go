@@ -28,20 +28,20 @@ func TestArrowsMoveWithinTheGrid(t *testing.T) {
 		t.Fatalf("FocusedHost() = %q", a.FocusedHost())
 	}
 
-	a = pressKey(t, a, "alt+right")
+	a = pressKey(t, a, "alt+shift+right")
 	if a.FocusedHost() != "web-02" {
 		t.Fatalf("FocusedHost() = %q after moving right", a.FocusedHost())
 	}
 	// Four hosts tile as a 2x2, so down is a row - two hosts - not one.
-	a = pressKey(t, a, "alt+down")
+	a = pressKey(t, a, "alt+shift+down")
 	if a.FocusedHost() != "web-04" {
 		t.Fatalf("FocusedHost() = %q after moving down", a.FocusedHost())
 	}
-	a = pressKey(t, a, "alt+left")
+	a = pressKey(t, a, "alt+shift+left")
 	if a.FocusedHost() != "web-03" {
 		t.Fatalf("FocusedHost() = %q after moving left", a.FocusedHost())
 	}
-	a = pressKey(t, a, "alt+up")
+	a = pressKey(t, a, "alt+shift+up")
 	if a.FocusedHost() != "web-01" {
 		t.Fatalf("FocusedHost() = %q after moving up", a.FocusedHost())
 	}
@@ -52,13 +52,13 @@ func TestArrowsMoveWithinTheGrid(t *testing.T) {
 func TestPaneFocusDoesNotWrap(t *testing.T) {
 	a := fleetApp(t, 3)
 
-	a = pressKey(t, a, "alt+left")
+	a = pressKey(t, a, "alt+shift+left")
 	if a.PaneIndex() != 0 {
 		t.Fatalf("PaneIndex() = %d after moving left from the first pane", a.PaneIndex())
 	}
 
 	for range 5 {
-		a = pressKey(t, a, "alt+right")
+		a = pressKey(t, a, "alt+shift+right")
 	}
 	if a.PaneIndex() != 2 {
 		t.Fatalf("PaneIndex() = %d after running off the end", a.PaneIndex())
@@ -99,7 +99,7 @@ func TestTheSameKeyMeansOneThingAtATime(t *testing.T) {
 	a := fleetApp(t, 4)
 
 	panelBefore := a.Panel()
-	a = pressKey(t, a, "alt+down")
+	a = pressKey(t, a, "alt+shift+down")
 	if a.Panel() != panelBefore {
 		t.Fatal("a pane-management chord also moved the sidebar")
 	}
@@ -134,8 +134,8 @@ func TestEnterFromTheSidebarFocusesTheGrid(t *testing.T) {
 // stays on the machine they were looking at, not on the position it occupied.
 func TestFocusSurvivesAChangedHostList(t *testing.T) {
 	a := fleetApp(t, 4)
-	a = pressKey(t, a, "alt+right")
-	a = pressKey(t, a, "alt+right")
+	a = pressKey(t, a, "alt+shift+right")
+	a = pressKey(t, a, "alt+shift+right")
 	if a.FocusedHost() != "web-03" {
 		t.Fatalf("setup: FocusedHost() = %q", a.FocusedHost())
 	}
@@ -163,7 +163,7 @@ func TestFocusSurvivesAChangedHostList(t *testing.T) {
 func TestFocusClampsWhenTheFocusedHostIsGone(t *testing.T) {
 	a := fleetApp(t, 4)
 	for range 3 {
-		a = pressKey(t, a, "alt+right")
+		a = pressKey(t, a, "alt+shift+right")
 	}
 	if a.FocusedHost() != "web-04" {
 		t.Fatalf("setup: FocusedHost() = %q", a.FocusedHost())
@@ -186,7 +186,7 @@ func TestFocusWithNoHosts(t *testing.T) {
 	if a.FocusedHost() != "" {
 		t.Fatalf("FocusedHost() = %q with no hosts", a.FocusedHost())
 	}
-	a = pressKey(t, a, "alt+right")
+	a = pressKey(t, a, "alt+shift+right")
 	if a.PaneIndex() != 0 {
 		t.Fatalf("PaneIndex() = %d with no hosts", a.PaneIndex())
 	}
@@ -200,7 +200,7 @@ func TestFocusWithNoHosts(t *testing.T) {
 func TestFocusedPaneIsVisible(t *testing.T) {
 	a := fleetApp(t, 3)
 	first := a.View().Content
-	a = pressKey(t, a, "alt+right")
+	a = pressKey(t, a, "alt+shift+right")
 	if a.View().Content == first {
 		t.Fatal("moving the pane focus changed nothing on screen")
 	}

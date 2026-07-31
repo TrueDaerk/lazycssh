@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-07-31T16:00:00Z
+timestamp: 2026-07-31T22:30:00Z
 ---
 
 # Keymap and help
@@ -63,11 +63,14 @@ duplicate still fails.
 | `x` | Sessions panel | end the session under the cursor, after `y/n`: ctrl+c and ctrl+d to its connected hosts |
 | `[` / `]` | sidebar | previous / next chunk of hosts |
 | any plain key | panes | **forwarded to the focused host** — letters, enter, tab, esc, ctrl+c, arrows, all of it |
+| `alt+←`/`alt+→` | panes | forwarded as `ESC b`/`ESC f`: word backward / forward on the remote line (opt+arrow on macOS) |
+| `super+←`/`super+→` | panes | forwarded as home / end: line start / end (cmd+arrow on macOS) |
+| `alt+<char>` | panes (unbound chords) | forwarded as `ESC` + character — meta, so `alt+b`/`alt+f`/`alt+.` reach readline |
 | `ctrl+a` | broadcast bar (edit mode) | escape prefix: the next key is a one-shot lazycssh command (`ctrl+a ctrl+a` toggles connected-only, `ctrl+a ?` help); `a` sends a literal `ctrl+a`, `esc` switches to view mode, an unbound key is a named no-op |
 | `enter` | broadcast bar (view mode) | back to edit mode |
 | `ctrl+]` | panes | stop typing: back to the app level, on the Status panel |
 | `alt+space` | panes (and app level) | toggle the focused pane's host in the selection |
-| `alt+←`/`alt+→`/`alt+↑`/`alt+↓` | panes (and app level) | move between panes |
+| `shift+alt+←`/`→`/`↑`/`↓` | panes (and app level) | move between panes — plain `alt+arrow` belongs to the shell (word navigation, issue #202) |
 | `alt+z` | panes (and app level) | full-screen this pane |
 | `alt+r` | panes (and app level) | reconnect this host |
 | `alt+x` | panes (and app level) | close this host; on a dead host, remove its pane |
