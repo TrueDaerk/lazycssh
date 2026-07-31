@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -184,4 +185,47 @@ func contains(all []string, v string) bool {
 		}
 	}
 	return false
+}
+
+// The acceptance criterion for issue #199: a run that needs more than one page
+// broadcasts to the page on screen, not to the hosts behind it.
+func TestBroadcastStopsAtThePage(t *testing.T) {
+	names := make([]string, 10)
+	for i := range names {
+		names[i] = fmt.Sprintf("web-%02d", i+1)
+	}
+	a, fleet, router, _ := statusApp(t, names...)
+	router.Attach(fleetSessions{fleet})
+	for _, id := range names {
+		fleet.connect(t, id)
+	}
+
+	// A terminal too small for ten panes: the grid pages, the broadcast must
+	// page with it.
+	a = pressKey(t, resize(t, a, 120, 30), "ctrl+]")
+	if a.Pages() < 2 {
+		t.Fatalf("setup: ten hosts fit on one page (%d pages)", a.Pages())
+	}
+
+	first := a.WindowHosts()
+	if len(first) >= len(names) {
+		t.Fatalf("setup: the page holds every host (%d)", len(first))
+	}
+	if got := strings.Join(router.Targets(), ","); got != strings.Join(first, ",") {
+		t.Fatalf("broadcast reaches %q, want the page %q", got, first)
+	}
+
+	a = pressKey(t, a, "ctrl+right")
+	second := a.WindowHosts()
+	if strings.Join(second, ",") == strings.Join(first, ",") {
+		t.Fatal("ctrl+right did not turn the page")
+	}
+	if got := strings.Join(router.Targets(), ","); got != strings.Join(second, ",") {
+		t.Fatalf("broadcast reaches %q after paging, want %q", got, second)
+	}
+	for _, id := range first {
+		if contains(router.Targets(), id) && !contains(second, id) {
+			t.Fatalf("broadcast still reaches %s, which left the screen", id)
+		}
+	}
 }

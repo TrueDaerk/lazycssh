@@ -2,6 +2,20 @@
 
 ## 2026-07-31
 
+- Broadcast stops at the page on screen (issue #199): the visibility limit the UI pushes into
+  the router is now the grid's **current page** — the filtered and split host list narrowed once
+  more by what fits on the terminal — instead of the whole visible chunk. Ten connected hosts on
+  a terminal that draws nine panes broadcast to nine; the tenth receives after `ctrl+→`.
+  The page moves far more often than a filter does (a resize repages, an arrow turns a page, a
+  host leaving reflows the run), so `App.Update` was split into a wrapper that resyncs the limit
+  after every message and the old handler beneath it, rather than dusting `syncBroadcastLimit`
+  over every paging site. Before the first size message there is no page and an empty limit
+  would swallow every keystroke, so the filters-only fallback stays. `fleet` remains unbounded,
+  `single` remains the focused pane, and full screen keeps its page's limit rather than turning
+  `all` into a one-host send. `core/tui.md`, `core/broadcast-scope.md`,
+  `core/groups-and-sessions.md` and the user docs said the opposite rule and were rewritten.
+  Version 0.9.39.
+
 - `make install` installs to `~/.local/bin` (issue #197): the target builds straight into
   `$(BINDIR)/lazycssh` — `BINDIR ?= $(HOME)/.local/bin`, created when missing — instead of
   running `go install` into whatever `GOPATH` points at, and `make uninstall` / `make clean`

@@ -36,7 +36,8 @@ The foreground session is what the interface is about:
 - the **grid** draws only its panes; focus, paging and hit-testing index into that list,
 - the **broadcast scope** is limited to it: the UI pushes the visible host set into the
   router's [visibility limit](./broadcast-scope.md), so `all` and `selected` stop at the
-  session's edge. `fleet` mode stays the explicit every-host escape hatch,
+  session's edge — and, within it, at the edge of the page on screen (issue #199).
+  `fleet` mode stays the explicit every-host escape hatch,
 - the **status bar** carries its name, and `N sessions` when more than one is open.
 
 Switching emits `GridChangedMsg` so the program can resize the remote PTYs to the new pane

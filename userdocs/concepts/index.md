@@ -37,6 +37,7 @@ are named, separated and documented on purpose.
 | **Scope** | Who am I addressing? |
 | **Targets** | Who can actually receive right now? |
 
-Paging the window never changes who receives a keystroke. Scope minus the hosts
+The window bounds the scope: `all` and `selected` reach the panes on screen, not
+the hosts on the pages behind them. Scope minus the hosts
 that cannot take input equals targets, and the first number on the status bar
 is always the target count — the label and the reality cannot drift.

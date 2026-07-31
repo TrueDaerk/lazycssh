@@ -159,19 +159,37 @@ func (a App) foregroundSession(index int) App {
 	return a.resetGridSlots().syncBroadcastLimit().syncFocusTarget()
 }
 
-// syncBroadcastLimit pushes the visible host set into the router. With no
-// session open and no filter there is nothing to limit; otherwise all and
-// selected mode stop at the edge of what is on screen.
+// syncBroadcastLimit pushes the on-screen host set into the router, so all and
+// selected mode stop at the edge of what the user can actually see.
+//
+// On screen means the current *page* of the grid, not the whole filtered or
+// split list (issue #199): a run that needs three pages draws nine panes and
+// broadcasts to nine hosts, never to the twenty-one the user cannot see. The
+// page moves far more often than a filter does, so [App.Update] resyncs the
+// limit after every message rather than at the handful of places that page.
+//
+// Full screen is the one deliberate exception: it is an explicit zoom on one
+// pane with its own way back, and it keeps the page's limit rather than
+// silently turning `all` into a single-host send.
 func (a App) syncBroadcastLimit() App {
 	if a.cfg.Targets == nil {
 		return a
 	}
-	if (a.active < 0 || a.active >= len(a.open)) && !a.connectedOnly && a.splitSize <= 0 {
-		a.cfg.Targets.SetLimit(nil)
+	g := a.grid()
+	if g.PerPage <= 0 {
+		// No usable grid area yet - before the first size message, or a
+		// terminal too small to draw a pane. There is no page to limit to, and
+		// an empty limit would silently swallow every keystroke, so fall back
+		// to the filters alone.
+		if (a.active < 0 || a.active >= len(a.open)) && !a.connectedOnly && a.splitSize <= 0 {
+			a.cfg.Targets.SetLimit(nil)
+			return a
+		}
+		a.cfg.Targets.SetLimit(nonHoles(a.visibleHosts()))
 		return a
 	}
 	// Holes are grid positions, not hosts: a keystroke cannot go to one.
-	a.cfg.Targets.SetLimit(nonHoles(a.visibleHosts()))
+	a.cfg.Targets.SetLimit(nonHoles(a.WindowHosts()))
 	return a
 }
 
