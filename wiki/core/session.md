@@ -4,7 +4,7 @@ title: SSH session lifecycle
 description: One host, end to end — dial, handshake, PTY, streams, resize and close — and the event contract the UI depends on.
 resource: internal/ssh/session.go
 tags: [ssh, transport, concurrency, lifecycle]
-timestamp: 2026-07-30T00:00:00Z
+timestamp: 2026-07-31T00:00:00Z
 ---
 
 # SSH session lifecycle
@@ -89,8 +89,17 @@ pane renderer strips OSC before drawing, so the marker is invisible everywhere.
 
 **Degradation is graceful by design.** A shell that does not run the hook — plain POSIX `sh`, a
 restricted shell, a profile that overwrites the variables — simply never emits the marker, and
-`LastExit()` reports "nothing known" rather than a wrong number. The hook line itself echoes in
-the scrollback once at connect; that is the honest cost of asking.
+`LastExit()` reports "nothing known" rather than a wrong number.
+
+The hook line's own PTY echo never reaches the user. A typed line echoes up to twice — once by
+the kernel while it waits in the input queue, once more when the shell's line editor redisplays
+the pending input at the first prompt — so the stdout pump runs through an echo filter
+(`echofilter.go`): a byte state machine, like the exit scanner, that withholds bytes matching
+the exact setup line, drops at most two occurrences plus their line breaks, and then becomes a
+no-op for the rest of the session. A failed partial match releases every withheld byte
+unchanged, and stream end flushes whatever was held. A shell whose echo looks different —
+syntax highlighting, a rewriting line editor — keeps its echo; same graceful degradation as the
+hook itself.
 
 ## The fake
 

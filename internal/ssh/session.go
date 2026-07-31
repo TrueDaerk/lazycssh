@@ -387,9 +387,10 @@ func (s *sshSession) startShell(session *ssh.Session) error {
 	}
 
 	s.wg.Add(2)
-	// Only stdout carries the prompt, so only stdout gets the scanner.
-	go s.pump(stdout, &exitScanner{onExit: s.recordExit})
-	go s.pump(stderr, nil)
+	// Only stdout carries the prompt, so only stdout gets the scanner and the
+	// echo filter that hides the setup line's PTY echo.
+	go s.pump(stdout, &exitScanner{onExit: s.recordExit}, newEchoFilter())
+	go s.pump(stderr, nil, nil)
 
 	return nil
 }
@@ -397,7 +398,10 @@ func (s *sshSession) startShell(session *ssh.Session) error {
 // pump copies one stream into the scrollback. Both streams land in the same
 // buffer because that is how they appear on a terminal, interleaved in arrival
 // order. The scanner, when given, watches the same bytes for exit markers.
-func (s *sshSession) pump(r io.Reader, scan *exitScanner) {
+// The filter, when given, removes the echoed exit-hook setup line before the
+// bytes reach the scrollback or the emulator; the scanner sees the raw stream,
+// because the marker it hunts is never part of the filtered text.
+func (s *sshSession) pump(r io.Reader, scan *exitScanner, filter *echoFilter) {
 	defer s.wg.Done()
 
 	buf := make([]byte, 32<<10)
@@ -407,11 +411,24 @@ func (s *sshSession) pump(r io.Reader, scan *exitScanner) {
 			if scan != nil {
 				scan.Scan(buf[:n])
 			}
-			s.buf.Write(buf[:n])
-			s.emu.Write(buf[:n])
-			s.notifyOutput()
+			out := buf[:n]
+			if filter != nil {
+				out = filter.Filter(out)
+			}
+			if len(out) > 0 {
+				s.buf.Write(out)
+				s.emu.Write(out)
+				s.notifyOutput()
+			}
 		}
 		if err != nil {
+			if filter != nil {
+				if held := filter.Flush(); len(held) > 0 {
+					s.buf.Write(held)
+					s.emu.Write(held)
+					s.notifyOutput()
+				}
+			}
 			return
 		}
 	}

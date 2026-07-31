@@ -100,8 +100,12 @@ func TestSessionTracksExitCodes(t *testing.T) {
 	}
 	waitForOutput(t, s, "welcome")
 
-	// The hook was sent: the shell echoed it.
-	waitForOutput(t, s, "PROMPT_COMMAND")
+	// The hook was sent, but its echo is filtered out of the scrollback: the
+	// pane starts clean (#201). The write below still lands after the setup
+	// line, because stdin writes are ordered.
+	if strings.Contains(s.Scrollback().String(), "PROMPT_COMMAND") {
+		t.Fatal("the setup line's echo leaked into the scrollback")
+	}
 
 	// Graceful degradation: this tiny shell never ran the hook, so nothing has
 	// been reported yet.
@@ -140,6 +144,12 @@ func TestSessionTracksExitCodes(t *testing.T) {
 	}
 	if len(codes) < 2 || codes[len(codes)-2] != 1 || codes[len(codes)-1] != 0 {
 		t.Fatalf("ExitEvents carried %v, want ...1, 0", codes)
+	}
+
+	// By now the shell has echoed the setup line and the session has seen it;
+	// the filter must have kept it out of the scrollback (#201).
+	if got := s.Scrollback().String(); strings.Contains(got, "PROMPT_COMMAND") {
+		t.Fatalf("the setup line's echo leaked into the scrollback: %q", got)
 	}
 }
 
