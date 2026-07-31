@@ -12,6 +12,7 @@ import (
 	"io"
 	"strconv"
 
+	"github.com/TrueDaerk/lazycssh/internal/term"
 	"github.com/TrueDaerk/lazycssh/internal/workingset"
 )
 
@@ -79,6 +80,10 @@ type Sessions interface {
 	Connected(id string) bool
 	// Writer returns the host's stdin, and whether there is one.
 	Writer(id string) (io.Writer, bool)
+	// SendKey delivers one key press to a host through its terminal emulator,
+	// which encodes it the way that host's current terminal modes demand.
+	// It reports false when the session cannot take input.
+	SendKey(id string, k term.KeyEvent) bool
 	// AltScreen reports whether the host's remote app is on the alternate
 	// screen — a full-screen app (vim, htop) that owns that session's
 	// keyboard. A keystroke meant for one vim must not reach twenty of them.
@@ -513,6 +518,29 @@ func (r *Router) Send(p []byte) (Delivery, error) {
 		if _, err := w.Write(p); err != nil {
 			d.Failed = append(d.Failed, id)
 			d.Errs = append(d.Errs, fmt.Errorf("write to %s: %w", id, err))
+			continue
+		}
+		d.Delivered++
+	}
+	return d, errors.Join(d.Errs...)
+}
+
+// SendKey delivers one key press to every target and reports what happened.
+// Unlike [Router.Send] the bytes differ per host: each session's emulator
+// encodes the key the way that host's terminal modes demand — application
+// cursor keys on one machine, plain arrows on another.
+func (r *Router) SendKey(k term.KeyEvent) (Delivery, error) {
+	targets := r.Targets()
+	d := Delivery{Mode: r.mode, Scope: r.ScopeCount(), Targets: len(targets)}
+
+	if r.sessions == nil {
+		return d, fmt.Errorf("broadcast: no transport attached")
+	}
+
+	for _, id := range targets {
+		if !r.sessions.SendKey(id, k) {
+			d.Failed = append(d.Failed, id)
+			d.Errs = append(d.Errs, fmt.Errorf("send key to %s: session cannot take input", id))
 			continue
 		}
 		d.Delivered++

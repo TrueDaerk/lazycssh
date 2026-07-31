@@ -60,7 +60,9 @@ from the app level too.
 | ++ctrl+bracket-right++ | stop typing: back to the app level, on the Status panel |
 | ++shift+alt+left++ ++shift+alt+right++ ++shift+alt+up++ ++shift+alt+down++ | move between panes |
 | ++alt+left++ / ++alt+right++ | word backward / forward on the remote line (sent as ++escape++ `b` / ++escape++ `f`) |
-| ++cmd+left++ / ++cmd+right++ | line start / end on the remote line (sent as home / end) |
+| ++alt+backspace++ / ++alt+delete++ | kill the previous / next word |
+| ++cmd+left++ / ++cmd+right++ | line start / end on the remote line (sent as ++ctrl+a++ / ++ctrl+e++) |
+| ++cmd+backspace++ | kill to line start (sent as ++ctrl+u++) |
 | ++alt+space++ | toggle this pane's host in the selection |
 | ++alt+z++ | full-screen this pane |
 | ++alt+r++ | reconnect this host |

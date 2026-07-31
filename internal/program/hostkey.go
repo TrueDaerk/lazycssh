@@ -84,7 +84,7 @@ func (m *Model) askHostKey(msg keyQuestionMsg) (tea.Model, tea.Cmd) {
 		m.pendingKeys = make(map[string]*keyQuestion)
 	}
 	m.pendingKeys[msg.q.sessionID] = msg.q
-	echoPrompt(m.promptScrollback(msg.q.sessionID), hostKeyPromptText(msg.q))
+	echoPrompt(m.promptTerminal(msg.q.sessionID), hostKeyPromptText(msg.q))
 	return m, tea.Batch(m.forward(ui.HostKeyQuestionMsg{
 		SessionID:   msg.q.sessionID,
 		Host:        msg.q.host.Alias,
@@ -103,7 +103,7 @@ func (m *Model) answerHostKey(msg ui.HostKeyAnswerMsg) (tea.Model, tea.Cmd) {
 	if msg.Accept {
 		shown = "yes"
 	}
-	echoAnswer(m.promptScrollback(q.sessionID), shown)
+	echoAnswer(m.promptTerminal(q.sessionID), shown)
 	q.answer <- msg.Accept
 	delete(m.pendingKeys, msg.SessionID)
 	return m, nil

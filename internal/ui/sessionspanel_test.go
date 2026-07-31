@@ -10,6 +10,7 @@ import (
 
 	"github.com/TrueDaerk/lazycssh/internal/sessions"
 	"github.com/TrueDaerk/lazycssh/internal/ssh"
+	"github.com/TrueDaerk/lazycssh/internal/term"
 )
 
 // openTwo opens two sessions over a live fleet on top of the run's own
@@ -140,6 +141,11 @@ func (s fleetSessions) Writer(id string) (io.Writer, bool) {
 		return nil, false
 	}
 	return sess, sess.State() == ssh.StateConnected
+}
+
+func (s fleetSessions) SendKey(id string, k term.KeyEvent) bool {
+	sess, present := s.f.sessions[id]
+	return present && sess.SendKey(k)
 }
 
 // A host that leaves the fleet leaves its sessions; a session that loses its

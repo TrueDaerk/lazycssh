@@ -73,7 +73,7 @@ func TestBroadcastBarUnknownSequenceCancelsAndSaysSo(t *testing.T) {
 	}
 
 	a = pressKey(t, a, "l")
-	if got := strings.Join(sender.sent, ","); got != "l" {
+	if got := strings.Join(sender.sent, ","); got != "<l>" {
 		t.Fatalf("sent = %q, want edit mode to resume after the cancel", got)
 	}
 }
@@ -114,7 +114,7 @@ func TestBroadcastBarEnterReturnsToEditMode(t *testing.T) {
 	}
 
 	a = pressKey(t, a, "l")
-	if got := strings.Join(sender.sent, ","); got != "l" {
+	if got := strings.Join(sender.sent, ","); got != "<l>" {
 		t.Fatalf("sent = %q, want typing to resume", got)
 	}
 }
@@ -182,7 +182,7 @@ func TestBroadcastBarPrefixDoesNotChain(t *testing.T) {
 	a = pressKey(t, a, "ctrl+a")
 	a = pressKey(t, a, "ctrl+a")
 	a = pressKey(t, a, "a")
-	if got := strings.Join(sender.sent, ","); got != "a" {
+	if got := strings.Join(sender.sent, ","); got != "<a>" {
 		t.Fatalf("sent = %q, want the plain letter after the one-shot prefix", got)
 	}
 }

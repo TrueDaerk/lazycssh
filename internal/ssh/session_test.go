@@ -341,7 +341,7 @@ func TestSessionSurvivesAnUndrainedEventChannel(t *testing.T) {
 
 	// Nobody drains events, yet the output must still arrive in the scrollback.
 	waitFor(t, "flooded output to arrive despite an undrained event channel", func() bool {
-		return s.Scrollback().Len() > 1000
+		return strings.Count(s.Terminal().Text(), "\n") > 100
 	})
 
 	// The dropped hints are counted rather than silently lost, so a UI that
@@ -397,7 +397,7 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 func waitForOutput(t *testing.T, s Session, want string) {
 	t.Helper()
 	waitFor(t, "output containing "+want, func() bool {
-		return strings.Contains(s.Scrollback().String(), want)
+		return strings.Contains(s.Terminal().Text(), want)
 	})
 }
 

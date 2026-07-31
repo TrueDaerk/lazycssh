@@ -22,7 +22,7 @@ func fakeFactory() (ssh.Factory, func(id string) *ssh.Fake) {
 	)
 	factory := func(req ssh.SessionRequest) ssh.Session {
 		f := ssh.NewFake(req.ID, req.Host, req.Events)
-		f.UseScrollback(req.Scrollback)
+		f.UseTerminal(req.Terminal)
 		mu.Lock()
 		fakes[req.ID] = f
 		mu.Unlock()

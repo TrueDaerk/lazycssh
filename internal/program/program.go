@@ -207,7 +207,7 @@ func realFactory(ctx context.Context, insecure bool, prompter ssh.HostKeyPrompte
 			Host:            req.Host,
 			Auth:            creds.Methods(ctx, req.ID, req.Host),
 			HostKeyCallback: callback(req.ID, req.Host),
-			Scrollback:      req.Scrollback,
+			Terminal:        req.Terminal,
 		}, req.Events)
 	}, nil
 }

@@ -1,9 +1,9 @@
 package ui
 
 import (
-	"unicode"
-
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/TrueDaerk/lazycssh/internal/term"
 )
 
 // escapeKeystroke leaves a terminal input - the focused pane, the broadcast
@@ -12,109 +12,62 @@ import (
 // always means "give me my keyboard back".
 const escapeKeystroke = "ctrl+]"
 
-// keystrokeBytes encodes a key press the way a terminal would send it to a PTY.
-//
-// It is deliberately explicit rather than clever: what reaches a remote shell is
-// the one thing in this program a user cannot inspect, so every mapping is
-// written down and tested.
-func keystrokeBytes(msg tea.KeyPressMsg) []byte {
-	switch msg.String() {
-	case "enter":
-		// A terminal sends carriage return; the remote line discipline turns it
-		// into a newline.
-		return []byte{'\r'}
-	case "tab":
-		return []byte{'\t'}
-	case "shift+tab":
-		return []byte("\x1b[Z")
-	case "backspace":
-		return []byte{0x7f}
-	case "delete":
-		return []byte("\x1b[3~")
-	case "esc":
-		return []byte{0x1b}
-	case "space":
-		return []byte{' '}
-	case "up":
-		return []byte("\x1b[A")
-	case "down":
-		return []byte("\x1b[B")
-	case "right":
-		return []byte("\x1b[C")
-	case "left":
-		return []byte("\x1b[D")
-	case "home":
-		return []byte("\x1b[H")
-	case "end":
-		return []byte("\x1b[F")
-	case "pgup":
-		return []byte("\x1b[5~")
-	case "pgdown":
-		return []byte("\x1b[6~")
+// textMods are the modifiers that only transform which text a key produces;
+// a key carrying nothing beyond these is plain typed input, not a chord.
+const textMods = tea.ModShift | tea.ModCapsLock | tea.ModNumLock
 
-	// cmd+arrow on macOS: line start and end, the same bytes as home and end.
-	case "super+left":
-		return []byte("\x1b[H")
-	case "super+right":
-		return []byte("\x1b[F")
-
-	// opt+arrow on macOS: word navigation. ESC b / ESC f rather than the
-	// CSI 1;3 arrow forms, because readline and zle bind the ESC letters by
-	// default and the modified arrows only via distribution inputrc files.
-	case "alt+left":
-		return []byte("\x1bb")
-	case "alt+right":
-		return []byte("\x1bf")
-	case "alt+up":
-		return []byte("\x1b[1;3A")
-	case "alt+down":
-		return []byte("\x1b[1;3B")
+// motionKey translates the macOS-conventional editing chords into the
+// readline/ZLE emacs-mode defaults — the "natural text editing" convention
+// (issue #202, #206): option+arrows jump words (ESC b / ESC f), cmd+arrows go
+// to line start/end (ctrl+a / ctrl+e), option+backspace kills the previous
+// word (ESC DEL), option+forward-delete kills the next word (ESC d),
+// cmd+backspace kills to line start (ctrl+u). Shift-augmented variants behave
+// the same; a PTY has no selection to extend.
+func motionKey(k tea.KeyPressMsg) (term.KeyEvent, bool) {
+	mod := k.Mod &^ textMods
+	isCmd := mod == tea.ModSuper || mod == tea.ModMeta
+	switch {
+	case mod == tea.ModAlt && k.Code == tea.KeyLeft:
+		return term.KeyEvent{Code: 'b', Mod: term.ModAlt}, true
+	case mod == tea.ModAlt && k.Code == tea.KeyRight:
+		return term.KeyEvent{Code: 'f', Mod: term.ModAlt}, true
+	case mod == tea.ModAlt && k.Code == tea.KeyBackspace:
+		return term.KeyEvent{Code: term.KeyBackspace, Mod: term.ModAlt}, true
+	case mod == tea.ModAlt && k.Code == tea.KeyDelete:
+		return term.KeyEvent{Code: 'd', Mod: term.ModAlt}, true
+	case isCmd && k.Code == tea.KeyLeft:
+		return term.KeyEvent{Code: 'a', Mod: term.ModCtrl}, true
+	case isCmd && k.Code == tea.KeyRight:
+		return term.KeyEvent{Code: 'e', Mod: term.ModCtrl}, true
+	case isCmd && k.Code == tea.KeyBackspace:
+		return term.KeyEvent{Code: 'u', Mod: term.ModCtrl}, true
 	}
-
-	if ctrl, ok := controlByte(msg); ok {
-		return []byte{ctrl}
-	}
-
-	// alt+<printable> is meta: ESC then the character, which is how a terminal
-	// sends it with the common "metaSendsEscape" behavior — alt+b and alt+f
-	// stay word navigation instead of degrading to plain letters. Chords bound
-	// to pane management are intercepted before this function sees them; keys
-	// above MaxRune are bubbletea's special codes, not characters.
-	if msg.Mod&tea.ModAlt != 0 && msg.Code >= ' ' && msg.Code != 0x7f && msg.Code <= unicode.MaxRune {
-		return append([]byte{0x1b}, []byte(string(msg.Code))...)
-	}
-
-	// Plain text, including anything an input method produced.
-	if msg.Text != "" {
-		return []byte(msg.Text)
-	}
-	if msg.Code >= ' ' && msg.Code != 0x7f {
-		return []byte(string(msg.Code))
-	}
-	return nil
+	return term.KeyEvent{}, false
 }
 
-// controlByte encodes ctrl+<letter> the way a terminal does: ctrl+a is 0x01,
-// ctrl+c is 0x03, and so on. ctrl+c has to reach the remote host rather than
-// killing lazycssh, which is the whole reason this function exists.
-func controlByte(msg tea.KeyPressMsg) (byte, bool) {
-	if msg.Mod&tea.ModCtrl == 0 {
-		return 0, false
+// paneKeyEvents converts a bubbletea key press into the emulator key events a
+// pane forwards; the two structs share the same shape (code, shifted code,
+// modifiers, text). Two adjustments:
+//
+//   - the macOS editing chords are pre-translated by [motionKey],
+//   - the emulator's encoder writes a plain key only when no modifier is set,
+//     so shifted or caps-locked characters (shift+a → "A") would be dropped;
+//     such presses are replayed as their produced text instead.
+func paneKeyEvents(k tea.KeyPressMsg) []term.KeyEvent {
+	if ev, ok := motionKey(k); ok {
+		return []term.KeyEvent{ev}
 	}
-
-	switch {
-	case msg.Code >= 'a' && msg.Code <= 'z':
-		return byte(msg.Code-'a') + 1, true
-	case msg.Code >= 'A' && msg.Code <= 'Z':
-		return byte(msg.Code-'A') + 1, true
-	case msg.Code == ' ' || msg.Code == '@':
-		return 0, true
-	case msg.Code == '[':
-		return 0x1b, true
-	case msg.Code == '\\':
-		return 0x1c, true
-	case msg.Code == '_' || msg.Code == '/':
-		return 0x1f, true
+	if k.Text != "" && k.Mod != 0 && k.Mod&^textMods == 0 {
+		evs := make([]term.KeyEvent, 0, 1)
+		for _, r := range k.Text {
+			evs = append(evs, term.KeyEvent{Code: r, Text: string(r)})
+		}
+		return evs
 	}
-	return 0, false
+	return []term.KeyEvent{{
+		Code:        k.Code,
+		ShiftedCode: k.ShiftedCode,
+		Mod:         term.KeyMod(k.Mod),
+		Text:        k.Text,
+	}}
 }

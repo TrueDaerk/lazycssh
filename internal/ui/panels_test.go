@@ -10,6 +10,7 @@ import (
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 	"github.com/TrueDaerk/lazycssh/internal/hosts"
 	"github.com/TrueDaerk/lazycssh/internal/ssh"
+	"github.com/TrueDaerk/lazycssh/internal/term"
 	"github.com/TrueDaerk/lazycssh/internal/workingset"
 )
 
@@ -30,6 +31,14 @@ func newFakeFleet(names ...string) *fakeFleet {
 }
 
 func (f *fakeFleet) IDs() []string { return append([]string(nil), f.ids...) }
+
+func (f *fakeFleet) SendKey(id string, k term.KeyEvent) bool {
+	s, ok := f.sessions[id]
+	if !ok {
+		return false
+	}
+	return s.SendKey(k)
+}
 
 func (f *fakeFleet) Session(id string) (ssh.Session, bool) {
 	s, ok := f.sessions[id]

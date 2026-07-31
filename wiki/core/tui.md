@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-31T22:30:00Z
+timestamp: 2026-08-01T00:00:00Z
 ---
 
 # TUI shell
@@ -213,9 +213,9 @@ bypassing the broadcast scope entirely: typing into a pane can never fan out.
 
 Each pane carries a one-line header — pane number, host name, connection state and the last exit
 code (`ok` / `exit 1`) — all read from the model's fleet snapshot, which the fleet event that
-changed them refreshed, so a change is on screen the moment the redraw happens. The scrollback
+changed them refreshed, so a change is on screen the moment the redraw happens. The terminal
 body is the one deliberate live read left in the render path: the buffer is internally
-synchronized and `Lines()` returns a copy, and snapshotting whole scrollbacks per output event
+synchronized, and snapshotting whole terminal contents per output event
 would copy far more than a redraw reads. When the width cannot hold everything the state gives up its space
 first and the exit code second — a failure must outlive the state label — and the host name
 truncates **from the left** (`…-1a-40.example.com`): in a fleet of near-identical names the
@@ -237,30 +237,25 @@ The transport reports each command's exit status through a prompt hook — see
 - a shell that never ran the hook reports nothing, and the interface shows nothing rather than
   a made-up zero;
 - a pane whose *connection* failed says why (issue #167): the session writes its error — DNS,
-  refused, auth, host key — into its own scrollback the way a plain terminal prints it (issue
+  refused, auth, host key — into its own terminal the way a plain one prints it (issue
   #180), so it scrolls with the history and is reachable like any other output. The snapshot
   (`hostState.errText`) still feeds the Status panel and the failure counts.
 
-Below the header the pane renders its session's [scrollback](./scrollback.md), following the
-tail: the newest output is what the user is watching for. Rendering is a pure
-function of the buffer's current content — `SessionOutputMsg` carries no bytes, it only asks for
-a redraw, so a coalesced or dropped message costs nothing.
+Below the header the pane renders its session's [terminal](./terminal.md) (issue #206):
+following the tail it shows the emulator's screen, exactly like a real terminal; scrolled
+back it shows a window over the shared virtual line space — the retained history, then the
+screen rows, with a muted `~ older output dropped ~` marker on top once the retention cap has
+evicted output. `SessionOutputMsg` carries no bytes, it only asks for a redraw, so a
+coalesced or dropped message costs nothing.
 
-The buffer stores escape sequences verbatim; the renderer decides what they may do:
-
-- **SGR sequences pass through.** `ls --color` looks like `ls --color`.
-- **Everything else is neutralized.** Cursor movement, screen clearing, OSC titles, charset
-  selection and stray control bytes are removed before the line is drawn — a pane renders
-  scrollback text, not a terminal, and one host emitting `clear` must not corrupt the layout
-  around it. Full VT emulation is a separate idea issue, deliberately.
-- A line that still carries a colour is closed with a reset, so an unbalanced SGR from one host
-  cannot bleed into the border or the neighbouring pane.
-- Tabs expand to 8-column stops; an escape sequence the remote never finished drops the tail of
-  its line rather than being half-rendered.
+The emulator interprets escape sequences for real — redraws, cursor movement, erase, SGR —
+so `ls --color` looks like `ls --color` and a prompt rewrite renders cleanly instead of
+leaving artifacts. Every window line is still clipped to the pane width before drawing, so a
+misbehaving host cannot push the layout apart.
 
 Long lines hard-wrap at the pane width with the colours kept intact across the break, and wide
 characters are counted by their display width. When the buffer has evicted lines to stay within
-its bound, a `~ N lines dropped ~` marker sits where the missing output was, so truncated
+its bound, a `~ older output dropped ~` marker sits where the missing output was, so truncated
 scrollback is visible rather than silent.
 
 ### Scrollback navigation
@@ -540,7 +535,7 @@ typed, and the audit trail is for commands.
 | `tea.BackgroundColorMsg` | rebuild the theme for a light or dark terminal |
 | `tea.KeyPressMsg` | dispatch by focus |
 | `FleetUpdatedMsg` | re-read the fleet into the model snapshot, then redraw from it |
-| `SessionOutputMsg` | redraw; the pane reads the internally synchronized scrollback itself |
+| `SessionOutputMsg` | redraw; the pane reads the internally synchronized emulator itself |
 | `HostsChangedMsg` | replace the host list, keeping the focused host |
 | `SessionsChangedMsg` | re-read the group directory |
 | `GroupOpenMsg` | emitted, not handled: the program resolves and connects a saved group's hosts |

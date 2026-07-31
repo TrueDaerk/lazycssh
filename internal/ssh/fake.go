@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/TrueDaerk/lazycssh/internal/hosts"
-	"github.com/TrueDaerk/lazycssh/internal/scrollback"
 	"github.com/TrueDaerk/lazycssh/internal/term"
 )
 
@@ -38,11 +37,11 @@ type Fake struct {
 	// AuthErr, when set, fails Start while authenticating, as a wrong
 	// credential does.
 	AuthErr error
-	// Banner is written to the scrollback once the session is connected, in
+	// Banner is written to the terminal once the session is connected, in
 	// place of a login message.
 	Banner string
 	// EchoInput makes everything written to the session appear in its
-	// scrollback, as a remote PTY echo would.
+	// terminal, as a remote PTY echo would.
 	EchoInput bool
 	// Responses maps a line written to the session to the output it produces.
 	// The lookup key is the line with its trailing carriage return or newline
@@ -52,18 +51,18 @@ type Fake struct {
 	id     string
 	host   hosts.Host
 	events chan<- Event
-	buf    *scrollback.Buffer
-	emu    *term.Emulator
 
-	mu      sync.Mutex
-	state   State
-	err     error
-	written strings.Builder
-	pending strings.Builder
-	width   int
-	height  int
-	closed  bool
-	resizes int
+	mu       sync.Mutex
+	emu      *term.Emulator
+	state    State
+	err      error
+	written  strings.Builder
+	pending  strings.Builder
+	width    int
+	height   int
+	closed   bool
+	released bool
+	resizes  int
 
 	scan     exitScanner
 	lastExit int
@@ -76,7 +75,6 @@ func NewFake(id string, host hosts.Host, events chan<- Event) *Fake {
 		id:     id,
 		host:   host,
 		events: events,
-		buf:    scrollback.New(scrollback.DefaultCapacity),
 		emu:    term.New(DefaultWidth, DefaultHeight),
 		width:  DefaultWidth,
 		height: DefaultHeight,
@@ -87,27 +85,36 @@ func NewFake(id string, host hosts.Host, events chan<- Event) *Fake {
 	return f
 }
 
-// UseScrollback adopts an existing buffer instead of the fake's own, which is
-// what a reconnect does to keep a pane's history.
-func (f *Fake) UseScrollback(buf *scrollback.Buffer) {
-	if buf == nil {
+// UseTerminal adopts an existing emulator instead of the fake's own, which is
+// what a reconnect does to keep a pane's history. The reply handler is
+// rebound to this fake, like the real session's New does.
+func (f *Fake) UseTerminal(emu *term.Emulator) {
+	if emu == nil {
 		return
 	}
 	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.buf = buf
+	f.emu = emu
+	f.mu.Unlock()
+	emu.SetReplyHandler(func(p []byte) { _, _ = f.Write(p) })
 }
 
 func (f *Fake) ID() string       { return f.id }
 func (f *Fake) Host() hosts.Host { return f.host }
 
-func (f *Fake) Scrollback() *scrollback.Buffer {
+func (f *Fake) Terminal() *term.Emulator {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.buf
+	return f.emu
 }
 
-func (f *Fake) Terminal() *term.Emulator { return f.emu }
+// ReleaseTerminal detaches and returns the emulator; the fake will not close
+// it afterwards.
+func (f *Fake) ReleaseTerminal() *term.Emulator {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.released = true
+	return f.emu
+}
 
 func (f *Fake) State() State {
 	f.mu.Lock()
@@ -180,6 +187,25 @@ func (f *Fake) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// SendKey delivers one key press through the fake's emulator, the way
+// [Manager.SendKey] does for a real session: the emulator encodes it and the
+// bytes arrive in Written via the reply pipe. The pipe is drained by a
+// goroutine, so SendKey waits until the bytes have landed — tests assert on
+// Written immediately after a key press, and an async fake would make every
+// one of them a race.
+func (f *Fake) SendKey(k term.KeyEvent) bool {
+	if f.State() != StateConnected {
+		return false
+	}
+	before := len(f.Written())
+	f.Terminal().SendKey(k)
+	deadline := time.Now().Add(2 * time.Second)
+	for len(f.Written()) == before && time.Now().Before(deadline) {
+		time.Sleep(100 * time.Microsecond)
+	}
+	return true
+}
+
 // splitCompleteLines drains every terminated line from b, leaving the partial
 // remainder. The caller holds the lock.
 func splitCompleteLines(b *strings.Builder) []string {
@@ -211,8 +237,7 @@ func (f *Fake) Resize(width, height int) error {
 	f.resizes++
 	f.mu.Unlock()
 
-	f.emu.Resize(width, height)
-	f.buf.SetWidth(width)
+	f.Terminal().Resize(width, height)
 	return nil
 }
 
@@ -225,9 +250,13 @@ func (f *Fake) Close() error {
 	}
 	f.closed = true
 	alreadyDone := f.state.Done()
+	released := f.released
+	emu := f.emu
 	f.mu.Unlock()
 
-	f.emu.Close()
+	if !released {
+		emu.Close()
+	}
 
 	if !alreadyDone {
 		f.setState(StateClosed, nil)
@@ -237,19 +266,34 @@ func (f *Fake) Close() error {
 
 // Emit appends output as if the remote host had sent it. The output passes
 // through the same exit marker scanner as a real session's stdout, so a test
-// emitting a marker exercises the real parsing.
+// emitting a marker exercises the real parsing. Bare line feeds are expanded
+// to CRLF the way a remote PTY's ONLCR discipline would — test fixtures write
+// "\n" and mean "next line, column zero", exactly like a program on the host.
 func (f *Fake) Emit(output string) {
 	f.mu.Lock()
 	if f.scan.onExit == nil {
 		f.scan.onExit = f.recordExit
 	}
 	f.scan.Scan([]byte(output))
-	buf := f.buf
+	emu := f.emu
 	f.mu.Unlock()
 
-	buf.Write([]byte(output))
-	f.emu.Write([]byte(output))
+	emu.Write([]byte(onlcr(output)))
 	f.emit(OutputEvent{ID: f.id})
+}
+
+// onlcr expands a bare "\n" into "\r\n", leaving existing CRLF pairs alone —
+// what a PTY's output discipline does to a program's line feeds.
+func onlcr(s string) string {
+	var b strings.Builder
+	b.Grow(len(s) + 8)
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' && (i == 0 || s[i-1] != '\r') {
+			b.WriteByte('\r')
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
 
 // recordExit stores the newest exit status. The caller holds f.mu.
@@ -275,7 +319,7 @@ func (f *Fake) Emitf(format string, args ...any) {
 	f.Emit(fmt.Sprintf(format, args...))
 }
 
-// Flood emits n lines quickly, for exercising the bounded scrollback and a UI
+// Flood emits n lines quickly, for exercising the bounded history and a UI
 // under load.
 func (f *Fake) Flood(n int) {
 	for i := 0; i < n; i++ {
@@ -342,7 +386,7 @@ func (f *Fake) setState(state State, err error) {
 	f.mu.Unlock()
 
 	if state == StateFailed {
-		writeFailureNotice(f.Scrollback(), err)
+		writeFailureNotice(f.Terminal(), err)
 	}
 	f.emit(StateEvent{ID: f.id, State: state, Err: err})
 }

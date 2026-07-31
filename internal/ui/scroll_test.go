@@ -64,10 +64,10 @@ func TestScrolledPaneKeepsBuffering(t *testing.T) {
 	a, fleet := scrollApp(t, 200)
 	a = pressKey(t, a, "shift+home")
 
-	before := fleet.sessions["web-01"].Scrollback().Len()
+	before := fleet.sessions["web-01"].Terminal().HistoryLen()
 	fleet.sessions["web-01"].Emit("fresh output after scrolling\n")
-	if got := fleet.sessions["web-01"].Scrollback().Len(); got != before+1 {
-		t.Fatalf("Len() = %d after new output, want %d", got, before+1)
+	if got := fleet.sessions["web-01"].Terminal().HistoryLen(); got != before+1 {
+		t.Fatalf("HistoryLen() = %d after new output, want %d", got, before+1)
 	}
 	if a.FollowingTail("web-01") {
 		t.Fatal("new output yanked the pane back to the tail")

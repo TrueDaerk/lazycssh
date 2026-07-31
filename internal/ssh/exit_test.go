@@ -103,7 +103,7 @@ func TestSessionTracksExitCodes(t *testing.T) {
 	// The hook was sent, but its echo is filtered out of the scrollback: the
 	// pane starts clean (#201). The write below still lands after the setup
 	// line, because stdin writes are ordered.
-	if strings.Contains(s.Scrollback().String(), "PROMPT_COMMAND") {
+	if strings.Contains(s.Terminal().Text(), "PROMPT_COMMAND") {
 		t.Fatal("the setup line's echo leaked into the scrollback")
 	}
 
@@ -148,20 +148,23 @@ func TestSessionTracksExitCodes(t *testing.T) {
 
 	// By now the shell has echoed the setup line and the session has seen it;
 	// the filter must have kept it out of the scrollback (#201).
-	if got := s.Scrollback().String(); strings.Contains(got, "PROMPT_COMMAND") {
+	if got := s.Terminal().Text(); strings.Contains(got, "PROMPT_COMMAND") {
 		t.Fatalf("the setup line's echo leaked into the scrollback: %q", got)
 	}
 }
 
-// The marker never reaches the user: it is stored in the scrollback verbatim
-// and stripped by the renderer, but the scanner itself must not eat the bytes
-// around it.
+// The marker never reaches the user: the emulator consumes the OSC sequence
+// invisibly, but the scanner itself must not eat the bytes around it. The
+// prompt's trailing space is a blank cell the terminal does not retain.
 func TestMarkerLeavesTheOutputIntact(t *testing.T) {
 	f := NewFake("h1", hosts.Host{Alias: "h1"}, nil)
 	f.Emit("result\r\n\x1b]133;D;0\a$ ")
 
-	got := f.Scrollback().String()
-	if !strings.Contains(got, "result") || !strings.Contains(got, "$ ") {
+	got := f.Terminal().Text()
+	if !strings.Contains(got, "result") || !strings.Contains(got, "$") {
 		t.Fatalf("the scanner damaged the stream: %q", got)
+	}
+	if strings.Contains(got, "133;D") {
+		t.Fatalf("the marker leaked into the pane text: %q", got)
 	}
 }

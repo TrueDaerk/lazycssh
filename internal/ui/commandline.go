@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
+	"github.com/TrueDaerk/lazycssh/internal/term"
 )
 
 // CommandSentMsg reports what one send did. It is emitted rather than only
@@ -18,11 +19,16 @@ type CommandSentMsg struct {
 	Delivery broadcast.Delivery
 }
 
-// CommandLine is what the command line needs to send. [broadcast.Router]
-// satisfies it; it is an interface so the UI can be tested without a transport.
+// CommandLine is what the command line and the broadcast bar need to send.
+// [broadcast.Router] satisfies it; it is an interface so the UI can be tested
+// without a transport.
 type CommandLine interface {
-	// Send writes to the active broadcast set.
+	// Send writes the same bytes to the active broadcast set — whole command
+	// lines, where the bytes are plain text.
 	Send(p []byte) (broadcast.Delivery, error)
+	// SendKey delivers one key press to the active broadcast set, encoded per
+	// host by each session's own terminal emulator (issue #206).
+	SendKey(k term.KeyEvent) (broadcast.Delivery, error)
 }
 
 // Recorder is the command log as the command line writes to it.

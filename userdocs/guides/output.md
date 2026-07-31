@@ -31,7 +31,7 @@ nothing, and lazycssh shows nothing rather than a made-up zero.
 
 Each session keeps a bounded ring buffer — 10,000 lines by default. When it is
 full the oldest line is evicted, and the eviction is **visible**: a
-`~ N lines dropped ~` marker sits where the missing output was, because
+`~ older output dropped ~` marker sits where the missing output was, because
 truncated history that says nothing is worse than history that says it is
 truncated. A chatty host can never stall the interface; it drops its own oldest
 output instead.
@@ -51,19 +51,22 @@ you read.
 
 ### What escape sequences may do
 
-The buffer stores what the host sent, verbatim; the renderer decides what it may
-do. Colours (SGR) pass through, so `ls --color` looks like `ls --color`.
-Everything else — cursor movement, screen clearing, OSC titles, stray control
-bytes — is neutralised before the line is drawn: a pane renders scrollback text,
-and one host emitting `clear` must not corrupt the layout around it. A line that
-still carries a colour is closed with a reset, so an unbalanced sequence from
-one host cannot bleed into a neighbouring pane.
+Each pane is a real terminal emulator: colours, cursor movement, prompt
+redraws and erase sequences render the way the host meant them, so `ls
+--color` looks like `ls --color` and a rewritten line leaves no artifacts.
+`clear` empties the pane — and the cleared output stays reachable by
+scrolling up, because the emulator pushes it into the history instead of
+discarding it; even the scrollback-erase some terminals send with `clear`
+is filtered out. Every line is clipped to the pane, so one misbehaving host
+cannot corrupt the layout around it.
 
-(Full-screen apps are the deliberate exception — see
+(Full-screen apps own the whole pane — see
 [Full-screen apps](full-screen-apps.md).)
 
-Long lines hard-wrap at the pane width with their colours intact across the
-break, and wide characters are counted by display width.
+Long lines wrap at the pane width with their colours intact across the
+break, and wide characters are counted by display width. Resizing the pane
+re-wraps the whole history at the new width, as if the terminal had always
+been that size.
 
 ## Search
 

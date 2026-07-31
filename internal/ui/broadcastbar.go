@@ -6,6 +6,8 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 )
 
 // handleBroadcastKey is the broadcast bar behaving like a terminal for the
@@ -41,11 +43,6 @@ func (a App) handleBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return next, cmd
 	}
 
-	raw := keystrokeBytes(msg)
-	if len(raw) == 0 {
-		return a, nil
-	}
-
 	a = a.trackBroadcastLine(msg)
 
 	// Prompting targets take the keystroke as their answer (issue #182): the
@@ -61,8 +58,16 @@ func (a App) handleBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	// Individual keystrokes are never recorded — this is where a password may
 	// be typed. The assembled line is recorded on enter instead, because a
-	// whole command is what the audit trail is for.
-	delivery, err := a.cfg.Sender.Send(raw)
+	// whole command is what the audit trail is for. Each key goes out as an
+	// event and every host's emulator encodes it for that host (issue #206).
+	var delivery broadcast.Delivery
+	var err error
+	for _, ev := range paneKeyEvents(msg) {
+		delivery, err = a.cfg.Sender.SendKey(ev)
+		if err != nil {
+			break
+		}
+	}
 	switch {
 	case err != nil:
 		a.lastDelivery = delivery.String() + ": " + err.Error()

@@ -6,8 +6,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
-
-	"github.com/TrueDaerk/lazycssh/internal/scrollback"
 )
 
 // Copying text out of a pane. Bubbletea owns the mouse, so the terminal's
@@ -38,31 +36,25 @@ func (a App) copyVisible() (App, tea.Cmd) {
 	return a, tea.SetClipboard(text)
 }
 
-// copyScrollback copies the focused pane's entire retained scrollback.
+// copyScrollback copies the focused pane's entire retained content: the
+// history that scrolled off the screen and the screen itself, as plain text.
 func (a App) copyScrollback() (App, tea.Cmd) {
 	id := a.FocusedHost()
-	if id == "" || a.cfg.Fleet == nil {
+	if id == "" {
 		return a, nil
 	}
-	session, ok := a.cfg.Fleet.Session(id)
-	if !ok {
+	t := a.paneTerminal(id)
+	if t == nil {
 		return a, nil
 	}
 
-	raw := session.Scrollback().Lines()
-	lines := make([]string, 0, len(raw))
-	for _, line := range raw {
-		if line == scrollback.ClearMark {
-			// The marker is pane furniture, not host output.
-			continue
-		}
-		lines = append(lines, ansi.Strip(sanitizeLine(line)))
-	}
-	if len(lines) == 0 {
+	text := t.Text()
+	if text == "" {
 		a.lastDelivery = id + ": nothing to copy"
 		return a, nil
 	}
+	lines := strings.Count(text, "\n") + 1
 	a.lastDelivery = fmt.Sprintf("copied %d line%s of %s's scrollback (OSC 52)",
-		len(lines), plural(len(lines)), id)
-	return a, tea.SetClipboard(strings.Join(lines, "\n"))
+		lines, plural(lines), id)
+	return a, tea.SetClipboard(text)
 }

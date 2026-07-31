@@ -24,7 +24,7 @@ func TestReconnectPreservesScrollbackWithASeparator(t *testing.T) {
 	m.Wait()
 
 	after, _ := m.Session("srv1")
-	got := after.Scrollback().String()
+	got := after.Terminal().Text()
 
 	// The pane that just died is exactly the pane whose last lines matter.
 	if !strings.Contains(got, "important error before the crash") {
@@ -48,7 +48,7 @@ func TestReconnectPreservesScrollbackWithASeparator(t *testing.T) {
 
 	// Another host's scrollback is untouched.
 	other, _ := m.Session("srv2")
-	if strings.Contains(other.Scrollback().String(), reconnectMarker) {
+	if strings.Contains(other.Terminal().Text(), reconnectMarker) {
 		t.Error("reconnecting one host wrote into another host's scrollback")
 	}
 }
@@ -119,7 +119,7 @@ func TestReconnectTouchesNoOtherSession(t *testing.T) {
 		if got := s.State(); got != StateConnected {
 			t.Errorf("%s State() = %s, want it still connected", id, got)
 		}
-		if !strings.Contains(s.Scrollback().String(), "state of "+id) {
+		if !strings.Contains(s.Terminal().Text(), "state of "+id) {
 			t.Errorf("%s lost its scrollback", id)
 		}
 	}
@@ -156,7 +156,7 @@ func TestReconnectDoesNotRePromptForCredentials(t *testing.T) {
 				Auth:            creds.Methods(context.Background(), req.ID, req.Host),
 				HostKeyCallback: srv.HostKeyCallback(),
 				Timeout:         5 * time.Second,
-				Scrollback:      req.Scrollback,
+				Terminal:        req.Terminal,
 			}, req.Events)
 		},
 	})
@@ -207,7 +207,7 @@ func TestReconnectKeepsScrollbackAcrossRealSessions(t *testing.T) {
 				Auth:            passwordAuth(srv),
 				HostKeyCallback: srv.HostKeyCallback(),
 				Timeout:         5 * time.Second,
-				Scrollback:      req.Scrollback,
+				Terminal:        req.Terminal,
 			}, req.Events)
 		},
 	})
@@ -229,9 +229,9 @@ func TestReconnectKeepsScrollbackAcrossRealSessions(t *testing.T) {
 
 	s, _ = m.Session("test-host")
 	waitFor(t, "the reconnected session to greet us again", func() bool {
-		return strings.Count(s.Scrollback().String(), "welcome") == 2
+		return strings.Count(s.Terminal().Text(), "welcome") == 2
 	})
-	if got := s.Scrollback().String(); !strings.Contains(got, reconnectMarker) {
+	if got := s.Terminal().Text(); !strings.Contains(got, reconnectMarker) {
 		t.Errorf("scrollback = %q, want the separator between the two connections", got)
 	}
 }
