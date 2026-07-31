@@ -326,6 +326,20 @@ func (a App) HelpVisible() bool { return a.showHelp }
 
 // Update handles one message. It is the only place the model changes.
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	next, cmd := a.update(msg)
+	app, ok := next.(App)
+	if !ok {
+		return next, cmd
+	}
+	// The broadcast limit is a statement about what is on screen, and almost
+	// every message can move that: a resize repages the grid, an arrow key
+	// turns a page, a host leaving reflows the run. Resyncing once here is the
+	// only way the limit cannot drift out of step with the panes (issue #199).
+	return app.syncBroadcastLimit(), cmd
+}
+
+// update is the real message handler; [App.Update] wraps it.
+func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.layout = ComputeLayout(msg.Width, msg.Height)

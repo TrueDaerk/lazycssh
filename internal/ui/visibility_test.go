@@ -219,8 +219,10 @@ func TestSplitClears(t *testing.T) {
 	if got := len(a.hostIDs()); got != 10 {
 		t.Fatalf("%d hosts visible after clearing, want 10", got)
 	}
-	if got := len(router.(*broadcast.Router).Targets()); got != 10 {
-		t.Fatalf("broadcast reaches %d hosts after clearing, want 10", got)
+	// Clearing the split restores the full grid; the broadcast still stops at
+	// the edge of the page that grid draws (issue #199).
+	if got, want := len(router.(*broadcast.Router).Targets()), len(a.WindowHosts()); got != want {
+		t.Fatalf("broadcast reaches %d hosts after clearing, want the %d on screen", got, want)
 	}
 
 	a = applySplitSize(t, a, "5")

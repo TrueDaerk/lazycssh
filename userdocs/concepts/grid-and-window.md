@@ -51,8 +51,15 @@ While you are typing into a host, ++ctrl+r++ belongs to the remote shell
 
 The **window** is which hosts are on screen. It is not the
 [working set](groups-and-sessions.md#working-sets), which is which hosts a
-command is about. Paging the window never changes who receives a keystroke —
-that is the entire reason the two are separate.
+command is about: the working set is the machines you are addressing, the window
+is how many of them fit on this terminal.
+
+**What you see is what receives.** The page on screen bounds the
+[broadcast](broadcast.md): `all` and `selected` reach the panes drawn right now
+and nothing on the pages behind them, and paging moves the broadcast with it.
+`fleet` (++ctrl+alt+b++) stays the explicit every-host escape hatch, and full
+screen (++f++) is a zoom — it keeps its page's targets rather than silently
+turning `all` into a one-host send.
 
 - ++ctrl+right++ / ++ctrl+left++ are the single navigator for "the next
   screenful": a whole page, and at a chunk boundary of an active split, the next

@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-07-30T21:00:00Z
+timestamp: 2026-07-31T22:00:00Z
 ---
 
 # TUI shell
@@ -116,8 +116,17 @@ full screen took the letter.
 ## The window
 
 The **window** is which hosts are on screen. It is not the [working set](./working-sets.md),
-which is which hosts a command is about. Paging the window never changes who receives a
-keystroke — that is the entire reason the two are separate concepts.
+which is which hosts a command is about: the working set says which machines the run is
+addressing, the window says how many of them fit on the terminal right now.
+
+**The window bounds the broadcast** (issue #199). The page on screen is pushed into the
+router's [visibility limit](./broadcast-scope.md), so `all`/`selected` reach the panes the user
+can see and nothing behind them — a run of ten hosts on a terminal that draws nine sends to
+nine, and paging on sends to the tenth. What the panes show is what receives a keystroke; a
+command that quietly went to hosts scrolled off screen is exactly the surprise this tool exists
+to prevent. `fleet` stays unbounded — it is the explicit every-host escape hatch — and `single`
+is already the focused pane. Full screen (`f`) keeps its page's limit rather than turning `all`
+into a one-host send: it is an explicit zoom with its own way back.
 
 - `ctrl+→` / `ctrl+←` are the **single navigator** for "the next screenful" (issue #147): they
   move the window a whole page — and, at a chunk boundary of an active split, the chunk —
@@ -127,7 +136,7 @@ keystroke — that is the entire reason the two are separate concepts.
   one the user can see. They are app-level commands: while a pane or the broadcast bar has the
   keyboard, ctrl+arrows stay keystrokes for the hosts (readline word movement),
 - moving the pane focus off the edge of a page turns the page rather than focusing a pane that is
-  not drawn,
+  not drawn, and the broadcast limit follows the new page,
 - the page indicator (`page 2/5`) appears in the status bar only when there is more than one page,
 - whenever the grid is showing a *part* — more pages, more split chunks, more open sessions — an
   **overflow footer** takes the grid's bottom line and says so in place: `+12 more hosts — ctrl+→

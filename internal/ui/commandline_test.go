@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -124,7 +125,7 @@ func TestPromptShowsTheTargetCountWhileTyping(t *testing.T) {
 	if !strings.Contains(view, ":rm -rf /tmp/cache") {
 		t.Fatalf("the prompt does not show what is being typed:\n%s", view)
 	}
-	if !strings.Contains(view, "BROADCAST all (3 hosts)") {
+	if !strings.Contains(view, fmt.Sprintf("BROADCAST all (%d host", len(a.WindowHosts()))) {
 		t.Fatalf("the prompt does not show the scope:\n%s", view)
 	}
 	// No confirmation step: enter sends.

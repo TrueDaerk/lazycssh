@@ -4,7 +4,7 @@ title: Broadcast scope
 description: What `BROADCAST all` means when a working set is active, and how the target count is made unmissable.
 resource: internal/broadcast
 tags: [broadcast, working-set, safety]
-timestamp: 2026-07-31T02:00:00Z
+timestamp: 2026-07-31T22:00:00Z
 ---
 
 # Broadcast scope
@@ -103,9 +103,16 @@ Rules the tests enforce:
 
 `SetLimit(ids)` restricts `all` and `selected` to the given hosts; `nil` lifts the limit, and
 an empty non-nil limit means "nothing is visible", not "no limit". The UI pushes it — it is the
-only layer that knows which panes are on screen — whenever the foreground
-[session](./groups-and-sessions.md) changes; the router only enforces that a keystroke cannot
-reach past it.
+only layer that knows which panes are on screen — and the router only enforces that a keystroke
+cannot reach past it.
+
+What the UI pushes is the **current page of the grid** (issue #199), which is the filtered and
+split host list narrowed once more by what fits on the terminal: nine drawn panes are nine
+targets, whatever the other twenty-one hosts of the run are doing. The page changes far more
+often than a filter does — a resize repages, an arrow key turns a page, a host leaving reflows
+the run — so `App.Update` resyncs the limit after **every** message rather than at the handful
+of places that page. Before the first size message there is no page to limit to, and an empty
+limit would swallow every keystroke; the UI falls back to the filters alone there.
 
 The limit deliberately does **not** bound `fleet` mode: that mode exists as the explicit
 every-host escape hatch, and an escape hatch that can be silently narrowed is not one. `single`
