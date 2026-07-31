@@ -387,28 +387,41 @@ func (s *sshSession) startShell(session *ssh.Session) error {
 	}
 
 	s.wg.Add(2)
-	// Only stdout carries the prompt, so only stdout gets the scanner.
-	go s.pump(stdout, &exitScanner{onExit: s.recordExit})
-	go s.pump(stderr, nil)
+	// Only stdout carries the prompt, so only stdout gets the scanner — and
+	// the echo filter, because the setup line comes back on stdout too.
+	go s.pump(stdout, &exitScanner{onExit: s.recordExit}, newSetupEchoFilter())
+	go s.pump(stderr, nil, nil)
 
 	return nil
 }
 
 // pump copies one stream into the scrollback. Both streams land in the same
 // buffer because that is how they appear on a terminal, interleaved in arrival
-// order. The scanner, when given, watches the same bytes for exit markers.
-func (s *sshSession) pump(r io.Reader, scan *exitScanner) {
+// order. The scanner, when given, watches the same bytes for exit markers; the
+// filter, when given, removes the echoed setup line before anything is stored.
+func (s *sshSession) pump(r io.Reader, scan *exitScanner, filt *setupEchoFilter) {
 	defer s.wg.Done()
 
 	buf := make([]byte, 32<<10)
 	for {
 		n, err := r.Read(buf)
 		if n > 0 {
-			if scan != nil {
-				scan.Scan(buf[:n])
+			out := buf[:n]
+			if filt != nil {
+				out = filt.Filter(out)
 			}
-			s.buf.Write(buf[:n])
-			s.emu.Write(buf[:n])
+			if scan != nil {
+				scan.Scan(out)
+			}
+			// The first marker proves the hook has run: every echo is past,
+			// so the filter stands down and releases anything held back.
+			if filt != nil && filt.active() {
+				if _, ok := s.LastExit(); ok {
+					out = append(out, filt.Stop()...)
+				}
+			}
+			s.buf.Write(out)
+			s.emu.Write(out)
 			s.notifyOutput()
 		}
 		if err != nil {

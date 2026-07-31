@@ -100,8 +100,11 @@ func TestSessionTracksExitCodes(t *testing.T) {
 	}
 	waitForOutput(t, s, "welcome")
 
-	// The hook was sent: the shell echoed it.
-	waitForOutput(t, s, "PROMPT_COMMAND")
+	// The hook was sent, but its echo is filtered out (issue #201): the
+	// scrollback must not show the setup line.
+	if strings.Contains(s.Scrollback().String(), "PROMPT_COMMAND") {
+		t.Fatal("the setup line's echo reached the scrollback")
+	}
 
 	// Graceful degradation: this tiny shell never ran the hook, so nothing has
 	// been reported yet.

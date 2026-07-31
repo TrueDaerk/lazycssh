@@ -2,6 +2,15 @@
 
 ## 2026-07-31
 
+- The exit-hook setup line no longer shows in the panes (issue #201): the line typed into every
+  remote shell to arm OSC 133;D exit reporting came back twice — once as PTY echo, once redrawn
+  by readline next to the first prompt — as the first thing a user saw under `Last login`. A
+  streaming filter on the stdout pump (`internal/ssh/echo.go`) now removes up to two byte-exact
+  occurrences of the setup line before anything reaches the scrollback or the terminal emulator,
+  holding back a stream suffix that could still grow into the line across read boundaries, and
+  stands down for good once the first exit marker proves the hook has run. `core/session.md`
+  rewritten where it called the echo "the honest cost of asking". Version 0.9.40.
+
 - Broadcast stops at the page on screen (issue #199): the visibility limit the UI pushes into
   the router is now the grid's **current page** — the filtered and split host list narrowed once
   more by what fits on the terminal — instead of the whole visible chunk. Ten connected hosts on
