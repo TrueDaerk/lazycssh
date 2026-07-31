@@ -2,6 +2,15 @@
 
 ## 2026-07-31
 
+- The exit-hook setup line no longer shows in panes (issue #201): the PTY echoes the injected
+  line up to twice — kernel echo plus the line editor's redisplay at the first prompt — and both
+  copies landed at the top of every pane's scrollback. The stdout pump now runs through an echo
+  filter (`internal/ssh/echofilter.go`), a byte state machine matching the exact setup line
+  across any read boundary; it removes at most two copies plus their line breaks, releases
+  failed partial matches unchanged, flushes withheld bytes at stream end, and passes everything
+  through afterwards. Shells whose echo differs (syntax highlighting) keep their echo — same
+  graceful degradation as the hook. `core/session.md` updated. Version 0.9.40.
+
 - Broadcast stops at the page on screen (issue #199): the visibility limit the UI pushes into
   the router is now the grid's **current page** — the filtered and split host list narrowed once
   more by what fits on the terminal — instead of the whole visible chunk. Ten connected hosts on
