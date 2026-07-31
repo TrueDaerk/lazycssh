@@ -14,9 +14,9 @@ import (
 // pane keeps buffering new output at full speed - the acceptance criterion of
 // the navigation issue.
 
-// scrollOffset is how far a pane is scrolled back, counted in wrapped lines
-// from the bottom. Zero is the tail, which is where every pane starts and
-// returns to.
+// scrollOffset is how far a pane is scrolled back, counted in virtual lines
+// (history plus screen rows) from the bottom. Zero is the tail, which is
+// where every pane starts and returns to.
 func (a App) scrollOffset(id string) int {
 	if a.scroll == nil {
 		return 0
@@ -27,7 +27,7 @@ func (a App) scrollOffset(id string) int {
 // FollowingTail reports whether a host's pane shows the newest output.
 func (a App) FollowingTail(id string) bool { return a.scrollOffset(id) == 0 }
 
-// scrollBy moves the focused pane's window by delta wrapped lines - positive
+// scrollBy moves the focused pane's window by delta lines - positive
 // is back in time. The offset is anchored at the bottom, so new output slides
 // the window rather than the reader's position in it; the alternative, a
 // top-anchored offset, drifts every time the bounded buffer drops a line.
@@ -91,11 +91,11 @@ func (a App) paneExtentAt(index int) (width, height int) {
 
 // maxScroll is the furthest back the focused pane can go at its current size.
 func (a App) maxScroll(id string) int {
-	w, h := a.paneExtent()
-	return max(0, len(a.wrappedLines(id, w))-h)
+	_, h := a.paneExtent()
+	return max(0, len(a.virtualLines(id))-h)
 }
 
-// scrollHostBy moves the pane at index by delta wrapped lines, whichever pane
+// scrollHostBy moves the pane at index by delta lines, whichever pane
 // has focus - the wheel scrolls what is under the pointer.
 func (a App) scrollHostBy(index, delta int) App {
 	id := a.hostIDAt(index)
@@ -109,8 +109,8 @@ func (a App) scrollHostBy(index, delta int) App {
 	if a.scroll == nil {
 		a.scroll = make(map[string]int)
 	}
-	w, h := a.paneExtentAt(index)
-	limit := max(0, len(a.wrappedLines(id, w))-h)
+	_, h := a.paneExtentAt(index)
+	limit := max(0, len(a.virtualLines(id))-h)
 	next := clamp(a.scroll[id]+delta, 0, limit)
 	if next == 0 {
 		delete(a.scroll, id)
@@ -170,15 +170,14 @@ func (a App) clearSearch() App {
 	return a
 }
 
-// matchLines returns the wrapped-line indices in a host's pane that contain
-// the term, oldest first, at the pane's current width.
+// matchLines returns the virtual-line indices in a host's pane that contain
+// the term, oldest first.
 func (a App) matchLines(id string) []int {
 	if a.searchTerm == "" {
 		return nil
 	}
-	w, _ := a.paneExtent()
 	var out []int
-	for i, line := range a.wrappedLines(id, w) {
+	for i, line := range a.virtualLines(id) {
 		if containsFold(ansi.Strip(line), a.searchTerm) {
 			out = append(out, i)
 		}
@@ -195,15 +194,15 @@ func (a App) newestMatch(id string) int {
 	return m[len(m)-1]
 }
 
-// gotoMatch scrolls the focused pane so a wrapped line is on screen, roughly
+// gotoMatch scrolls the focused pane so a virtual line is on screen, roughly
 // centred. A negative line - no match - changes nothing.
 func (a App) gotoMatch(line int) App {
 	id := a.FocusedHost()
 	if id == "" || line < 0 {
 		return a
 	}
-	w, h := a.paneExtent()
-	total := len(a.wrappedLines(id, w))
+	_, h := a.paneExtent()
+	total := len(a.virtualLines(id))
 	if a.scroll == nil {
 		a.scroll = make(map[string]int)
 	}
@@ -238,11 +237,11 @@ func (a App) stepMatch(direction int) App {
 	return a
 }
 
-// currentLine is the wrapped line the focused pane's window is anchored on:
+// currentLine is the virtual line the focused pane's window is anchored on:
 // the centre of what is visible.
 func (a App) currentLine(id string) int {
-	w, h := a.paneExtent()
-	total := len(a.wrappedLines(id, w))
+	_, h := a.paneExtent()
+	total := len(a.virtualLines(id))
 	return clamp(total-1-a.scrollOffset(id)-h/2, 0, max(0, total-1))
 }
 
@@ -274,20 +273,20 @@ func (a App) searchReport() string {
 		a.searchTerm, len(matched), len(nonHoles(a.hostIDs())), names)
 }
 
-// matchAnywhere searches a host's raw scrollback rather than its wrapped
-// pane, so the answer does not depend on which page the pane happens to be on
-// or how wide it is.
+// matchAnywhere searches a host's whole retained content — history and
+// screen — so the answer does not depend on which page the pane happens to be
+// on.
 func (a App) matchAnywhere(id string) []int {
-	if a.searchTerm == "" || a.cfg.Fleet == nil {
+	if a.searchTerm == "" {
 		return nil
 	}
-	session, ok := a.cfg.Fleet.Session(id)
-	if !ok {
+	t := a.paneTerminal(id)
+	if t == nil {
 		return nil
 	}
 	var out []int
-	for i, line := range session.Scrollback().Lines() {
-		if containsFold(sanitizeLine(line), a.searchTerm) {
+	for i, line := range strings.Split(t.Text(), "\n") {
+		if containsFold(line, a.searchTerm) {
 			out = append(out, i)
 		}
 	}

@@ -19,7 +19,6 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/TrueDaerk/lazycssh/internal/hosts"
-	"github.com/TrueDaerk/lazycssh/internal/scrollback"
 	"github.com/TrueDaerk/lazycssh/internal/term"
 )
 
@@ -118,12 +117,14 @@ type Session interface {
 	State() State
 	// Err is the error that moved the session to [StateFailed], or nil.
 	Err() error
-	// Scrollback holds the output received so far.
-	Scrollback() *scrollback.Buffer
-	// Terminal is the emulator fed with the same output bytes as the
-	// scrollback. It tracks screen state the scrollback cannot — alternate
-	// screen, cursor position — for rendering full-screen remote apps.
+	// Terminal is the emulator fed with the session's output. It holds
+	// everything a pane shows: the visible screen, the retained history that
+	// scrolled off it, the cursor, and the alternate-screen state.
 	Terminal() *term.Emulator
+	// ReleaseTerminal detaches the emulator from the session and returns it:
+	// the session will no longer close it. Reconnecting hands the emulator to
+	// the replacement session this way, so the pane keeps its history.
+	ReleaseTerminal() *term.Emulator
 	// LastExit is the exit status of the last command the remote shell
 	// reported, and whether one has been reported at all. A shell without the
 	// prompt hook never reports; see exit.go.
@@ -158,12 +159,13 @@ type Config struct {
 	Term string
 	// Width and Height are the initial PTY dimensions.
 	Width, Height int
-	// ScrollbackLines bounds the retained output; zero means the default.
+	// ScrollbackLines bounds the retained history; zero means the emulator's
+	// default.
 	ScrollbackLines int
-	// Scrollback, when set, is reused instead of allocating a fresh buffer.
-	// Reconnecting passes the previous buffer here so the pane keeps what the
-	// host said before it died.
-	Scrollback *scrollback.Buffer
+	// Terminal, when set, is adopted instead of allocating a fresh emulator.
+	// Reconnecting passes the previous session's emulator here so the pane
+	// keeps what the host said before it died.
+	Terminal *term.Emulator
 }
 
 func (c Config) withDefaults() Config {
@@ -192,7 +194,6 @@ type sshSession struct {
 	id     string
 	cfg    Config
 	events chan<- Event
-	buf    *scrollback.Buffer
 	emu    *term.Emulator
 
 	mu            sync.Mutex
@@ -204,6 +205,7 @@ type sshSession struct {
 	droppedEvents int
 	lastExit      int
 	hasExit       bool
+	emuReleased   bool
 
 	closeOnce sync.Once
 	closed    chan struct{} // closed when the session is shutting down
@@ -215,35 +217,49 @@ type sshSession struct {
 func New(id string, cfg Config, events chan<- Event) Session {
 	cfg = cfg.withDefaults()
 
-	buf := cfg.Scrollback
-	if buf == nil {
-		buf = scrollback.New(cfg.ScrollbackLines)
+	emu := cfg.Terminal
+	if emu == nil {
+		emu = term.New(cfg.Width, cfg.Height)
+		if cfg.ScrollbackLines > 0 {
+			emu.SetHistorySize(cfg.ScrollbackLines)
+		}
+	} else {
+		// An adopted emulator carries the previous connection's screen; keep
+		// its geometry in lockstep with the PTY this session will request.
+		emu.Resize(cfg.Width, cfg.Height)
 	}
-	// The scrollback's line discipline maps cursor movement through the remote
-	// terminal's width; keep it in lockstep with the PTY, like the emulator.
-	buf.SetWidth(cfg.Width)
 
 	s := &sshSession{
 		id:     id,
 		cfg:    cfg,
 		events: events,
-		buf:    buf,
-		emu:    term.New(cfg.Width, cfg.Height),
+		emu:    emu,
 		closed: make(chan struct{}),
 	}
-	// The emulator's answers to terminal queries (device attributes, cursor
-	// position) go back to this session's stdin — and only this session's;
-	// they never travel through broadcast. Full-screen apps hang without them.
-	// Before the shell starts or after the session dies, Write refuses and the
-	// reply is dropped rather than queued for the wrong moment.
+	// The emulator's host-bound bytes — answers to terminal queries and the
+	// encodings SendKey produces — go back to this session's stdin, and only
+	// this session's; they never travel through broadcast. Full-screen apps
+	// hang without them. Before the shell starts or after the session dies,
+	// Write refuses and the bytes are dropped rather than queued for the
+	// wrong moment. Rebinding on adoption points a reconnected pane's
+	// emulator at the new stdin.
 	s.emu.SetReplyHandler(func(p []byte) { _, _ = s.Write(p) })
 	return s
 }
 
-func (s *sshSession) ID() string                     { return s.id }
-func (s *sshSession) Host() hosts.Host               { return s.cfg.Host }
-func (s *sshSession) Scrollback() *scrollback.Buffer { return s.buf }
-func (s *sshSession) Terminal() *term.Emulator       { return s.emu }
+func (s *sshSession) ID() string               { return s.id }
+func (s *sshSession) Host() hosts.Host         { return s.cfg.Host }
+func (s *sshSession) Terminal() *term.Emulator { return s.emu }
+
+// ReleaseTerminal detaches the emulator: Close will no longer close it. The
+// reply handler keeps pointing at this session's stdin until the adopter
+// rebinds it, which New does.
+func (s *sshSession) ReleaseTerminal() *term.Emulator {
+	s.mu.Lock()
+	s.emuReleased = true
+	s.mu.Unlock()
+	return s.emu
+}
 
 func (s *sshSession) State() State {
 	s.mu.Lock()
@@ -395,12 +411,12 @@ func (s *sshSession) startShell(session *ssh.Session) error {
 	return nil
 }
 
-// pump copies one stream into the scrollback. Both streams land in the same
-// buffer because that is how they appear on a terminal, interleaved in arrival
+// pump copies one stream into the emulator. Both streams land in the same
+// terminal because that is how they appear on one, interleaved in arrival
 // order. The scanner, when given, watches the same bytes for exit markers.
 // The filter, when given, removes the echoed exit-hook setup line before the
-// bytes reach the scrollback or the emulator; the scanner sees the raw stream,
-// because the marker it hunts is never part of the filtered text.
+// bytes reach the emulator; the scanner sees the raw stream, because the
+// marker it hunts is never part of the filtered text.
 func (s *sshSession) pump(r io.Reader, scan *exitScanner, filter *echoFilter) {
 	defer s.wg.Done()
 
@@ -416,7 +432,6 @@ func (s *sshSession) pump(r io.Reader, scan *exitScanner, filter *echoFilter) {
 				out = filter.Filter(out)
 			}
 			if len(out) > 0 {
-				s.buf.Write(out)
 				s.emu.Write(out)
 				s.notifyOutput()
 			}
@@ -424,7 +439,6 @@ func (s *sshSession) pump(r io.Reader, scan *exitScanner, filter *echoFilter) {
 		if err != nil {
 			if filter != nil {
 				if held := filter.Flush(); len(held) > 0 {
-					s.buf.Write(held)
 					s.emu.Write(held)
 					s.notifyOutput()
 				}
@@ -490,7 +504,6 @@ func (s *sshSession) Resize(width, height int) error {
 	s.mu.Unlock()
 
 	s.emu.Resize(width, height)
-	s.buf.SetWidth(width)
 
 	if session == nil {
 		// Not connected yet: the size is remembered and requested at start.
@@ -529,7 +542,14 @@ func (s *sshSession) Close() error {
 		// client guarantees. Waiting here is what makes "no goroutine leaks"
 		// testable.
 		s.wg.Wait()
-		s.emu.Close()
+		s.mu.Lock()
+		released := s.emuReleased
+		s.mu.Unlock()
+		if !released {
+			// A released emulator lives on in the replacement session; closing
+			// it here would kill the pane that just reconnected.
+			s.emu.Close()
+		}
 
 		s.mu.Lock()
 		if !s.state.Done() {
@@ -568,7 +588,7 @@ func (s *sshSession) setState(state State, err error) {
 	s.mu.Unlock()
 
 	if state == StateFailed {
-		writeFailureNotice(s.buf, err)
+		writeFailureNotice(s.emu, err)
 	}
 	s.emit(StateEvent{ID: s.id, State: state, Err: err})
 }

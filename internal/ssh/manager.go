@@ -11,33 +11,33 @@ import (
 	"time"
 
 	"github.com/TrueDaerk/lazycssh/internal/hosts"
-	"github.com/TrueDaerk/lazycssh/internal/scrollback"
+	"github.com/TrueDaerk/lazycssh/internal/term"
 )
 
-// reconnectMarker begins the separator line written into a preserved scrollback.
+// reconnectMarker begins the separator line written into a preserved terminal.
 // It is matched by tests and by the renderer, so it is a constant rather than a
 // literal in a format string.
 const reconnectMarker = "── reconnecting"
 
 // writeReconnectSeparator marks where an old connection ended and a new one
 // begins, so the two cannot be read as one continuous stream.
-func writeReconnectSeparator(buf *scrollback.Buffer, host hosts.Host) {
-	if buf == nil {
+func writeReconnectSeparator(emu *term.Emulator, host hosts.Host) {
+	if emu == nil {
 		return
 	}
 	line := fmt.Sprintf("\r\n%s to %s at %s %s\r\n",
 		reconnectMarker, host.Alias, time.Now().Format(time.RFC3339), strings.Repeat("─", 8))
-	buf.Write([]byte(line))
+	_, _ = emu.Write([]byte(line))
 }
 
-// writeFailureNotice prints a failed session's error into its scrollback the
-// way a plain terminal would show it (issue #180): as output, where the eye
+// writeFailureNotice prints a failed session's error into its terminal the
+// way a plain one would show it (issue #180): as output, where the eye
 // already is, scrolling with the history rather than floating over it.
-func writeFailureNotice(buf *scrollback.Buffer, err error) {
-	if buf == nil || err == nil {
+func writeFailureNotice(emu *term.Emulator, err error) {
+	if emu == nil || err == nil {
 		return
 	}
-	buf.Write([]byte("\r\n" + err.Error() + "\r\n"))
+	_, _ = emu.Write([]byte("\r\n" + err.Error() + "\r\n"))
 }
 
 // Defaults for a manager that does not configure them.
@@ -58,9 +58,10 @@ type SessionRequest struct {
 	Host hosts.Host
 	// Events is the fan-in channel to report on.
 	Events chan<- Event
-	// Scrollback, when set, must be adopted rather than replaced. Reconnecting
-	// passes the previous session's buffer here so the pane keeps its history.
-	Scrollback *scrollback.Buffer
+	// Terminal, when set, must be adopted rather than replaced. Reconnecting
+	// passes the previous session's emulator here so the pane keeps its
+	// history.
+	Terminal *term.Emulator
 }
 
 // Factory builds one session. It exists so the manager can be driven by fakes:
@@ -234,11 +235,11 @@ func (m *Manager) Reconnect(ctx context.Context, id string) error {
 		return fmt.Errorf("reconnect %s: no such session", id)
 	}
 
-	buf := old.Scrollback()
-	writeReconnectSeparator(buf, old.Host())
+	emu := old.ReleaseTerminal()
+	writeReconnectSeparator(emu, old.Host())
 
 	fresh := m.cfg.NewSession(SessionRequest{
-		ID: id, Host: old.Host(), Events: m.events, Scrollback: buf,
+		ID: id, Host: old.Host(), Events: m.events, Terminal: emu,
 	})
 	m.byID[id] = fresh
 	for i, s := range m.sessions {
@@ -356,6 +357,20 @@ func (m *Manager) Writer(id string) (io.Writer, bool) {
 		return nil, false
 	}
 	return s, true
+}
+
+// SendKey delivers one key press to a host through its terminal emulator: the
+// emulator encodes it the way that host's current modes demand and the bytes
+// reach the session's stdin over the reply pipe. It reports false when the
+// session cannot take input — the same refusal Writer gives, so a keystroke
+// into a dead host is a visible miss, never a silent success.
+func (m *Manager) SendKey(id string, k term.KeyEvent) bool {
+	s, ok := m.Session(id)
+	if !ok || s.State() != StateConnected {
+		return false
+	}
+	s.Terminal().SendKey(k)
+	return true
 }
 
 // Counts summarises the fleet for the status bar.

@@ -16,7 +16,7 @@ func TestFailureIsWrittenToTheScrollback(t *testing.T) {
 	f.Disconnect(errors.New("session on h1 ended: connection reset"))
 	f.Disconnect(errors.New("a second failure"))
 
-	got := f.Scrollback().String()
+	got := f.Terminal().Text()
 	if !strings.Contains(got, "connection reset") {
 		t.Fatalf("the failure is not in the scrollback:\n%s", got)
 	}

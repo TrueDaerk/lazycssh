@@ -4,16 +4,18 @@ title: SSH session lifecycle
 description: One host, end to end — dial, handshake, PTY, streams, resize and close — and the event contract the UI depends on.
 resource: internal/ssh/session.go
 tags: [ssh, transport, concurrency, lifecycle]
-timestamp: 2026-07-31T00:00:00Z
+timestamp: 2026-08-01T00:00:00Z
 ---
 
 # SSH session lifecycle
 
 A `Session` is one host: dial, authenticate, request a PTY, run a login shell, pump output into
-the [scrollback buffer](./scrollback.md), accept keystrokes, resize, close.
+the [terminal emulator](./terminal.md), accept keystrokes, resize, close.
 
-Each session also owns a [terminal emulator](./terminal.md), fed by the same output pump and
-resized in lockstep with the PTY, exposed via `Terminal()`.
+The emulator, exposed via `Terminal()`, holds everything the pane shows — screen, retained
+history, cursor — and is resized in lockstep with the PTY. It outlives the session:
+`ReleaseTerminal()` detaches it so a reconnect can hand it to the replacement session and the
+pane keeps its history.
 
 Nothing in the transport touches the bubbletea model. Sessions report over an event channel; the
 UI drains it with a command and converts events into messages, so model mutation stays inside
@@ -37,7 +39,7 @@ Two event types, and one rule that governs both:
 
 | Event | Meaning |
 |-------|---------|
-| `OutputEvent` | new output is available in the session's scrollback |
+| `OutputEvent` | new output is available in the session's terminal |
 | `StateEvent` | the session changed state; `Err` is set for `failed` |
 | `ExitEvent` | the shell reported a command's exit status; also readable via `LastExit()` |
 
@@ -52,7 +54,7 @@ back.
 
 Dropped events are counted, so a UI that appears stuck can be diagnosed instead of guessed at.
 
-Output bytes never travel in events. They go into the scrollback, and the event says only that
+Output bytes never travel in events. They go into the terminal emulator, and the event says only that
 there is something new — otherwise a chatty host would push backpressure through the event
 channel into the UI.
 
@@ -65,7 +67,7 @@ everything.
 
 ## Streams
 
-stdout and stderr land in the same scrollback buffer, interleaved in arrival order, because that
+stdout and stderr land in the same terminal, interleaved in arrival order, because that
 is how they appear on a terminal.
 
 `Close` is idempotent, safe on a session that never started, and waits for the reader goroutines
@@ -84,8 +86,8 @@ convention) with `$?` before every prompt. The line starts with a space so
 
 A scanner on the stdout pump watches for the marker — a byte state machine, because the sequence
 can be split across any read boundary — records the code, and emits an `ExitEvent`. The bytes
-themselves still land in the scrollback verbatim; terminals ignore unknown OSC sequences and the
-pane renderer strips OSC before drawing, so the marker is invisible everywhere.
+themselves still reach the emulator verbatim; a terminal consumes OSC sequences invisibly and the
+marker is invisible everywhere.
 
 **Degradation is graceful by design.** A shell that does not run the hook — plain POSIX `sh`, a
 restricted shell, a profile that overwrites the variables — simply never emits the marker, and
@@ -114,7 +116,7 @@ f := ssh.NewFake("s1", host, events)
 f.Responses = map[string]string{"hostname": "srv1\r\n"}
 f.Start(ctx)
 f.Emit("...")            // output as if from the remote
-f.Flood(20000)           // overwhelm the scrollback
+f.Flood(20000)           // overwhelm the retained history
 f.Disconnect(err)        // drop mid-session
 f.ExitWithStatus(3)      // remote shell exits non-zero
 f.ReportExit(1)          // a command finishes; goes through the real marker parsing
@@ -133,5 +135,5 @@ The real implementation is tested against an in-process SSH server on the loopba
 real shell. No test in this repository reaches the network, and none needs a fixture host.
 
 The test server echoes input as a PTY does, translating a bare carriage return into CRLF. Any
-other choice would be misleading: the scrollback treats a bare `\r` as a line redraw, so an
+other choice would be misleading: a terminal treats a bare `\r` as a line redraw, so an
 echo without the newline would vanish exactly as a progress bar frame does.

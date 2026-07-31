@@ -7,7 +7,6 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/TrueDaerk/lazycssh/internal/scrollback"
 	"github.com/TrueDaerk/lazycssh/internal/ssh"
 	"github.com/TrueDaerk/lazycssh/internal/term"
 )
@@ -102,82 +101,6 @@ func truncateLeft(s string, width int) string {
 	return "…" + string(r[len(r)-width+1:])
 }
 
-// wrappedLines is one host's scrollback as the pane draws it: sanitized,
-// dropped-marker first, hard-wrapped at the width. It is a pure function of
-// the buffer's current content, so two renders of the same state cannot
-// disagree and the tests need no terminal.
-func (a App) wrappedLines(id string, width int) []string {
-	lines, _ := a.wrappedLinesTail(id, width)
-	return lines
-}
-
-// wrappedLinesTail is wrappedLines plus where the tail view begins: the first
-// wrapped line after the last clear-screen marker, 0 when the host never
-// cleared. A pane following the tail starts there, so "clear" leaves an
-// apparently empty pane while the history above it stays scrollable.
-//
-// This is the one live read left in the render path, deliberately: the
-// scrollback buffer is internally synchronized (scrollback.Buffer holds its
-// own mutex and Lines returns a copy), and snapshotting whole scrollbacks
-// into the model on every output event would copy far more than a redraw
-// reads. Session state, by contrast, renders only from the model's snapshot.
-func (a App) wrappedLinesTail(id string, width int) ([]string, int) {
-	if width <= 0 || a.cfg.Fleet == nil {
-		return nil, 0
-	}
-	session, ok := a.cfg.Fleet.Session(id)
-	if !ok {
-		return nil, 0
-	}
-
-	buf := session.Scrollback()
-	raw := buf.Lines()
-	if len(raw) == 0 && buf.Dropped() == 0 {
-		return nil, 0
-	}
-
-	lines := make([]string, 0, len(raw)+1)
-	if dropped := buf.Dropped(); dropped > 0 {
-		// The marker sits where the missing output was, so a reader scrolling
-		// to the top learns the history is truncated rather than short.
-		lines = append(lines, a.theme.Muted.Render(
-			fmt.Sprintf("~ %d line%s dropped ~", dropped, plural(dropped))))
-	}
-	cleared := -1 // index in lines of the last clear marker
-	for _, line := range raw {
-		if line == scrollback.ClearMark {
-			cleared = len(lines)
-			lines = append(lines, a.theme.Muted.Render("~ screen cleared ~"))
-			continue
-		}
-		lines = append(lines, sanitizeLine(line))
-	}
-
-	if echo, ok := a.inlineAnswerEcho(id); ok {
-		// The open auth question's answer is typed inline after the prompt the
-		// scrollback holds, the way a terminal takes it (issue #180).
-		if len(lines) == 0 {
-			lines = append(lines, echo)
-		} else {
-			lines[len(lines)-1] += echo
-		}
-	}
-
-	// Hardwrap keeps ANSI colours intact across the break and counts wide
-	// characters correctly, which a naive byte slice would not. Wrapping the
-	// two halves separately keeps the marker's wrapped position known; each
-	// line wraps independently, so the split changes nothing else.
-	if cleared < 0 {
-		return strings.Split(ansi.Hardwrap(strings.Join(lines, "\n"), width, true), "\n"), 0
-	}
-	head := strings.Split(ansi.Hardwrap(strings.Join(lines[:cleared+1], "\n"), width, true), "\n")
-	if cleared+1 == len(lines) {
-		return head, len(head)
-	}
-	tail := strings.Split(ansi.Hardwrap(strings.Join(lines[cleared+1:], "\n"), width, true), "\n")
-	return append(head, tail...), len(head)
-}
-
 // altScreenTerminal returns the session's emulator when the remote app is on
 // the alternate screen — the signal that a full-screen app (vim, htop, less)
 // owns the pane — and nil otherwise.
@@ -238,97 +161,146 @@ func overlayCursor(line string, x int, style lipgloss.Style) string {
 	return left + style.Render(ch) + right
 }
 
-// paneBody renders one host's scrollback into an area of width columns and
-// height rows, following the tail unless the pane is scrolled back, and
-// highlighting the lines the active search matches. A pane whose remote app
-// is on the alternate screen renders the live emulator grid instead. A
-// connected pane following the tail draws the remote cursor where the
-// scrollback says it is (issue #190).
-func (a App) paneBody(id string, width, height int) string {
-	if height <= 0 {
-		return ""
+// paneTerminal returns the session's emulator, or nil when the host is
+// unknown.
+func (a App) paneTerminal(id string) *term.Emulator {
+	if a.cfg.Fleet == nil {
+		return nil
 	}
-	if t := a.altScreenTerminal(id); t != nil {
-		return a.terminalGrid(t, width, height)
+	session, ok := a.cfg.Fleet.Session(id)
+	if !ok {
+		return nil
 	}
-	wrapped, tailStart := a.wrappedLinesTail(id, width)
+	return session.Terminal()
+}
 
-	cursorLine, cursorCol := -1, 0
-	if a.scrollOffset(id) == 0 {
-		if line, col, ok := a.paneCursorTarget(id, width, wrapped); ok {
-			cursorLine, cursorCol = line, col
-			if cursorLine == len(wrapped) {
-				// The cursor sits on the empty row below the last line - right
-				// after a line feed - so that row must exist to be drawn on.
-				wrapped = append(wrapped, "")
-			}
+// virtualLines is one host's whole pane content as styled lines: the retained
+// history that scrolled off the screen, then the screen's rows, with a muted
+// marker on top when the retention cap has dropped older output. It is the
+// coordinate space the scroll offset, the search and the render all share, so
+// they cannot disagree about which line is which.
+//
+// Screen rows below both the cursor and the last content row are dropped: the
+// window anchors on what the host said, not on the bottom of a screen that
+// may (transiently, or in a test) be taller than the pane.
+func (a App) virtualLines(id string) []string {
+	lines, _ := a.virtualLinesTop(id)
+	return lines
+}
+
+// virtualLinesTop is virtualLines plus the index of the first screen row, so
+// the cursor's screen coordinates can be mapped into the shared line space.
+func (a App) virtualLinesTop(id string) ([]string, int) {
+	t := a.paneTerminal(id)
+	if t == nil || !t.HasOutput() {
+		return nil, 0
+	}
+
+	var lines []string
+	if t.HistoryFull() {
+		// The marker sits where the missing output was, so a reader scrolling
+		// to the top learns the history is truncated rather than short.
+		lines = append(lines, a.theme.Muted.Render("~ older output dropped ~"))
+	}
+	for i, n := 0, t.HistoryLen(); i < n; i++ {
+		lines = append(lines, t.HistoryLine(i))
+	}
+	screenTop := len(lines)
+
+	rows := strings.Split(t.Render(), "\n")
+	last := -1
+	for y := len(rows) - 1; y >= 0; y-- {
+		if strings.TrimRight(ansi.Strip(rows[y]), " ") != "" {
+			last = y
+			break
 		}
 	}
-	if len(wrapped) == 0 {
+	return append(lines, rows[:last+1]...), screenTop
+}
+
+// paneBody renders one host's terminal into an area of width columns and
+// height rows: the live screen when following the tail, a window over
+// [history ++ screen] when scrolled back, and the lines the active search
+// matches highlighted. A pane whose remote app is on the alternate screen
+// renders the live grid alone — no scroll, no search, no selection. A
+// connected pane following the tail draws the remote cursor where the
+// emulator says it is (issue #190).
+func (a App) paneBody(id string, width, height int) string {
+	if height <= 0 || width <= 0 {
+		return ""
+	}
+	t := a.paneTerminal(id)
+	if t == nil {
+		return ""
+	}
+	if t.IsAltScreen() {
+		return a.terminalGrid(t, width, height)
+	}
+	lines, screenTop := a.virtualLinesTop(id)
+	if len(lines) == 0 {
 		return ""
 	}
 
-	offset := clamp(a.scrollOffset(id), 0, max(0, len(wrapped)-height))
-	end := len(wrapped) - offset
+	// The cursor may sit on the blank row below the last content — right
+	// after a line feed. That row must exist to be drawn on, but only while
+	// the pane follows the tail and could show a cursor at all.
+	cx, cy := t.CursorPosition()
+	cursorIdx := screenTop + cy
+	if a.scrollOffset(id) == 0 && a.state(id) == ssh.StateConnected {
+		for len(lines) <= cursorIdx {
+			lines = append(lines, "")
+		}
+	}
+
+	// The open auth question's answer is typed inline at the cursor, the way
+	// a terminal takes it (issue #180). The echo carries its own cursor block,
+	// so the remote cursor is not drawn on top of it.
+	echoing := false
+	if echo, ok := a.inlineAnswerEcho(id); ok {
+		if cursorIdx >= 0 && cursorIdx < len(lines) {
+			lines[cursorIdx] = spliceAt(lines[cursorIdx], cx) + echo
+			echoing = true
+		}
+	}
+
+	offset := clamp(a.scrollOffset(id), 0, max(0, len(lines)-height))
+	end := len(lines) - offset
 	start := max(0, end-height)
 	if offset == 0 {
-		// Following the tail after a clear shows only what came after it -
-		// the cleared pane a terminal would show - while scrolling up still
-		// reaches the history and the marker where the clear happened.
-		start = max(start, tailStart)
+		// Following the tail shows the screen, exactly like a real terminal:
+		// after a `clear` the pane is empty even though the history above is
+		// still there — scrolling up reaches it.
+		start = max(start, screenTop)
 	}
-	window := wrapped[start:end]
+	window := append([]string(nil), lines[start:end]...)
+	for i := range window {
+		window[i] = ansi.Truncate(window[i], width, "")
+	}
 
 	if a.searchTerm != "" {
-		out := make([]string, len(window))
 		for i, line := range window {
 			if text := ansi.Strip(line); containsFold(text, a.searchTerm) {
 				// The whole line takes the match style, its own colours
 				// dropped: a highlight fighting the remote's colours would
 				// lose.
-				out[i] = a.theme.Match.Render(text)
-				continue
+				window[i] = a.theme.Match.Render(text)
 			}
-			out[i] = line
 		}
-		window = out
 	}
 
-	if i := cursorLine - start; i >= 0 && i < len(window) {
-		window[i] = overlayCursor(window[i], cursorCol, a.theme.Cursor)
+	if offset == 0 && !echoing && a.state(id) == ssh.StateConnected && t.CursorVisible() {
+		if i := cursorIdx - start; i >= 0 && i < len(window) && cx >= 0 && cx < width {
+			window[i] = overlayCursor(window[i], cx, a.theme.Cursor)
+		}
 	}
 	return strings.Join(window, "\n")
 }
 
-// paneCursorTarget locates the remote cursor in the wrapped scrollback of a
-// connected host: the wrapped line index (len(wrapped) means the empty row
-// below the last line) and the column. The scrollback's own cursor is the
-// source (issue #178 made it real), so no emulation is involved; while an
-// inline auth answer is echoed, the cursor follows the echo instead, because
-// that is where the typing happens.
-func (a App) paneCursorTarget(id string, width int, wrapped []string) (line, col int, ok bool) {
-	if width <= 0 || a.cfg.Fleet == nil {
-		return 0, 0, false
+// spliceAt cuts a rendered line at column x, padding with spaces when the
+// line is shorter, so typed text can be appended at the cursor.
+func spliceAt(line string, x int) string {
+	if w := ansi.StringWidth(line); w <= x {
+		return line + strings.Repeat(" ", x-w)
 	}
-	session, exists := a.cfg.Fleet.Session(id)
-	if !exists || a.state(id) != ssh.StateConnected {
-		return 0, 0, false
-	}
-	if len(wrapped) > 0 {
-		if _, echoing := a.inlineAnswerEcho(id); echoing {
-			last := wrapped[len(wrapped)-1]
-			return len(wrapped) - 1, min(ansi.StringWidth(last), width-1), true
-		}
-	}
-
-	rowsUp, cell, pendingEmpty := session.Scrollback().CursorTail()
-	col = min(cell, width-1)
-	if pendingEmpty {
-		return len(wrapped), col, true
-	}
-	line = len(wrapped) - 1 - rowsUp
-	if line < 0 {
-		return 0, 0, false
-	}
-	return line, col, true
+	return ansi.Cut(line, 0, x)
 }

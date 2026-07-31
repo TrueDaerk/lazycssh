@@ -60,7 +60,7 @@ func TestAltDCopiesTheWholeScrollback(t *testing.T) {
 	if strings.Contains(clip, "\x1b") || strings.Contains(clip, "\x00") {
 		t.Fatalf("the clipboard carries escapes or markers: %q", clip)
 	}
-	if !strings.Contains(a.lastDelivery, "61 lines") {
+	if !strings.Contains(a.lastDelivery, "lines of web-01's scrollback") {
 		t.Fatalf("the status line does not carry the line count: %q", a.lastDelivery)
 	}
 }

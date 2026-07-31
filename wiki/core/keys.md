@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-07-31T22:30:00Z
+timestamp: 2026-08-01T00:00:00Z
 ---
 
 # Keymap and help
@@ -62,10 +62,12 @@ duplicate still fails.
 | `d` | Groups panel | delete the group under the cursor, after `y/n` (shadows the global select-down) |
 | `x` | Sessions panel | end the session under the cursor, after `y/n`: ctrl+c and ctrl+d to its connected hosts |
 | `[` / `]` | sidebar | previous / next chunk of hosts |
-| any plain key | panes | **forwarded to the focused host** — letters, enter, tab, esc, ctrl+c, arrows, all of it |
-| `alt+←`/`alt+→` | panes | forwarded as `ESC b`/`ESC f`: word backward / forward on the remote line (opt+arrow on macOS) |
-| `super+←`/`super+→` | panes | forwarded as home / end: line start / end (cmd+arrow on macOS) |
-| `alt+<char>` | panes (unbound chords) | forwarded as `ESC` + character — meta, so `alt+b`/`alt+f`/`alt+.` reach readline |
+| any plain key | panes | **forwarded to the focused host** — letters, enter, tab, esc, ctrl+c, arrows, all of it. Each key goes through the host's own [terminal emulator](./terminal.md) (issue #206), so the bytes honour that host's modes (application cursor keys, keypad) |
+| `alt+←`/`alt+→` | panes | word backward / forward on the remote line: `ESC b`/`ESC f` (opt+arrow on macOS) |
+| `super+←`/`super+→` | panes | line start / end on the remote line: `ctrl+a`/`ctrl+e` (cmd+arrow on macOS) |
+| `alt+backspace` / `alt+delete` | panes | kill the previous / next word: `ESC DEL` / `ESC d` (opt+backspace, opt+forward-delete) |
+| `super+backspace` | panes | kill to line start: `ctrl+u` (cmd+backspace) |
+| `alt+<char>` | panes (unbound chords) | meta: `ESC` + character, so `alt+b`/`alt+f`/`alt+.` reach readline |
 | `ctrl+a` | broadcast bar (edit mode) | escape prefix: the next key is a one-shot lazycssh command (`ctrl+a ctrl+a` toggles connected-only, `ctrl+a ?` help); `a` sends a literal `ctrl+a`, `esc` switches to view mode, an unbound key is a named no-op |
 | `enter` | broadcast bar (view mode) | back to edit mode |
 | `ctrl+]` | panes | stop typing: back to the app level, on the Status panel |

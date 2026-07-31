@@ -5,6 +5,8 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/TrueDaerk/lazycssh/internal/term"
 )
 
 // PaneWriter is the one way the interface writes to a single host: the typing
@@ -12,9 +14,13 @@ import (
 // declared here so typing can be tested against a fake and so this package
 // still cannot dial.
 type PaneWriter interface {
-	// Writer returns where the host's keystrokes go, or false when the
+	// Writer returns where the host's raw bytes go, or false when the
 	// session cannot take input.
 	Writer(id string) (io.Writer, bool)
+	// SendKey delivers one key press through the host's terminal emulator,
+	// which encodes it the way that host's current modes demand (issue #206).
+	// It reports false when the session cannot take input.
+	SendKey(id string, k term.KeyEvent) bool
 }
 
 // handleTypingKey is the focused pane behaving like a terminal: every key
@@ -42,11 +48,6 @@ func (a App) handleTypingKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.handleAuthKey(id, msg)
 	}
 
-	raw := keystrokeBytes(msg)
-	if len(raw) == 0 {
-		return a, nil
-	}
-
 	if id == "" {
 		return a, nil
 	}
@@ -54,18 +55,18 @@ func (a App) handleTypingKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		a.lastDelivery = "no transport: nothing was sent"
 		return a, nil
 	}
-	w, ok := a.cfg.Panes.Writer(id)
-	if !ok {
-		// A dead pane swallowing keystrokes silently would read as a hung
-		// host; saying so is the difference.
-		a.lastDelivery = id + " is not connected — alt+r reconnects, " + escapeKeystroke + " leaves"
-		return a, nil
-	}
 
 	// Typed keys are never recorded: this is where passwords are typed, and
-	// the audit trail is for commands — see wiki/core/command-log.md.
-	if _, err := w.Write(raw); err != nil {
-		a.lastDelivery = id + ": " + err.Error()
+	// the audit trail is for commands — see wiki/core/command-log.md. The
+	// events go through the host's own emulator, so what reaches the shell is
+	// what that host's terminal modes ask for (issue #206).
+	for _, ev := range paneKeyEvents(msg) {
+		if !a.cfg.Panes.SendKey(id, ev) {
+			// A dead pane swallowing keystrokes silently would read as a hung
+			// host; saying so is the difference.
+			a.lastDelivery = id + " is not connected — alt+r reconnects, " + escapeKeystroke + " leaves"
+			return a, nil
+		}
 	}
 	return a, nil
 }

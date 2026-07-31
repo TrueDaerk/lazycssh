@@ -4,8 +4,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-
-	"github.com/TrueDaerk/lazycssh/internal/scrollback"
 )
 
 // The pane shows the newest output: watching the tail is what the grid is for.
@@ -34,7 +32,9 @@ func TestPaneBodyPreservesColors(t *testing.T) {
 	fleet.sessions["web-01"].Emit("\x1b[01;34mbin\x1b[0m  \x1b[01;36mlink\x1b[0m  file.txt\n")
 
 	body := a.paneBody("web-01", 40, 5)
-	if !strings.Contains(body, "\x1b[01;34m") {
+	// The emulator re-renders styles canonically, so the assertion is on the
+	// colour surviving, not on the exact byte form the host sent.
+	if !strings.Contains(body, "\x1b[34;1mbin") {
 		t.Fatalf("the directory colour is gone:\n%q", body)
 	}
 	if !strings.Contains(plain(body), "bin") || !strings.Contains(plain(body), "file.txt") {
@@ -64,6 +64,7 @@ func TestCursorEscapesCannotCorruptTheLayout(t *testing.T) {
 // A line longer than the pane wraps rather than widening the pane.
 func TestPaneBodyWrapsLongLines(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.sessions["web-01"].Resize(20, 10)
 	fleet.sessions["web-01"].Emit(strings.Repeat("abcdefghij", 5) + "\n")
 
 	body := plain(a.paneBody("web-01", 20, 10))
@@ -85,16 +86,20 @@ func TestPaneBodyWrapsLongLines(t *testing.T) {
 // silent. The marker sits where the missing output was.
 func TestPaneBodyMarksDroppedOutput(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01")
-	fleet.sessions["web-01"].UseScrollback(scrollback.New(5))
-	for i := 1; i <= 12; i++ {
+	fleet.sessions["web-01"].Resize(40, 5)
+	fleet.sessions["web-01"].Terminal().SetHistorySize(5)
+	for i := 1; i <= 15; i++ {
 		fleet.sessions["web-01"].Emitf("line-%02d\n", i)
 	}
 
-	body := plain(a.paneBody("web-01", 40, 10))
-	if !strings.Contains(body, "7 lines dropped") {
+	// Scrolled all the way back, the marker sits where the missing output
+	// was. Following the tail it is above the screen, like in any terminal.
+	a.scroll = map[string]int{"web-01": 100}
+	body := plain(a.paneBody("web-01", 40, 5))
+	if !strings.Contains(body, "older output dropped") {
 		t.Fatalf("no dropped marker:\n%s", body)
 	}
-	if !strings.HasPrefix(body, "~ 7 lines dropped ~") {
+	if !strings.HasPrefix(body, "~ older output dropped ~") {
 		t.Fatalf("the marker is not where the missing output was:\n%s", body)
 	}
 }
@@ -314,24 +319,22 @@ func TestStatusBarNamesTheAltScreenSkip(t *testing.T) {
 	}
 }
 
-// The scrollback is preserved, not wiped: scrolling up reaches the pre-clear
-// history, with a marker where the clear happened.
+// The history is preserved, not wiped: a clear pushes the visible lines into
+// the retention (the xterm behaviour), so scrolling up reaches the pre-clear
+// output — and the ESC[3J some terminfos append is filtered out before it
+// could erase it.
 func TestClearedHistoryStaysScrollable(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.sessions["web-01"].Resize(40, 5)
 	for i := 1; i <= 10; i++ {
 		fleet.sessions["web-01"].Emitf("old-%02d\n", i)
 	}
-	fleet.sessions["web-01"].Emit("\x1b[2J$ \n")
+	fleet.sessions["web-01"].Emit("\x1b[H\x1b[2J\x1b[3J$ ")
 
-	a.scroll = map[string]int{"web-01": 5}
+	a.scroll = map[string]int{"web-01": 100}
 	body := plain(a.paneBody("web-01", 40, 5))
 	if !strings.Contains(body, "old-") {
 		t.Fatalf("scrolling up does not reach the pre-clear history:\n%s", body)
-	}
-
-	a.scroll["web-01"] = 1
-	if body := plain(a.paneBody("web-01", 40, 5)); !strings.Contains(body, "screen cleared") {
-		t.Fatalf("no marker where the clear happened:\n%s", body)
 	}
 }
 
@@ -386,7 +389,7 @@ func TestFailedPaneErrorScrollsLikeOutput(t *testing.T) {
 	if !strings.Contains(body, "failure text") {
 		t.Fatalf("the failure is not in the output:\n%s", body)
 	}
-	if history := plain(strings.Join(a.wrappedLines("web-01", 20), "\n")); !strings.Contains(history, "kept") {
+	if history := plain(strings.Join(a.virtualLines("web-01"), "\n")); !strings.Contains(history, "kept") {
 		t.Fatalf("the earlier output is gone from the history:\n%s", history)
 	}
 }
@@ -481,8 +484,10 @@ func TestPaneCursorNeedsAConnection(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01")
 	fleet.sessions["web-01"].Emit("$ ")
 
+	// The trailing space is a blank cell like any other; the emulator does
+	// not retain it.
 	body := a.paneBody("web-01", 40, 5)
-	if body != "$ " {
+	if body != "$" {
 		t.Fatalf("a disconnected pane grew a cursor:\n%q", body)
 	}
 }

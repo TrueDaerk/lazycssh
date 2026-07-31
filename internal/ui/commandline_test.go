@@ -10,6 +10,7 @@ import (
 
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 	"github.com/TrueDaerk/lazycssh/internal/commandlog"
+	"github.com/TrueDaerk/lazycssh/internal/term"
 	"github.com/TrueDaerk/lazycssh/internal/workingset"
 )
 
@@ -22,6 +23,13 @@ type fakeSender struct {
 
 func (f *fakeSender) Send(p []byte) (broadcast.Delivery, error) {
 	f.sent = append(f.sent, string(p))
+	return f.delivery, f.err
+}
+
+// SendKey records the key's canonical name in angle brackets, so a test can
+// tell a fanned-out key event from sent bytes.
+func (f *fakeSender) SendKey(k term.KeyEvent) (broadcast.Delivery, error) {
+	f.sent = append(f.sent, "<"+k.String()+">")
 	return f.delivery, f.err
 }
 

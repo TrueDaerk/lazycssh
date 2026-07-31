@@ -460,7 +460,7 @@ func TestNoSecretEverAppearsInAnError(t *testing.T) {
 	if err := s.Err(); err != nil {
 		messages = append(messages, err.Error())
 	}
-	messages = append(messages, s.Scrollback().String())
+	messages = append(messages, s.Terminal().Text())
 
 	for _, secret := range []string{testPassword, testPassphrase} {
 		for _, msg := range messages {

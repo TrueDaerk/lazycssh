@@ -3,7 +3,7 @@
 // to say it in-band. lazycssh injects a prompt hook that prints an OSC 133;D
 // sequence - the FinalTerm / shell-integration convention - carrying $? before
 // every prompt. The sequence is invisible: terminals ignore unknown OSC
-// sequences, and the pane renderer strips OSC before drawing.
+// sequences, so the marker never shows in a pane.
 //
 // Degradation is graceful by design. A shell that does not run the hook - a
 // plain POSIX sh, a restricted shell, a user profile that overwrites the

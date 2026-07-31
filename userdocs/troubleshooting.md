@@ -90,7 +90,7 @@ and re-tiles (and resizes the remote PTYs).
 
 ## "Output is missing from the top of a pane"
 
-`~ N lines dropped ~` marks where the bounded scrollback (10,000 lines per
+`~ older output dropped ~` marks where the bounded history (10,000 lines per
 session) evicted output. ++shift+home++ jumps to the oldest retained line.
 
 If a pane looks frozen while others move, check for `scrollback +N` on the

@@ -33,7 +33,7 @@ func fakeFactory(script func(host hosts.Host, f *Fake)) (Factory, func(id string
 
 	factory := func(req SessionRequest) Session {
 		f := NewFake(req.ID, req.Host, req.Events)
-		f.UseScrollback(req.Scrollback)
+		f.UseTerminal(req.Terminal)
 		f.Banner = "welcome to " + req.Host.Alias + "\r\n"
 		if script != nil {
 			script(req.Host, f)

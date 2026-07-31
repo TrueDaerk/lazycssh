@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/TrueDaerk/lazycssh/internal/term"
 	"github.com/TrueDaerk/lazycssh/internal/workingset"
 )
 
@@ -346,6 +347,14 @@ func newFakeSessions(ids ...string) *fakeSessions {
 func (f *fakeSessions) Connected(id string) bool { return f.up[id] }
 
 func (f *fakeSessions) AltScreen(id string) bool { return f.altScreen[id] }
+
+func (f *fakeSessions) SendKey(id string, k term.KeyEvent) bool {
+	if !f.up[id] || f.writerless[id] || f.failing[id] {
+		return false
+	}
+	f.writes[id] += "<" + k.String() + ">"
+	return true
+}
 
 func (f *fakeSessions) Writer(id string) (io.Writer, bool) {
 	if !f.up[id] || f.writerless[id] {

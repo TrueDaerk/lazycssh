@@ -88,4 +88,4 @@ next group is opened from; quitting stays what `q` and `ctrl+q` are for.
 
 Sessions do not own transports. There is one fleet, one `ssh.Manager`, one event stream; a
 session is a *view* over it. Backgrounding is invisible to the remote host, and a chatty
-background host still lands in its scrollback — see [Scrollback](./scrollback.md).
+background host still lands in its terminal — see [Terminal emulation](./terminal.md).

@@ -113,7 +113,7 @@ func (m *Model) askSecret(msg secretQuestionMsg) (tea.Model, tea.Cmd) {
 		m.pendingSecrets = make(map[string]*secretQuestion)
 	}
 	m.pendingSecrets[msg.q.sessionID] = msg.q
-	echoPrompt(m.promptScrollback(msg.q.sessionID), msg.q.prompt)
+	echoPrompt(m.promptTerminal(msg.q.sessionID), msg.q.prompt)
 	return m, tea.Batch(m.forward(ui.SecretQuestionMsg{
 		SessionID: msg.q.sessionID,
 		Host:      msg.q.host,
@@ -135,7 +135,7 @@ func (m *Model) answerSecret(msg ui.SecretAnswerMsg) (tea.Model, tea.Cmd) {
 	if msg.Ok && q.echo {
 		shown = msg.Value
 	}
-	echoAnswer(m.promptScrollback(q.sessionID), shown)
+	echoAnswer(m.promptTerminal(q.sessionID), shown)
 	q.answer <- secretAnswer{value: msg.Value, ok: msg.Ok}
 	delete(m.pendingSecrets, msg.SessionID)
 	return m, nil

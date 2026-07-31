@@ -1,5 +1,26 @@
 # Log
 
+## 2026-08-01
+
+- Panes are real terminals (issue #206): the hand-rolled scrollback line discipline
+  (`internal/scrollback`, 767 lines of case-by-case emulation) is gone; the per-session vt
+  emulator (`internal/term`, wrapping charmbracelet `x/vt`) now holds everything a pane shows —
+  screen, retained history, cursor, modes. Three consequences. **Rendering**: redraws, cursor
+  movement and erase sequences render as the host meant them; `clear` empties the pane while an
+  ED-3 guard keeps the history scrollable; the `~ screen cleared ~` marker and per-width
+  re-wrapping at render time are gone (a width change reflows the emulator content itself,
+  losslessly, via the reflow machinery ported from ike — logical-line replay, height-shrink
+  scroll-out, resize reserve). **Input**: keystrokes travel as key events and each host's own
+  emulator encodes them (`SendKey`), honouring that host's terminal modes — application cursor
+  keys, bracketed paste — so the hand-written key table (`keystrokeBytes`) and its per-key bug
+  class are gone; macOS editing chords map to the readline defaults (opt+arrows → `ESC b/f`,
+  cmd+arrows → `ctrl+a/e`, opt+backspace → `ESC DEL`, cmd+backspace → `ctrl+u`); the broadcast
+  bar fans out events per host through `Router.SendKey`. **Lifecycle**: the emulator outlives
+  its session — `ReleaseTerminal`/`Config.Terminal` carry it across reconnects, so the pane
+  keeps its history; auth prompts and failure notices inject through the same write path.
+  `core/terminal.md` rewritten, `core/scrollback.md` deleted, `core/session.md`, `core/tui.md`,
+  `core/keys.md` and the user docs updated. Version 0.10.0.
+
 ## 2026-07-31
 
 - Line editing navigation works while typing to a host (issue #202): `cmd+←`/`cmd+→` (super)

@@ -31,7 +31,7 @@ func TestBroadcastBarForwardsEveryKeystroke(t *testing.T) {
 	a = press(t, a, tea.KeyPressMsg{Code: tea.KeyTab})
 	press(t, a, tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 
-	if got := strings.Join(sender.sent, ","); got != "l,s,\t,\x03" {
+	if got := strings.Join(sender.sent, ","); got != "<l>,<s>,<tab>,<ctrl+c>" {
 		t.Fatalf("sent = %q, want each keystroke separately", got)
 	}
 }
@@ -58,8 +58,8 @@ func TestBroadcastBarTracksTheLineWithoutEchoingIt(t *testing.T) {
 	if a.BroadcastLine() != "" {
 		t.Fatalf("BroadcastLine() = %q after enter", a.BroadcastLine())
 	}
-	if sender.sent[len(sender.sent)-1] != "\r" {
-		t.Fatalf("enter sent %q, want a carriage return", sender.sent[len(sender.sent)-1])
+	if sender.sent[len(sender.sent)-1] != "<enter>" {
+		t.Fatalf("enter sent %q, want the enter key event", sender.sent[len(sender.sent)-1])
 	}
 }
 
