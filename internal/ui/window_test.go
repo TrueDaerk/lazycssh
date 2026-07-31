@@ -86,7 +86,7 @@ func TestMovingFocusTurnsThePage(t *testing.T) {
 	perPage := a.Grid().PerPage
 
 	for range perPage {
-		a = pressKey(t, a, "alt+right")
+		a = pressKey(t, a, "alt+shift+right")
 	}
 	if a.Page() != 1 {
 		t.Fatalf("Page() = %d after moving the focus past the page", a.Page())

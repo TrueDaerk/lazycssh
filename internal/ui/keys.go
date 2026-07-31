@@ -209,10 +209,12 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("ctrl+]", "stop typing to the host")),
 		ToggleSelect: key.NewBinding(key.WithKeys("alt+ ", "alt+space"),
 			key.WithHelp("alt+space", "toggle this host's selection")),
-		PaneLeft:   key.NewBinding(key.WithKeys("alt+left"), key.WithHelp("alt+←", "pane left")),
-		PaneRight:  key.NewBinding(key.WithKeys("alt+right"), key.WithHelp("alt+→", "pane right")),
-		PaneUp:     key.NewBinding(key.WithKeys("alt+up"), key.WithHelp("alt+↑", "pane up")),
-		PaneDown:   key.NewBinding(key.WithKeys("alt+down"), key.WithHelp("alt+↓", "pane down")),
+		// Pane movement takes shift as well: plain alt+arrows belong to the
+		// shell (word navigation, issue #202) and are forwarded while typing.
+		PaneLeft:   key.NewBinding(key.WithKeys("alt+shift+left"), key.WithHelp("shift+alt+←", "pane left")),
+		PaneRight:  key.NewBinding(key.WithKeys("alt+shift+right"), key.WithHelp("shift+alt+→", "pane right")),
+		PaneUp:     key.NewBinding(key.WithKeys("alt+shift+up"), key.WithHelp("shift+alt+↑", "pane up")),
+		PaneDown:   key.NewBinding(key.WithKeys("alt+shift+down"), key.WithHelp("shift+alt+↓", "pane down")),
 		FullScreen: key.NewBinding(key.WithKeys("alt+z"), key.WithHelp("alt+z", "full screen this pane")),
 		Reconnect:  key.NewBinding(key.WithKeys("alt+r"), key.WithHelp("alt+r", "reconnect this host")),
 		ClosePane:  key.NewBinding(key.WithKeys("alt+x"), key.WithHelp("alt+x", "close this host, again to remove")),

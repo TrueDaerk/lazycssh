@@ -29,7 +29,7 @@ func pressKey(t *testing.T, a App, keystroke string) App {
 }
 
 // keyMsgFor synthesises a key press from a human-readable keystroke, chords
-// like "alt+left" and "ctrl+]" included.
+// like "alt+shift+left" and "ctrl+]" included.
 func keyMsgFor(t *testing.T, keystroke string) tea.KeyPressMsg {
 	t.Helper()
 
@@ -75,16 +75,16 @@ base:
 }
 
 // focusGrid enters the focused pane's terminal the way a user does: an
-// alt+arrow. alt+left clamps at the first pane, so calling this right after
+// shift+alt+arrow. It clamps at the first pane, so calling this right after
 // setup does not move the focus.
 func focusGrid(t *testing.T, a App) App {
 	t.Helper()
 	if a.Focus() == AreaGrid {
 		return a
 	}
-	a = pressKey(t, a, "alt+left")
+	a = pressKey(t, a, "alt+shift+left")
 	if a.Focus() != AreaGrid {
-		t.Fatal("alt+left did not enter the grid")
+		t.Fatal("alt+shift+left did not enter the grid")
 	}
 	return a
 }
@@ -215,9 +215,9 @@ func TestTabCyclesFocus(t *testing.T) {
 
 	// The grid is not a tab stop at all - it is entered with enter or an
 	// alt+arrow, because inside it tab belongs to the host.
-	a = pressKey(t, a, "alt+left")
+	a = pressKey(t, a, "alt+shift+left")
 	if a.Focus() != AreaGrid {
-		t.Fatalf("Focus() = %v after alt+left, want the grid", a.Focus())
+		t.Fatalf("Focus() = %v after alt+shift+left, want the grid", a.Focus())
 	}
 	a = pressKey(t, a, "ctrl+]")
 	a = pressKey(t, a, "shift+tab")

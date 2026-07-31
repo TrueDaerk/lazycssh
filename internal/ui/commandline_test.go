@@ -114,6 +114,34 @@ func TestCommandLineSendsToTheBroadcastSet(t *testing.T) {
 	}
 }
 
+// cmd+arrow edits the line like any macOS input (issue #202): super+left jumps
+// to the start, super+right back to the end.
+func TestCommandLineNavigatesWithCmdArrows(t *testing.T) {
+	a, _, _, _ := cmdApp(t, "web-01")
+
+	a = typeCommand(t, a, "grep err")
+	a = press(t, a, tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModSuper})
+	a = typeMore(t, a, "z")
+	if a.CommandLineValue() != "zgrep err" {
+		t.Fatalf("CommandLineValue() = %q after super+left, want %q", a.CommandLineValue(), "zgrep err")
+	}
+
+	a = press(t, a, tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModSuper})
+	a = typeMore(t, a, "s")
+	if a.CommandLineValue() != "zgrep errs" {
+		t.Fatalf("CommandLineValue() = %q after super+right, want %q", a.CommandLineValue(), "zgrep errs")
+	}
+}
+
+// typeMore types into the already-open command line without reopening it.
+func typeMore(t *testing.T, a App, text string) App {
+	t.Helper()
+	for _, r := range text {
+		a = pressKey(t, a, string(r))
+	}
+	return a
+}
+
 // The acceptance criterion: no confirmation dialog, but the target count is
 // visible in the prompt while typing.
 func TestPromptShowsTheTargetCountWhileTyping(t *testing.T) {

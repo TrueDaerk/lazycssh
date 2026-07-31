@@ -111,7 +111,7 @@ func TestAppBindingsAreForwardedWhileTyping(t *testing.T) {
 // keys go now.
 func TestLeaveTypingReturnsToTheStatusPanel(t *testing.T) {
 	a, _ := typingApp(t, "web-01", "web-02")
-	a = press(t, a, tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModAlt}) // onto web-02
+	a = press(t, a, tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModAlt | tea.ModShift}) // onto web-02
 
 	a = press(t, a, tea.KeyPressMsg{Code: ']', Mod: tea.ModCtrl})
 	if a.Focus() != AreaSidebar || a.Panel() != PanelStatus {
@@ -124,14 +124,14 @@ func TestLeaveTypingReturnsToTheStatusPanel(t *testing.T) {
 	}
 }
 
-// alt+arrows switch panes without leaving typing; the next keystroke reaches
-// the newly focused host.
-func TestAltArrowsSwitchThePaneWhileTyping(t *testing.T) {
+// shift+alt+arrows switch panes without leaving typing; the next keystroke
+// reaches the newly focused host.
+func TestShiftAltArrowsSwitchThePaneWhileTyping(t *testing.T) {
 	a, fleet := typingApp(t, "web-01", "web-02")
 
-	a = press(t, a, tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModAlt})
+	a = press(t, a, tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModAlt | tea.ModShift})
 	if a.Focus() != AreaGrid {
-		t.Fatalf("Focus() = %v; alt+right must stay in typing", a.Focus())
+		t.Fatalf("Focus() = %v; shift+alt+right must stay in typing", a.Focus())
 	}
 	press(t, a, tea.KeyPressMsg{Code: 'w', Text: "w"})
 
@@ -140,6 +140,25 @@ func TestAltArrowsSwitchThePaneWhileTyping(t *testing.T) {
 	}
 	if got := fleet.sessions["web-01"].Written(); len(got) != 0 {
 		t.Fatalf("web-01 received %q after focus left it", got)
+	}
+}
+
+// Plain alt+arrows are the shell's word navigation (issue #202): they reach
+// the focused host as ESC b / ESC f instead of switching panes.
+func TestAltArrowsAreWordNavigationWhileTyping(t *testing.T) {
+	a, fleet := typingApp(t, "web-01", "web-02")
+
+	a = press(t, a, tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModAlt})
+	a = press(t, a, tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModAlt})
+
+	if got := string(fleet.sessions["web-01"].Written()); got != "\x1bb\x1bf" {
+		t.Fatalf("web-01 received %q, want word navigation", got)
+	}
+	if got := fleet.sessions["web-02"].Written(); len(got) != 0 {
+		t.Fatalf("web-02 received %q; alt+arrow must not switch panes", got)
+	}
+	if a.Focus() != AreaGrid {
+		t.Fatalf("Focus() = %v; alt+arrow must stay in typing", a.Focus())
 	}
 }
 
@@ -209,6 +228,15 @@ func TestKeystrokeBytes(t *testing.T) {
 		{"ctrl+r", tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl}, "\x12"},
 		{"ctrl+z", tea.KeyPressMsg{Code: 'z', Mod: tea.ModCtrl}, "\x1a"},
 		{"ctrl+space", tea.KeyPressMsg{Code: ' ', Mod: tea.ModCtrl}, "\x00"},
+		{"cmd+left is line start", tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModSuper}, "\x1b[H"},
+		{"cmd+right is line end", tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModSuper}, "\x1b[F"},
+		{"opt+left is word backward", tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModAlt}, "\x1bb"},
+		{"opt+right is word forward", tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModAlt}, "\x1bf"},
+		{"alt+up is the modified arrow", tea.KeyPressMsg{Code: tea.KeyUp, Mod: tea.ModAlt}, "\x1b[1;3A"},
+		{"alt+down is the modified arrow", tea.KeyPressMsg{Code: tea.KeyDown, Mod: tea.ModAlt}, "\x1b[1;3B"},
+		{"alt+b is meta", tea.KeyPressMsg{Code: 'b', Mod: tea.ModAlt}, "\x1bb"},
+		{"alt+f is meta", tea.KeyPressMsg{Code: 'f', Mod: tea.ModAlt}, "\x1bf"},
+		{"alt+dot is meta", tea.KeyPressMsg{Code: '.', Mod: tea.ModAlt}, "\x1b."},
 	}
 
 	for _, tc := range tests {

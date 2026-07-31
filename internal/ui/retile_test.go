@@ -191,7 +191,7 @@ func TestPaneFocusSkipsHoles(t *testing.T) {
 		t.Fatalf("setup: FocusedHost() = %q", a.FocusedHost())
 	}
 
-	a = pressKey(t, a, "alt+right")
+	a = pressKey(t, a, "alt+shift+right")
 	if a.FocusedHost() != "web-03" {
 		t.Fatalf("FocusedHost() = %q, want web-03 (the hole skipped)", a.FocusedHost())
 	}
@@ -199,7 +199,7 @@ func TestPaneFocusSkipsHoles(t *testing.T) {
 		t.Fatalf("PaneIndex() = %d, want 2", a.PaneIndex())
 	}
 
-	a = pressKey(t, a, "alt+left")
+	a = pressKey(t, a, "alt+shift+left")
 	if a.FocusedHost() != "web-01" {
 		t.Fatalf("FocusedHost() = %q, want web-01 (the hole skipped going back)", a.FocusedHost())
 	}
@@ -210,7 +210,7 @@ func TestPaneFocusSkipsHoles(t *testing.T) {
 func TestFocusLeavesTheDepartedHostsHole(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01", "web-02", "web-03")
 	a = pressKey(t, a, "enter")
-	a = pressKey(t, a, "alt+right") // focus web-02
+	a = pressKey(t, a, "alt+shift+right") // focus web-02
 	if a.FocusedHost() != "web-02" {
 		t.Fatalf("setup: FocusedHost() = %q", a.FocusedHost())
 	}

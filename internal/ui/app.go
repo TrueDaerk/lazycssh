@@ -220,6 +220,18 @@ type App struct {
 	fullScreen    bool
 }
 
+// newLineInput builds a text input the way every prompt here uses it: no
+// prompt string, and cmd+arrow (super, macOS) jumping to line start and end
+// alongside the home/end and ctrl+a/ctrl+e the widget already understands.
+func newLineInput(placeholder string) textinput.Model {
+	ti := textinput.New()
+	ti.Placeholder = placeholder
+	ti.Prompt = ""
+	ti.KeyMap.LineStart = key.NewBinding(key.WithKeys("home", "ctrl+a", "super+left"))
+	ti.KeyMap.LineEnd = key.NewBinding(key.WithKeys("end", "ctrl+e", "super+right"))
+	return ti
+}
+
 // NewApp builds the root model.
 func NewApp(cfg Config) App {
 	keys := DefaultKeyMap()
@@ -231,33 +243,13 @@ func NewApp(cfg Config) App {
 	h := help.New()
 	h.Styles = HelpStyles(theme)
 
-	save := textinput.New()
-	save.Placeholder = "session name"
-	save.Prompt = ""
-
-	command := textinput.New()
-	command.Placeholder = "command"
-	command.Prompt = ""
-
-	search := textinput.New()
-	search.Placeholder = "search"
-	search.Prompt = ""
-
-	host := textinput.New()
-	host.Placeholder = "host, user@host:port, web-{01..04}"
-	host.Prompt = ""
-
-	groupName := textinput.New()
-	groupName.Placeholder = "group name"
-	groupName.Prompt = ""
-
-	groupHosts := textinput.New()
-	groupHosts.Placeholder = "host patterns, space separated"
-	groupHosts.Prompt = ""
-
-	split := textinput.New()
-	split.Placeholder = "panes per view"
-	split.Prompt = ""
+	save := newLineInput("session name")
+	command := newLineInput("command")
+	search := newLineInput("search")
+	host := newLineInput("host, user@host:port, web-{01..04}")
+	groupName := newLineInput("group name")
+	groupHosts := newLineInput("host patterns, space separated")
+	split := newLineInput("panes per view")
 
 	a := App{
 		cfg:             cfg,

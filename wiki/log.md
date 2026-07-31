@@ -2,6 +2,15 @@
 
 ## 2026-07-31
 
+- Line editing navigation works while typing to a host (issue #202): `cmd+←`/`cmd+→` (super)
+  are forwarded as home/end, plain `alt+←`/`alt+→` as `ESC b`/`ESC f` (word navigation), and
+  any other unbound `alt+<char>` as meta (`ESC` + character) instead of degrading to the bare
+  letter. Pane movement, which sat on the bare alt+arrows, moved to `shift+alt+arrows` — same
+  chord plus shift, working while typing and from the app level as before. The text inputs
+  (command line, prompts, search) gained `super+left`/`super+right` on their LineStart/LineEnd
+  bindings via a shared constructor. `core/keys.md`, `core/tui.md` and the user docs updated.
+  Version 0.9.41.
+
 - The exit-hook setup line no longer shows in panes (issue #201): the PTY echoes the injected
   line up to twice — kernel echo plus the line editor's redisplay at the first prompt — and both
   copies landed at the top of every pane's scrollback. The stdout pump now runs through an echo
