@@ -178,22 +178,22 @@ func TestSplitShowsTheFirstChunk(t *testing.T) {
 	}
 }
 
-// ctrl+right shows the next chunk and wraps at the ends (issue #147): the
+// ctrl+shift+right shows the next chunk and wraps at the ends (issue #147): the
 // last chunk leads back to the first, and stepping back from the first lands
 // on the last. The status bar's SPLIT indicator says where the wrap landed.
 func TestSplitStepsBetweenChunksAndWraps(t *testing.T) {
 	a, _, _ := splitApp(t)
 	a = applySplitSize(t, a, "5")
 
-	a = pressKey(t, a, "ctrl+right")
+	a = pressKey(t, a, "ctrl+shift+right")
 	if got := strings.Join(a.hostIDs(), ","); got != "web-06,web-07,web-08,web-09,web-10" {
-		t.Fatalf("visible hosts = %q after ctrl+right", got)
+		t.Fatalf("visible hosts = %q after ctrl+shift+right", got)
 	}
 	if got := plain(a.View().Content); !strings.Contains(got, "SPLIT 2/2") {
 		t.Fatalf("the indicator did not follow:\n%s", got)
 	}
 
-	a = pressKey(t, a, "ctrl+right") // past the last chunk: wrap to the first
+	a = pressKey(t, a, "ctrl+shift+right") // past the last chunk: wrap to the first
 	if got := a.hostIDs()[0]; got != "web-01" {
 		t.Fatalf("visible hosts start at %q after wrapping forward", got)
 	}
@@ -201,7 +201,7 @@ func TestSplitStepsBetweenChunksAndWraps(t *testing.T) {
 		t.Fatalf("the indicator did not follow the wrap:\n%s", got)
 	}
 
-	a = pressKey(t, a, "ctrl+left") // before the first chunk: wrap to the last
+	a = pressKey(t, a, "ctrl+shift+left") // before the first chunk: wrap to the last
 	if got := a.hostIDs()[0]; got != "web-06" {
 		t.Fatalf("visible hosts start at %q after wrapping backward", got)
 	}
@@ -265,8 +265,8 @@ func TestSplitComposesWithConnectedOnly(t *testing.T) {
 func TestSplitChunkClampsWhenHostsLeave(t *testing.T) {
 	a, fleet, _ := splitApp(t)
 	a = applySplitSize(t, a, "4") // chunks: 4, 4, 2
-	a = pressKey(t, a, "ctrl+right")
-	a = pressKey(t, a, "ctrl+right") // chunk 3: web-09, web-10
+	a = pressKey(t, a, "ctrl+shift+right")
+	a = pressKey(t, a, "ctrl+shift+right") // chunk 3: web-09, web-10
 
 	fleet.ids = fleet.ids[:4]
 	model, _ := a.Update(HostsChangedMsg{Hosts: fleet.IDs()})
@@ -365,27 +365,27 @@ func TestStepViewPagesInsideTheChunkThenSteps(t *testing.T) {
 		t.Fatalf("setup: FocusedHost() = %q", got)
 	}
 
-	a = pressKey(t, a, "ctrl+right") // page 2 of chunk 1
+	a = pressKey(t, a, "ctrl+shift+right") // page 2 of chunk 1
 	if got := a.FocusedHost(); got != "web-02" {
 		t.Fatalf("FocusedHost() = %q, want the chunk's second page", got)
 	}
 
-	a = pressKey(t, a, "ctrl+right") // chunk 2, page 1
+	a = pressKey(t, a, "ctrl+shift+right") // chunk 2, page 1
 	if got := a.FocusedHost(); got != "web-03" {
 		t.Fatalf("FocusedHost() = %q, want the next chunk", got)
 	}
 
-	a = pressKey(t, a, "ctrl+right") // past the end: wrap to chunk 1, page 1
+	a = pressKey(t, a, "ctrl+shift+right") // past the end: wrap to chunk 1, page 1
 	if got := a.FocusedHost(); got != "web-01" {
 		t.Fatalf("FocusedHost() = %q after wrapping forward", got)
 	}
 
-	a = pressKey(t, a, "ctrl+left") // before the start: last chunk, last page
+	a = pressKey(t, a, "ctrl+shift+left") // before the start: last chunk, last page
 	if got := a.FocusedHost(); got != "web-03" {
 		t.Fatalf("FocusedHost() = %q after wrapping backward", got)
 	}
 
-	a = pressKey(t, a, "ctrl+left") // back into chunk 1, on its last page
+	a = pressKey(t, a, "ctrl+shift+left") // back into chunk 1, on its last page
 	if got := a.FocusedHost(); got != "web-02" {
 		t.Fatalf("FocusedHost() = %q stepping back into the first chunk", got)
 	}

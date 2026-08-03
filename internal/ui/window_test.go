@@ -14,8 +14,8 @@ func pagedApp(t *testing.T, hosts int, width, height int) App {
 	if a.Pages() < 2 {
 		t.Fatalf("setup: %d hosts fit on one page at %dx%d", hosts, width, height)
 	}
-	// ctrl+arrows are app-level commands: while a pane is focused they stay
-	// keystrokes for the host, so the paging tests drive them from outside.
+	// The paging tests drive the app level; paging while typing has its own
+	// test.
 	return pressKey(t, a, "ctrl+]")
 }
 
@@ -36,7 +36,7 @@ func TestPagingMovesTheWindowAndTheFocus(t *testing.T) {
 	a := pagedApp(t, 12, 60, 14)
 	perPage := a.Grid().PerPage
 
-	a = pressKey(t, a, "ctrl+right")
+	a = pressKey(t, a, "ctrl+shift+right")
 	if a.Page() != 1 {
 		t.Fatalf("Page() = %d after paging forward", a.Page())
 	}
@@ -48,7 +48,7 @@ func TestPagingMovesTheWindowAndTheFocus(t *testing.T) {
 		t.Fatalf("FocusedHost() = %q after paging", a.FocusedHost())
 	}
 
-	a = pressKey(t, a, "ctrl+left")
+	a = pressKey(t, a, "ctrl+shift+left")
 	if a.Page() != 0 {
 		t.Fatalf("Page() = %d after paging back", a.Page())
 	}
@@ -62,7 +62,7 @@ func TestPagingMovesTheWindowAndTheFocus(t *testing.T) {
 func TestPagingWrapsAtBothEnds(t *testing.T) {
 	a := pagedApp(t, 12, 60, 14)
 
-	a = pressKey(t, a, "ctrl+left")
+	a = pressKey(t, a, "ctrl+shift+left")
 	if got, want := a.Page(), a.Pages()-1; got != want {
 		t.Fatalf("Page() = %d after wrapping backward, want %d", got, want)
 	}
@@ -70,7 +70,7 @@ func TestPagingWrapsAtBothEnds(t *testing.T) {
 		t.Fatalf("the focused host %q is not on screen after the wrap", a.FocusedHost())
 	}
 
-	a = pressKey(t, a, "ctrl+right")
+	a = pressKey(t, a, "ctrl+shift+right")
 	if a.Page() != 0 {
 		t.Fatalf("Page() = %d after wrapping forward, want 0", a.Page())
 	}
@@ -96,13 +96,43 @@ func TestMovingFocusTurnsThePage(t *testing.T) {
 	}
 }
 
+// Plain ctrl+arrows page nothing any more (issue #208): they are readline word
+// movement for the hosts, and IDEs and window managers swallow them anyway.
+func TestPlainCtrlArrowsDoNotPage(t *testing.T) {
+	a := pagedApp(t, 12, 60, 14)
+
+	a = pressKey(t, a, "ctrl+right")
+	a = pressKey(t, a, "ctrl+left")
+	if a.Page() != 0 {
+		t.Fatalf("Page() = %d; plain ctrl+arrows must not page", a.Page())
+	}
+}
+
+// Paging is pane management like the alt chords (issue #208): ctrl+shift+arrow
+// turns the page while typing too, without leaving the pane's terminal.
+func TestPagingWorksWhileTyping(t *testing.T) {
+	a := resize(t, fleetApp(t, 12), 60, 14)
+	if a.Pages() < 2 {
+		t.Fatal("setup: the hosts fit on one page")
+	}
+	a = focusGrid(t, a)
+
+	a = pressKey(t, a, "ctrl+shift+right")
+	if a.Page() != 1 {
+		t.Fatalf("Page() = %d after paging while typing", a.Page())
+	}
+	if a.Focus() != AreaGrid {
+		t.Fatalf("Focus() = %v; paging must stay in typing", a.Focus())
+	}
+}
+
 // The window is not the working set: paging changes what is on screen, never
 // which hosts a command is about.
 func TestPagingDoesNotChangeTheHostList(t *testing.T) {
 	a := pagedApp(t, 12, 60, 14)
 	before := strings.Join(a.hostIDs(), ",")
 
-	a = pressKey(t, a, "ctrl+right")
+	a = pressKey(t, a, "ctrl+shift+right")
 	if got := strings.Join(a.hostIDs(), ","); got != before {
 		t.Fatalf("paging changed the run's hosts:\n%s\n%s", before, got)
 	}
@@ -129,7 +159,7 @@ func TestPageIndicatorOnlyWhenItPages(t *testing.T) {
 func TestPageClampsWhenTheTerminalChanges(t *testing.T) {
 	a := pagedApp(t, 12, 60, 14)
 	for range 20 {
-		a = pressKey(t, a, "ctrl+right")
+		a = pressKey(t, a, "ctrl+shift+right")
 	}
 	last := a.Page()
 
@@ -171,7 +201,7 @@ func TestPagingWithASinglePageDoesNothing(t *testing.T) {
 	a := pressKey(t, resize(t, fleetApp(t, 4), 200, 60), "ctrl+]")
 	before := a.View().Content
 
-	a = pressKey(t, a, "ctrl+right")
+	a = pressKey(t, a, "ctrl+shift+right")
 	if a.Page() != 0 || a.View().Content != before {
 		t.Fatal("paging moved a window that has only one page")
 	}
@@ -215,10 +245,10 @@ func TestBroadcastStopsAtThePage(t *testing.T) {
 		t.Fatalf("broadcast reaches %q, want the page %q", got, first)
 	}
 
-	a = pressKey(t, a, "ctrl+right")
+	a = pressKey(t, a, "ctrl+shift+right")
 	second := a.WindowHosts()
 	if strings.Join(second, ",") == strings.Join(first, ",") {
-		t.Fatal("ctrl+right did not turn the page")
+		t.Fatal("ctrl+shift+right did not turn the page")
 	}
 	if got := strings.Join(router.Targets(), ","); got != strings.Join(second, ",") {
 		t.Fatalf("broadcast reaches %q after paging, want %q", got, second)

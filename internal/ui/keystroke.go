@@ -23,10 +23,20 @@ const textMods = tea.ModShift | tea.ModCapsLock | tea.ModNumLock
 // word (ESC DEL), option+forward-delete kills the next word (ESC d),
 // cmd+backspace kills to line start (ctrl+u). Shift-augmented variants behave
 // the same; a PTY has no selection to extend.
+//
+// ctrl+arrows are word movement too (issue #208): they are the Linux/Windows
+// readline convention, and since paging moved to ctrl+shift+arrows nothing in
+// lazycssh claims them. The vt emulator's encoder drops ctrl-modified arrows,
+// so they are translated to the ESC b / ESC f readline defaults here — same
+// destination the xterm CSI 1;5D encoding reaches through an inputrc.
 func motionKey(k tea.KeyPressMsg) (term.KeyEvent, bool) {
 	mod := k.Mod &^ textMods
 	isCmd := mod == tea.ModSuper || mod == tea.ModMeta
 	switch {
+	case mod == tea.ModCtrl && k.Code == tea.KeyLeft:
+		return term.KeyEvent{Code: 'b', Mod: term.ModAlt}, true
+	case mod == tea.ModCtrl && k.Code == tea.KeyRight:
+		return term.KeyEvent{Code: 'f', Mod: term.ModAlt}, true
 	case mod == tea.ModAlt && k.Code == tea.KeyLeft:
 		return term.KeyEvent{Code: 'b', Mod: term.ModAlt}, true
 	case mod == tea.ModAlt && k.Code == tea.KeyRight:

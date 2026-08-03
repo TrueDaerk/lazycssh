@@ -26,7 +26,7 @@ not typing into a pane, not in the broadcast bar's edit mode, not in a prompt.
 | ++ctrl+a++ | show only the connected hosts; broadcast follows the visible set |
 | ++ctrl+r++ | re-tile the grid for the current hosts |
 | ++ctrl+s++ | split the grid into chunks of N panes (empty or `0` clears) |
-| ++ctrl+right++ / ++ctrl+left++ | next / previous screenful: pages, then split chunks, wrapping |
+| ++ctrl+shift+right++ / ++ctrl+shift+left++ | next / previous screenful: pages, then split chunks, wrapping; works while typing too. Plain ++ctrl+right++ / ++ctrl+left++ stay word movement for the hosts |
 | ++a++ | select every host |
 | ++i++ | invert the selection |
 | ++c++ | clear the selection |
