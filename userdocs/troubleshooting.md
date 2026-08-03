@@ -76,11 +76,21 @@ The grid never shrinks a pane below what its host needs (45×16). Past that
 point it **pages** instead, and the overflow footer says so:
 
 ```
-+12 more hosts — ctrl+→ · page 1/3 · 2 more sessions — [3]
++12 hosts — ctrl+shift+→ · page 1/3 · 2 more sessions — [3]
 ```
 
-++ctrl+right++ / ++ctrl+left++ move a screenful at a time. Paging changes what
+++ctrl+shift+right++ / ++ctrl+shift+left++ move a screenful at a time. Paging changes what
 you see, never who receives a keystroke.
+
+## "ctrl+shift+arrows do nothing"
+
+Paging needs the terminal to deliver ++ctrl+shift+right++ as the xterm
+`CSI 1;6C` encoding, which most terminals do out of the box. Terminal.app on
+macOS is the known exception: its default keyboard profile has no entry for
+ctrl+shift+arrows, so the chord never reaches lazycssh. Add one under
+Settings → Profiles → Keyboard (send `\033[1;6C` for ctrl+shift+→ and
+`\033[1;6D` for ctrl+shift+←), or use iTerm2/kitty/WezTerm, which deliver the
+chord unconfigured.
 
 ## "A pane is in the wrong place / there is an empty frame"
 

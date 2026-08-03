@@ -61,7 +61,7 @@ and nothing on the pages behind them, and paging moves the broadcast with it.
 screen (++f++) is a zoom — it keeps its page's targets rather than silently
 turning `all` into a one-host send.
 
-- ++ctrl+right++ / ++ctrl+left++ are the single navigator for "the next
+- ++ctrl+shift+right++ / ++ctrl+shift+left++ are the single navigator for "the next
   screenful": a whole page, and at a chunk boundary of an active split, the next
   chunk, wrapping at both ends. Pane focus follows onto the new screenful, so
   the pane that receives a keystroke is one you can see.
@@ -75,14 +75,15 @@ turning `all` into a one-host send.
   the grid's bottom line and says so, naming the navigation for each part:
 
   ```
-  +12 more hosts — ctrl+→ · page 1/3 · 2 more sessions — [3]
+  +12 hosts — ctrl+shift+→ · page 1/3 · 2 more sessions — [3]
   ```
 
   The visible panes must never read as the whole run.
 
-While a pane or the broadcast bar has the keyboard, ++ctrl+left++ and
-++ctrl+right++ stay keystrokes for the hosts (readline word movement); paging is
-an app-level command.
+Paging works while typing too, like the other pane-management chords. Plain
+++ctrl+left++ and ++ctrl+right++ are never claimed: they stay keystrokes for the
+hosts (readline word movement) in every context — IDEs and window managers tend
+to swallow them before lazycssh sees them anyway.
 
 ## Narrowing what is on screen
 
@@ -94,7 +95,7 @@ reconnects reappears without a keypress. A filter that hides every pane renders
 
 **Split** — ++ctrl+s++ asks for a number and cuts the visible hosts into
 consecutive chunks of that size. Ten hosts split by five shows the first five
-terminals; ++ctrl+right++ pages through the chunk and then moves on to the next.
+terminals; ++ctrl+shift+right++ pages through the chunk and then moves on to the next.
 The status bar carries `SPLIT 1/2 (5 hosts)` for as long as the split narrows
 anything. An empty prompt or `0` clears it; ++esc++ keeps it. Splits compose
 with the connected-only filter — chunks are cut from the filtered list.

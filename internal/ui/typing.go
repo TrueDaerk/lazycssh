@@ -95,6 +95,15 @@ func (a App) handlePaneKey(msg tea.KeyPressMsg) (App, tea.Cmd, bool) {
 		return a.enterPane().movePane(-a.grid().Columns).followFocus(), nil, true
 	case key.Matches(msg, a.keys.PaneDown):
 		return a.enterPane().movePane(+a.grid().Columns).followFocus(), nil, true
+	// Paging works while typing too (issue #208): ctrl+shift+arrows are
+	// pane management like the alt chords, and without these cases the
+	// shift-stripping in motionKey would turn them into word movement.
+	case key.Matches(msg, a.keys.NextSplit):
+		next, cmd := a.stepView(+1)
+		return next, cmd, true
+	case key.Matches(msg, a.keys.PrevSplit):
+		next, cmd := a.stepView(-1)
+		return next, cmd, true
 	case key.Matches(msg, a.keys.ToggleSelect):
 		// The selection lives in the router, keyed by host identifier, so it
 		// survives a reconnect and a page turn.

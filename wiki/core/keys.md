@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-08-01T00:00:00Z
+timestamp: 2026-08-03T00:00:00Z
 ---
 
 # Keymap and help
@@ -49,7 +49,7 @@ duplicate still fails.
 | `ctrl+a` | global (app level) | show only the connected hosts; broadcast follows the visible set. In the broadcast bar's edit mode it is reachable as `ctrl+a ctrl+a` via the escape prefix; view mode reaches it directly |
 | `ctrl+r` | global (app level) | re-tile the grid for the current hosts (a departure keeps the shape) |
 | `ctrl+s` | global (app level) | split the grid into chunks of N panes (prompt; empty or 0 clears) |
-| `ctrl+→` / `ctrl+←` | global (app level) | next / previous screenful: pages, then split chunks, wrapping at the ends |
+| `ctrl+shift+→` / `ctrl+shift+←` | global (works while typing too) | next / previous screenful: pages, then split chunks, wrapping at the ends. Plain `ctrl+arrows` are never claimed — they stay readline word movement for the hosts, and IDEs and window managers swallow them anyway (issue #208) |
 | `a` | global (app level) | select every host |
 | `i` | global (app level) | invert the selection |
 | `c` | global (app level) | clear the selection |
@@ -63,7 +63,7 @@ duplicate still fails.
 | `x` | Sessions panel | end the session under the cursor, after `y/n`: ctrl+c and ctrl+d to its connected hosts |
 | `[` / `]` | sidebar | previous / next chunk of hosts |
 | any plain key | panes | **forwarded to the focused host** — letters, enter, tab, esc, ctrl+c, arrows, all of it. Each key goes through the host's own [terminal emulator](./terminal.md) (issue #206), so the bytes honour that host's modes (application cursor keys, keypad) |
-| `alt+←`/`alt+→` | panes | word backward / forward on the remote line: `ESC b`/`ESC f` (opt+arrow on macOS) |
+| `alt+←`/`alt+→`, `ctrl+←`/`ctrl+→` | panes | word backward / forward on the remote line: `ESC b`/`ESC f` (opt+arrow on macOS, ctrl+arrow on Linux/Windows; issue #208) |
 | `super+←`/`super+→` | panes | line start / end on the remote line: `ctrl+a`/`ctrl+e` (cmd+arrow on macOS) |
 | `alt+backspace` / `alt+delete` | panes | kill the previous / next word: `ESC DEL` / `ESC d` (opt+backspace, opt+forward-delete) |
 | `super+backspace` | panes | kill to line start: `ctrl+u` (cmd+backspace) |

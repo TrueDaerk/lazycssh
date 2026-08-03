@@ -171,10 +171,14 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("ctrl+r", "re-tile the grid for the current hosts")),
 		Split: key.NewBinding(key.WithKeys("ctrl+s"),
 			key.WithHelp("ctrl+s", "split the grid into chunks of N panes")),
-		NextSplit: key.NewBinding(key.WithKeys("ctrl+right"),
-			key.WithHelp("ctrl+→", "next screenful (page, then chunk; wraps)")),
-		PrevSplit: key.NewBinding(key.WithKeys("ctrl+left"),
-			key.WithHelp("ctrl+←", "previous screenful (page, then chunk; wraps)")),
+		// Paging takes shift on top of ctrl: plain ctrl+arrows are swallowed
+		// by IDEs (pane switching) and window managers (workspace switching)
+		// before lazycssh ever sees them, and they are readline word movement,
+		// so they stay keystrokes for the hosts in every context (issue #208).
+		NextSplit: key.NewBinding(key.WithKeys("ctrl+shift+right"),
+			key.WithHelp("ctrl+shift+→", "next screenful (page, then chunk; wraps)")),
+		PrevSplit: key.NewBinding(key.WithKeys("ctrl+shift+left"),
+			key.WithHelp("ctrl+shift+←", "previous screenful (page, then chunk; wraps)")),
 
 		SelectAll: key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "select every host")),
 		Invert:    key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "invert the selection")),

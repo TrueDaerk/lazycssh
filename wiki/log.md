@@ -1,5 +1,18 @@
 # Log
 
+## 2026-08-03
+
+- Screenful paging moved from `ctrl+arrows` to `ctrl+shift+arrows` (issue #208): plain
+  `ctrl+←`/`ctrl+→` never reached lazycssh in common setups — IDEs switch editor panes on them,
+  GNOME/KDE switch workspaces — leaving a navigator that silently did nothing. The new chords
+  arrive through the standard xterm `CSI 1;6D/C` encoding, work on every keyboard layout, and are
+  handled as pane-management chords, so paging now works while typing too. Plain ctrl+arrows are
+  never claimed any more: `motionKey` translates them to readline word movement (`ESC b`/`ESC f`,
+  the Linux/Windows convention) because the vt emulator's encoder drops ctrl-modified arrows.
+  The overflow footer says `ctrl+shift+→` and lost the word "more" to keep fitting narrow grids.
+  `core/keys.md`, `core/tui.md` and the user docs updated; troubleshooting gained a Terminal.app
+  note (its default profile does not send the chord). Version 0.10.1.
+
 ## 2026-08-01
 
 - Panes are real terminals (issue #206): the hand-rolled scrollback line discipline

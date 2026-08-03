@@ -238,6 +238,11 @@ func TestTypingKeyEncodings(t *testing.T) {
 		{"cmd+left is line start", tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModSuper}, "\x01"},
 		{"cmd+right is line end", tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModSuper}, "\x05"},
 		{"cmd+backspace kills to line start", tea.KeyPressMsg{Code: tea.KeyBackspace, Mod: tea.ModSuper}, "\x15"},
+		// ctrl+arrows are readline word movement, not paging (issue #208):
+		// nothing in lazycssh claims them, and they reach the host as the
+		// ESC b / ESC f readline defaults.
+		{"ctrl+left is word backward", tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModCtrl}, "\x1bb"},
+		{"ctrl+right is word forward", tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModCtrl}, "\x1bf"},
 		{"alt+b is meta", tea.KeyPressMsg{Code: 'b', Mod: tea.ModAlt}, "\x1bb"},
 		{"alt+dot is meta", tea.KeyPressMsg{Code: '.', Mod: tea.ModAlt}, "\x1b."},
 	}

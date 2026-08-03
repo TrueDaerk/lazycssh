@@ -36,8 +36,8 @@ func (a App) gridArea() Rect {
 
 // overflowFooter renders the footer line: what is hidden, and the key that
 // reaches it. Each part names its own navigation, because "more" means three
-// different keys depending on what is hiding it - a page (ctrl+→), a split
-// chunk (ctrl+→), another session (the Sessions panel).
+// different keys depending on what is hiding it - a page (ctrl+shift+→), a split
+// chunk (ctrl+shift+→), another session (the Sessions panel).
 func (a App) overflowFooter() string {
 	var parts []string
 
@@ -46,14 +46,14 @@ func (a App) overflowFooter() string {
 		// Holes are not hosts: only real machines are worth announcing.
 		hidden := len(nonHoles(a.hostIDs())) - len(nonHoles(a.WindowHosts()))
 		parts = append(parts, a.theme.StatusWarning.Render(fmt.Sprintf(
-			"+%d more host%s — ctrl+→ · page %d/%d",
+			"+%d host%s — ctrl+shift+→ · page %d/%d",
 			hidden, plural(hidden), a.clampedPage(g)+1, g.Pages)))
 	}
 
 	if chunks := a.splitChunks(); chunks > 1 {
 		hidden := len(nonHoles(a.filteredHosts())) - len(nonHoles(a.visibleHosts()))
 		parts = append(parts, a.theme.StatusWarning.Render(fmt.Sprintf(
-			"+%d host%s in other chunks — ctrl+→", hidden, plural(hidden))))
+			"+%d host%s in other chunks — ctrl+shift+→", hidden, plural(hidden))))
 	}
 
 	if others := len(a.open) - 1; others > 0 {
