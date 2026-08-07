@@ -1,5 +1,15 @@
 # Log
 
+## 2026-08-07
+
+- Issue creation aligned with the ike process (issue #210): `contributing/workflow.md` now
+  mandates a duplicate check (open **and** closed issues, epic task lists; reopen instead of
+  re-filing), body conventions (English, `- [ ]` acceptance checklist including tests/wiki,
+  `Depends on #N`, sub-issues link their epic), the one-task scope rule, one GitHub milestone
+  per epic, and out-of-scope discoveries as new issues. `contributing/issue-types.md` gained the
+  milestone rule under `epic`. ike's `roadmap:NNNN` stream labels were not ported — lazycssh has
+  no roadmap streams. Version 0.10.2.
+
 ## 2026-08-03
 
 - Screenful paging moved from `ctrl+arrows` to `ctrl+shift+arrows` (issue #208): plain

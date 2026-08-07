@@ -3,7 +3,7 @@ type: reference
 title: Issue types
 description: The four issue type labels used in lazycssh — epic, idea, bug, enhancement — and what each one commits to.
 tags: [github, issues, labels, process]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-08-07T00:00:00Z
 ---
 
 # Issue types
@@ -33,7 +33,12 @@ An epic body holds:
 - a task list of sub-issues (`- [ ] #12`), kept up to date as they are created and closed,
 - the acceptance criteria for the epic as a whole.
 
-The epic closes when its last sub-issue closes. An epic is never closed by a PR of its own.
+Each epic gets a **GitHub milestone** of its own, assigned to the epic and all its sub-issues;
+its progress bar is the progress tracking — see
+[Development workflow](./workflow.md).
+
+The epic closes when its last sub-issue closes — then its milestone is closed too. An epic is
+never closed by a PR of its own.
 
 ## `idea`
 
