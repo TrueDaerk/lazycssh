@@ -3,7 +3,7 @@ type: guide
 title: Development workflow
 description: Issue-driven development — how work is created, branched, reviewed, merged and cleaned up.
 tags: [workflow, github, git, process]
-timestamp: 2026-07-31T21:00:00Z
+timestamp: 2026-08-07T00:00:00Z
 ---
 
 # Development workflow
@@ -26,19 +26,40 @@ Branch name pattern: `<type>/<issue-number>-<short-slug>`. Types follow the usua
 
 ## Creating issues
 
-An issue is written before the work, not after. It states:
+An issue is written before the work, not after. Issues that only exist to describe a commit
+already written are not the workflow.
 
-- the user-visible problem or the capability being added,
-- the acceptance criteria that let the PR be called done,
-- any constraint that shapes the design (security, backpressure, broadcast semantics).
+### Before creating: check for duplicates
 
-Issues that only exist to describe a commit already written are not the workflow.
+1. Search open **and** closed issues: `gh issue list --state all --search "<keywords>"`.
+2. Skim the task list of any epic the topic belongs to.
+3. If a matching issue exists, extend or comment on it instead of opening a new one; if it
+   exists but is closed and the problem is back, reopen it.
 
-Every issue carries exactly one **type label** — see [Issue types](./issue-types.md).
+### Conventions
+
+- **Title and body in English.**
+- **Body:** state the user-visible problem or the capability being added, plus any constraint
+  that shapes the design (security, backpressure, broadcast semantics). List concrete
+  acceptance criteria as a `- [ ]` checklist — they are what lets the PR be called done.
+  Include tests and wiki updates in the checklist when they apply. Name dependencies by issue
+  number (`Depends on #12`). Sub-issues link their epic (`epic: #<n>`).
+- **Scope:** one issue = one independently completable, reviewable task. Split rather than
+  batch.
+- Every issue carries exactly one **type label** — see [Issue types](./issue-types.md).
 
 ```sh
 gh issue create --label enhancement --title "..." --body "..."
 ```
+
+### Epics and milestones
+
+An epic gets a **GitHub milestone** of its own, assigned to the epic and all its sub-issues;
+the milestone's progress bar is the progress tracking. New sub-issues are added to the epic's
+task list and its milestone. When the last sub-issue closes, close the epic and its milestone.
+
+Discoveries out of scope while working an issue become **new** issues (after the duplicate
+check), not scope creep on the current one.
 
 ## Closing sequence
 
