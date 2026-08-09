@@ -86,9 +86,10 @@ In **edit mode**, every keystroke goes to the target set. The bar keeps
 
 | Key | Action |
 |---|---|
+| ++ctrl+a++ ++ctrl+a++ | send one literal ++ctrl+a++ to the targets — the GNU-screen double press |
+| ++ctrl+a++ ++a++ | the same literal, matching `screen`'s own ++ctrl+a++ ++a++ |
 | ++ctrl+a++ ++escape++ | switch to view mode |
-| ++ctrl+a++ ++a++ | send one literal ++ctrl+a++ to the targets |
-| ++ctrl+a++ *other* | run that key as a one-shot lazycssh command (++ctrl+a++ ++question++ opens the help, ++ctrl+a++ ++ctrl+r++ re-tiles) |
+| ++ctrl+a++ *other* | forward that key to the targets as a normal keystroke |
 | ++enter++ | send a carriage return and record the assembled line |
 
 In **view mode** every key is an app-level command instead, and nothing is sent.

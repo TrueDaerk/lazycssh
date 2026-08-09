@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-08-09T12:00:00Z
+timestamp: 2026-08-09T13:00:00Z
 ---
 
 # Keymap and help
@@ -68,7 +68,7 @@ duplicate still fails.
 | `alt+backspace` / `alt+delete` | panes | kill the previous / next word: `ESC DEL` / `ESC d` (opt+backspace, opt+forward-delete) |
 | `super+backspace` | panes | kill to line start: `ctrl+u` (cmd+backspace) |
 | `alt+<char>` | panes (unbound chords) | meta: `ESC` + character, so `alt+b`/`alt+f`/`alt+.` reach readline |
-| `ctrl+a` | broadcast bar (edit mode) | escape prefix: the next key is a one-shot lazycssh command (`ctrl+a ?` help, `ctrl+a ctrl+r` re-tile); `a` sends a literal `ctrl+a`, `esc` switches to view mode, an unbound key is a named no-op |
+| `ctrl+a` | broadcast bar (edit mode) | escape prefix, forwarding by default (issue #214): `ctrl+a ctrl+a` and `ctrl+a a` send a literal `ctrl+a` for a remote `screen`/`tmux`, `esc` switches to view mode, and **any other key is forwarded to the targets** as a keystroke |
 | `enter` | broadcast bar (view mode) | back to edit mode |
 | `ctrl+]` | panes | stop typing: back to the app level, on the Status panel |
 | `alt+space` | panes (and app level) | toggle the focused pane's host in the selection |

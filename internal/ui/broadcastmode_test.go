@@ -3,6 +3,8 @@ package ui
 import (
 	"strings"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 // ctrl+a esc switches the bar to view mode; neither key of the sequence
@@ -58,23 +60,57 @@ func TestBroadcastBarCtrlAASendsTheLiteral(t *testing.T) {
 	}
 }
 
-// An unknown key after ctrl+a cancels the prefix and says so; neither key is
-// sent, and the bar is back to normal for the next keystroke.
-func TestBroadcastBarUnknownSequenceCancelsAndSaysSo(t *testing.T) {
+// Issue #214: the prefix forwards by default. A key that is neither the
+// literal nor esc reaches the targets as the keystroke it is, runs no lazycssh
+// command, and stays out of the assembled line.
+func TestBroadcastBarPrefixForwardsOtherKeys(t *testing.T) {
 	a, sender := barApp(t, "web-01")
 
 	a = pressKey(t, a, "ctrl+a")
-	a = pressKey(t, a, "x")
-	if len(sender.sent) != 0 {
-		t.Fatalf("a cancelled sequence was forwarded: %q", sender.sent)
+	a = pressKey(t, a, "c")
+	if got := strings.Join(sender.sent, ","); got != "<c>" {
+		t.Fatalf("sent = %q, want the prefixed key forwarded", got)
 	}
-	if !strings.Contains(a.LastDelivery(), "nothing was sent") {
-		t.Fatalf("LastDelivery() = %q, want a note that nothing was sent", a.LastDelivery())
+	if a.broadcastPending || a.broadcastView {
+		t.Fatal("the forward did not return the bar to plain edit mode")
+	}
+	if a.BroadcastLine() != "" {
+		t.Fatalf("a prefixed key entered the assembled line: %q", a.BroadcastLine())
 	}
 
 	a = pressKey(t, a, "l")
-	if got := strings.Join(sender.sent, ","); got != "<l>" {
-		t.Fatalf("sent = %q, want edit mode to resume after the cancel", got)
+	if got := strings.Join(sender.sent, ","); got != "<c>,<l>" {
+		t.Fatalf("sent = %q, want edit mode to resume after the prefix", got)
+	}
+}
+
+// A prefixed app chord is a keystroke too: ctrl+a ? forwards the question mark
+// instead of opening the help, because the prefix no longer dispatches
+// commands (superseding issue #148).
+func TestBroadcastBarPrefixDoesNotRunAppCommands(t *testing.T) {
+	a, sender := barApp(t, "web-01", "web-02")
+
+	a = pressKey(t, a, "ctrl+a")
+	a = pressKey(t, a, "?")
+	if a.HelpVisible() {
+		t.Fatal("ctrl+a ? still ran the help command")
+	}
+	if got := strings.Join(sender.sent, ","); got != "<?>" {
+		t.Fatalf("sent = %q, want the chord forwarded to the hosts", got)
+	}
+	if a.broadcastPending {
+		t.Fatal("the prefix survived its second key")
+	}
+}
+
+// Non-text keys forward through the same encoding as plain typing.
+func TestBroadcastBarPrefixForwardsArrowKeys(t *testing.T) {
+	a, sender := barApp(t, "web-01")
+
+	a = pressKey(t, a, "ctrl+a")
+	press(t, a, tea.KeyPressMsg{Code: tea.KeyRight})
+	if got := strings.Join(sender.sent, ","); got != "<right>" {
+		t.Fatalf("sent = %q, want the arrow forwarded", got)
 	}
 }
 
@@ -154,22 +190,22 @@ func TestBroadcastBarPanelKeyResetsViewMode(t *testing.T) {
 	}
 }
 
-// Issue #148: ctrl+a is a general "the next key is for lazycssh" prefix. An
-// app chord after it runs the app command - ctrl+a ? opens the help - and
-// sends nothing to the hosts.
-func TestBroadcastBarPrefixDispatchesAppCommands(t *testing.T) {
+// ctrl+a ctrl+a is the GNU-screen double press: exactly one literal ctrl+a
+// reaches the targets, which is how ctrl+a ctrl+a c opens a screen window on
+// every host (issue #214).
+func TestBroadcastBarCtrlACtrlASendsTheLiteral(t *testing.T) {
 	a, sender := barApp(t, "web-01", "web-02")
 
 	a = pressKey(t, a, "ctrl+a")
-	a = pressKey(t, a, "?")
-	if !a.HelpVisible() {
-		t.Fatal("ctrl+a ? did not reach the help command")
+	a = pressKey(t, a, "ctrl+a")
+	if got := strings.Join(sender.sent, ","); got != "\x01" {
+		t.Fatalf("sent = %q, want exactly one literal ctrl+a", got)
 	}
-	if len(sender.sent) != 0 {
-		t.Fatalf("the prefixed command was forwarded: %q", sender.sent)
+	if a.broadcastPending || a.broadcastView {
+		t.Fatal("the double press did not return the bar to plain edit mode")
 	}
-	if a.broadcastPending {
-		t.Fatal("the prefix survived its second key")
+	if a.BroadcastLine() != "" {
+		t.Fatalf("the literal leaked into the echo line: %q", a.BroadcastLine())
 	}
 }
 
@@ -181,19 +217,21 @@ func TestBroadcastBarPrefixDoesNotChain(t *testing.T) {
 	a = pressKey(t, a, "ctrl+a")
 	a = pressKey(t, a, "ctrl+a")
 	a = pressKey(t, a, "a")
-	if got := strings.Join(sender.sent, ","); got != "<a>" {
+	if got := strings.Join(sender.sent, ","); got != "\x01,<a>" {
 		t.Fatalf("sent = %q, want the plain letter after the one-shot prefix", got)
 	}
 }
 
-// ctrl+a ? opens the help overlay from inside the bar.
-func TestBroadcastBarPrefixOpensHelp(t *testing.T) {
+// esc is still the way to the app commands from inside the bar: view mode
+// opens the help overlay and forwards nothing.
+func TestBroadcastBarViewModeOpensHelp(t *testing.T) {
 	a, sender := barApp(t, "web-01")
 
 	a = pressKey(t, a, "ctrl+a")
+	a = pressKey(t, a, "esc")
 	a = pressKey(t, a, "?")
 	if !a.showHelp {
-		t.Fatal("ctrl+a ? did not open the help overlay")
+		t.Fatal("? in view mode did not open the help overlay")
 	}
 	if len(sender.sent) != 0 {
 		t.Fatalf("the help chord was forwarded: %q", sender.sent)

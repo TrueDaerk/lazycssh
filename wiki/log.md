@@ -2,6 +2,16 @@
 
 ## 2026-08-09
 
+- The broadcast bar's `ctrl+a` prefix now **forwards by default** (issue #214), superseding the
+  one-shot command dispatch of issue #148. `ctrl+a ctrl+a` (freed by issue #213) and `ctrl+a a`
+  send one literal `0x01` via `sendBroadcastRaw`; `ctrl+a esc` still enters view mode; every
+  other key after the prefix goes to the targets through the same `paneKeyEvents` +
+  `Sender.SendKey` path as plain typing, extracted into `sendBroadcastKey`/`forwardBroadcastKey`,
+  and stays out of the assembled line the recorder logs. `matchesAppBinding` and the "has no
+  lazycssh binding" no-op are gone — view mode is now the way to run an app command from inside
+  the bar. Binding help and the pending-prefix status hint reworded; `core/tui.md`,
+  `core/keys.md` and the user docs updated. Version 0.10.5.
+
 - Removed the `ctrl+a` connected-only visibility filter (issue #213): the `ConnectedOnly`
   binding, the `connectedOnly` model field, `toggleConnectedOnly`, the `ConnectedOnly()`
   accessor, the `CONNECTED HOSTS ONLY` status flag and the "no connected hosts" empty state are

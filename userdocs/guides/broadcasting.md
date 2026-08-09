@@ -68,15 +68,22 @@ Inside the bar, ++ctrl+a++ is a csshx-style escape prefix:
 
 | Sequence | Effect |
 |---|---|
+| ++ctrl+a++ ++ctrl+a++ | send one literal ++ctrl+a++ to the targets — the GNU-screen double press |
+| ++ctrl+a++ ++a++ | the same literal, matching `screen`'s own ++ctrl+a++ ++a++ |
 | ++ctrl+a++ ++escape++ | switch to view mode |
-| ++ctrl+a++ ++a++ | send one literal ++ctrl+a++ to the targets — how a remote `screen` or `tmux` stays reachable |
-| ++ctrl+a++ *anything else* | run that key as a one-shot lazycssh command — ++ctrl+a++ ++question++ opens the help, ++ctrl+a++ ++right++ pages, ++ctrl+a++ ++q++ quits |
+| ++ctrl+a++ *anything else* | forward that key to the targets as a normal keystroke |
 
-The prefix is cleared before the second key is handled, so it cannot chain, and a
-key with no app binding is a no-op the status bar names rather than a silently
-swallowed keystroke. Nothing after the prefix reaches the hosts except the
-literal `a`. While a prefix is armed the status bar says so:
-`ctrl+a… next key = command · a = literal · esc = view`.
+The prefix exists for the remote multiplexer, so it forwards by default: press
+++ctrl+a++ ++ctrl+a++ then ++c++ to open a `screen` window on every host, or
+++ctrl+a++ ++ctrl+a++ then ++n++ to step them all to the next one. Only those
+three sequences are kept by lazycssh; everything else after the prefix reaches
+the hosts. The prefix is cleared before the second key is handled, so it cannot
+chain, and a prefixed key never enters the recorded command line. While a prefix
+is armed the status bar says so:
+`ctrl+a… next key goes to the hosts · ctrl+a/a = literal · esc = view`.
+
+App commands from inside the bar go through view mode (++ctrl+a++ ++escape++),
+which is the one place keys are commands instead of keystrokes.
 
 ## One command — the `:` line
 

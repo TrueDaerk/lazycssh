@@ -18,8 +18,9 @@ import (
 // The bar keeps the reserved escape and the pane-management chords for itself,
 // exactly like a focused pane, plus the csshx-style ctrl+a prefix: ctrl+a esc
 // switches the bar to view mode, where keys are commands rather than
-// keystrokes, and ctrl+a a sends the literal ctrl+a a remote screen or tmux
-// needs.
+// keystrokes, ctrl+a ctrl+a and ctrl+a a send the literal ctrl+a a remote
+// screen or tmux needs, and anything else after the prefix is forwarded to the
+// targets unchanged.
 func (a App) handleBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, a.keys.LeaveTyping) {
 		a.focus = AreaSidebar
@@ -59,14 +60,7 @@ func (a App) handleBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// be typed. The assembled line is recorded on enter instead, because a
 	// whole command is what the audit trail is for. Each key goes out as an
 	// event and every host's emulator encodes it for that host (issue #206).
-	var delivery broadcast.Delivery
-	var err error
-	for _, ev := range paneKeyEvents(msg) {
-		delivery, err = a.cfg.Sender.SendKey(ev)
-		if err != nil {
-			break
-		}
-	}
+	delivery, err := a.sendBroadcastKey(msg)
 	switch {
 	case err != nil:
 		a.lastDelivery = delivery.String() + ": " + err.Error()
@@ -101,29 +95,65 @@ func (a App) handleBroadcastViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return a.handleAppKey(msg)
 }
 
-// resolveBroadcastEscape is the key after ctrl+a: esc switches to view mode, a
-// sends a literal ctrl+a to the targets, and **any other key is a one-shot
-// lazycssh command** (issue #148) — dispatched to the app keymap exactly as if
-// the bar did not have the keyboard, so ctrl+a ? opens the help and
-// ctrl+a → pages without leaving the bar. The prefix is cleared
-// before the second key is handled, so it cannot chain. A key with no app
-// binding is a no-op that says so, because a silently swallowed keystroke
-// reads as a hung bar; nothing after the prefix ever reaches the hosts except
-// the literal `a`.
+// resolveBroadcastEscape is the key after ctrl+a. The prefix exists for the
+// remote multiplexer, so it forwards by default (issue #214): exactly three
+// keys are kept by lazycssh and everything else reaches the targets as the
+// keystroke it is.
+//
+//   - ctrl+a — one literal ctrl+a, the GNU-screen double press; ctrl+a ctrl+a c
+//     opens a screen window on every host.
+//   - a — the same literal, matching screen's own ctrl+a a.
+//   - esc — switch the bar to view mode, which is now the only way to run an
+//     app command from inside the bar; it supersedes the one-shot dispatch of
+//     issue #148.
+//
+// The prefix is cleared before the second key is handled, so it cannot chain.
+// Forwarded keys take the same send path as plain typing but stay out of the
+// assembled line: a prefixed key is a control sequence, not command text.
 func (a App) resolveBroadcastEscape(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	a.broadcastPending = false
 	switch msg.String() {
 	case "esc":
 		a.broadcastView = true
 		return a, nil
-	case "a":
+	case "ctrl+a", "a":
 		return a.sendBroadcastRaw([]byte{0x01})
 	}
-	if !a.keys.matchesAppBinding(msg) {
-		a.lastDelivery = "ctrl+a " + msg.String() + " has no lazycssh binding — nothing was sent"
+	return a.forwardBroadcastKey(msg)
+}
+
+// forwardBroadcastKey sends one keystroke to the targets without touching the
+// assembled line — the prefix passthrough. Plain typing goes through
+// [App.handleBroadcastKey] instead, which also tracks the line and feeds
+// pending auth prompts.
+func (a App) forwardBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if a.cfg.Sender == nil {
+		a.lastDelivery = "no transport: nothing was sent"
 		return a, nil
 	}
-	return a.handleAppKey(msg)
+	delivery, err := a.sendBroadcastKey(msg)
+	switch {
+	case err != nil:
+		a.lastDelivery = delivery.String() + ": " + err.Error()
+	case delivery.Delivered == 0:
+		a.lastDelivery = delivery.String() + " — no host can take input right now"
+	}
+	return a, nil
+}
+
+// sendBroadcastKey fans one keystroke out as events, so every host's emulator
+// encodes it for that host (issue #206). The last delivery wins: a key that
+// expands to several events reaches the same target set for all of them.
+func (a App) sendBroadcastKey(msg tea.KeyPressMsg) (broadcast.Delivery, error) {
+	var delivery broadcast.Delivery
+	var err error
+	for _, ev := range paneKeyEvents(msg) {
+		delivery, err = a.cfg.Sender.SendKey(ev)
+		if err != nil {
+			break
+		}
+	}
+	return delivery, err
 }
 
 // sendBroadcastRaw fans raw bytes out to the targets — the same path a typed
