@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -72,14 +73,14 @@ func (a App) handleAuthKey(id string, msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 	if q == nil {
 		return a, nil
 	}
-	switch msg.String() {
-	case "enter":
+	switch {
+	case key.Matches(msg, a.keys.PromptSubmit):
 		return a.submitAuth(id)
-	case "esc", "ctrl+c":
+	case key.Matches(msg, a.keys.AuthCancel):
 		return a.cancelAuth(id)
-	case "ctrl+q":
+	case key.Matches(msg, a.keys.ForceQuit):
 		return a, tea.Quit
-	case "backspace":
+	case key.Matches(msg, a.keys.PromptErase):
 		if n := len(q.answer); n > 0 {
 			q.answer = q.answer[:n-1]
 		}
@@ -149,12 +150,15 @@ func (a App) feedAuthBroadcast(msg tea.KeyPressMsg) (App, []tea.Cmd, int) {
 			continue
 		}
 		fed++
-		switch msg.String() {
-		case "enter":
+		switch {
+		case key.Matches(msg, a.keys.PromptSubmit):
 			var cmd tea.Cmd
 			a, cmd = a.submitAuth(id)
 			cmds = append(cmds, cmd)
-		case "ctrl+c":
+		case key.Matches(msg, a.keys.AuthCancel):
+			// esc lands here too, not in the default branch: cancelling
+			// returns a Cmd that answers the waiting session, and dropping it
+			// would leave that host's prompt hanging.
 			var cmd tea.Cmd
 			a, cmd = a.cancelAuth(id)
 			cmds = append(cmds, cmd)

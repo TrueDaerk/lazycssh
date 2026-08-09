@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/charmbracelet/x/ansi"
@@ -142,8 +143,8 @@ func (a App) openSearch() App {
 // open, for the same reason the filter does: a term containing any letter must
 // be typeable without acting on a pane.
 func (a App) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "enter":
+	switch {
+	case key.Matches(msg, a.keys.PromptSubmit):
 		a.searchInput.Blur()
 		a.searchTerm = strings.TrimSpace(a.searchInput.Value())
 		if a.searchTerm == "" {
@@ -152,7 +153,7 @@ func (a App) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Land on the newest match: the reader is almost always hunting the
 		// error that just happened.
 		return a.gotoMatch(a.newestMatch(a.FocusedHost())), nil
-	case "esc":
+	case key.Matches(msg, a.keys.PromptCancel):
 		a.searchInput.Blur()
 		a.searchInput.SetValue("")
 		return a, nil

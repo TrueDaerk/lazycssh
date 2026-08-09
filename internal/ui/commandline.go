@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
@@ -77,14 +78,14 @@ func (a App) closeCommandLine() App {
 // must not switch the broadcast mode or open a second prompt, and a `ctrl+c`
 // while editing must not reach forty machines.
 func (a App) handleCommandLineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "enter":
+	switch {
+	case key.Matches(msg, a.keys.PromptSubmit):
 		return a.sendCommandLine()
-	case "esc":
+	case key.Matches(msg, a.keys.PromptCancel):
 		return a.closeCommandLine(), nil
-	case "up":
+	case key.Matches(msg, a.keys.HistoryPrev):
 		return a.recallHistory(-1), nil
-	case "down":
+	case key.Matches(msg, a.keys.HistoryNext):
 		return a.recallHistory(+1), nil
 	}
 

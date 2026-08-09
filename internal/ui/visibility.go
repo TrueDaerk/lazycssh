@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -65,8 +66,8 @@ func (a App) beginSplit() App {
 // it is open. enter applies the typed size - empty or 0 clears the split -
 // and esc leaves the split as it was.
 func (a App) handleSplitKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "enter":
+	switch {
+	case key.Matches(msg, a.keys.PromptSubmit):
 		raw := strings.TrimSpace(a.splitInput.Value())
 		a.splitInput.SetValue("")
 		a.splitInput.Blur()
@@ -81,7 +82,7 @@ func (a App) handleSplitKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			size = parsed
 		}
 		return a.applySplit(size)
-	case "esc":
+	case key.Matches(msg, a.keys.PromptCancel):
 		a.splitInput.SetValue("")
 		a.splitInput.Blur()
 		return a, nil

@@ -474,7 +474,7 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// host prompt - which must not be able to trap the user. While typing to
 	// a host it stays a keystroke for the host (XON), like every other chord
 	// the pane forwards.
-	if msg.String() == "ctrl+q" &&
+	if key.Matches(msg, a.keys.ForceQuit) &&
 		(a.cmdInput.Focused() || a.hostInput.Focused() ||
 			a.searchInput.Focused() || a.Saving() || a.splitInput.Focused() ||
 			a.GroupDialogOpen() || a.deleteGroup != "" || a.endSession != "") {
@@ -542,10 +542,10 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// selection ctrl+c stays what it always was, a keystroke for the hosts.
 	// esc clears the selection and still does whatever it did before.
 	if a.textSelectionValid() {
-		if msg.String() == "ctrl+c" {
+		if key.Matches(msg, a.keys.CopySelection) {
 			return a.copyTextSelection()
 		}
-		if msg.String() == "esc" {
+		if key.Matches(msg, a.keys.PromptCancel) {
 			a = a.clearTextSelection()
 		}
 	}
@@ -645,7 +645,7 @@ func (a App) handleAppKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// The selection keys are app-level for the same reason the broadcast-mode
 	// keys are: the selection is about the run, not about a panel.
-	if next, handled := a.handleSelectionKey(msg.String()); handled {
+	if next, handled := a.handleSelectionKey(msg); handled {
 		return next, nil
 	}
 
@@ -682,14 +682,14 @@ func (a App) handleAppKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // it is open. enter asks the program to connect the typed pattern, tab
 // completes the first matching ssh-config alias, esc abandons the prompt.
 func (a App) handleHostInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "tab":
+	switch {
+	case key.Matches(msg, a.keys.PromptComplete):
 		if hints := a.aliasHints(); len(hints) > 0 {
 			a.hostInput.SetValue(hints[0])
 			a.hostInput.CursorEnd()
 		}
 		return a, nil
-	case "enter":
+	case key.Matches(msg, a.keys.PromptSubmit):
 		pattern := strings.TrimSpace(a.hostInput.Value())
 		a.hostInput.SetValue("")
 		a.hostInput.Blur()
@@ -698,7 +698,7 @@ func (a App) handleHostInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		a.connectErr = ""
 		return a, func() tea.Msg { return HostConnectMsg{Patterns: []string{pattern}} }
-	case "esc":
+	case key.Matches(msg, a.keys.PromptCancel):
 		a.hostInput.SetValue("")
 		a.hostInput.Blur()
 		return a, nil
@@ -751,7 +751,7 @@ func (a App) handleSaveKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 	if a.confirmOverwrite {
-		switch readConfirm(msg) {
+		switch a.readConfirm(msg) {
 		case answerYes:
 			a.confirmOverwrite = false
 			return a.commitSave(true)
@@ -762,10 +762,10 @@ func (a App) handleSaveKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	switch msg.String() {
-	case "enter":
+	switch {
+	case key.Matches(msg, a.keys.PromptSubmit):
 		return a.commitSave(false)
-	case "esc":
+	case key.Matches(msg, a.keys.PromptCancel):
 		return a.cancelSave(), nil
 	}
 

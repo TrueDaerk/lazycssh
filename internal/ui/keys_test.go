@@ -1,6 +1,12 @@
 package ui
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -43,6 +49,166 @@ func TestAllReturnsEveryBinding(t *testing.T) {
 	k := DefaultKeyMap()
 	if got, want := len(k.All()), len(bindingFields(k)); got != want {
 		t.Fatalf("All() returned %d bindings, the keymap declares %d", got, want)
+	}
+}
+
+// managedKeys are the keys the prompts and dialogs answer. They used to be
+// matched with raw msg.String() comparisons scattered over every prompt site,
+// which made them invisible to the help and to the invariants above; issue
+// #226 moved them into [KeyMap.prompts]. The test below is what keeps them
+// there.
+var managedKeys = map[string]bool{
+	"esc": true, "enter": true, "tab": true, "up": true, "down": true,
+	"y": true, "Y": true, "n": true, "N": true,
+	"ctrl+c": true, "ctrl+q": true, "backspace": true, "ctrl+a": true,
+}
+
+// No prompt matches a key by comparing msg.String() to a literal: a key that
+// is compared by hand is a key the overlay and the box footers cannot see.
+//
+// The check parses the package rather than grepping it, so a literal in a
+// comment or in a message string is not a false positive - only a comparison
+// against msg.String() counts, which is exactly the pattern being banned.
+func TestPromptKeysAreMatchedThroughTheKeyMap(t *testing.T) {
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, ".", func(fi os.FileInfo) bool {
+		return !strings.HasSuffix(fi.Name(), "_test.go")
+	}, 0)
+	if err != nil {
+		t.Fatalf("parsing the package: %v", err)
+	}
+
+	for _, pkg := range pkgs {
+		for _, file := range pkg.Files {
+			ast.Inspect(file, func(n ast.Node) bool {
+				switch node := n.(type) {
+				case *ast.SwitchStmt:
+					if !isKeyString(node.Tag) {
+						return true
+					}
+					t.Errorf("%s: switch msg.String() dispatches keys by literal; "+
+						"match them with key.Matches against a KeyMap binding",
+						fset.Position(node.Pos()))
+				case *ast.BinaryExpr:
+					if node.Op != token.EQL && node.Op != token.NEQ {
+						return true
+					}
+					if !isKeyString(node.X) && !isKeyString(node.Y) {
+						return true
+					}
+					for _, side := range []ast.Expr{node.X, node.Y} {
+						lit, ok := side.(*ast.BasicLit)
+						if !ok || lit.Kind != token.STRING {
+							continue
+						}
+						if pressed, err := strconv.Unquote(lit.Value); err == nil && managedKeys[pressed] {
+							t.Errorf("%s: %s is compared to msg.String(); "+
+								"match it with key.Matches against a KeyMap binding",
+								fset.Position(lit.Pos()), lit.Value)
+						}
+					}
+				}
+				return true
+			})
+		}
+	}
+}
+
+// The prompts really go through the keymap: rebinding cancel moves what closes
+// the command line, which a literal comparison could not do.
+func TestRebindingCancelMovesThePromptKey(t *testing.T) {
+	a := testApp()
+	a.keys.PromptCancel = key.NewBinding(key.WithKeys("ctrl+g"), key.WithHelp("ctrl+g", "cancel"))
+
+	a = pressKey(t, a, ":")
+	if !a.CommandLineOpen() {
+		t.Fatal("the command line did not open")
+	}
+	a = pressKey(t, a, "esc")
+	if !a.CommandLineOpen() {
+		t.Fatal("esc closed the command line although cancel was rebound off it")
+	}
+	a = pressKey(t, a, "ctrl+g")
+	if a.CommandLineOpen() {
+		t.Fatal("the rebound cancel key did not close the command line")
+	}
+}
+
+// isKeyString reports whether an expression is a call to a key message's
+// String method - the shape "msg.String()".
+func isKeyString(expr ast.Expr) bool {
+	call, ok := expr.(*ast.CallExpr)
+	if !ok || len(call.Args) != 0 {
+		return false
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "String" {
+		return false
+	}
+	ident, ok := sel.X.(*ast.Ident)
+	return ok && ident.Name == "msg"
+}
+
+// Every prompt binding is declared with the help the overlay needs, and the
+// prompt area is one of the areas the overlay lists - which is how a user with
+// a box in front of them can find out what answers it.
+func TestPromptAreaIsInTheHelp(t *testing.T) {
+	k := DefaultKeyMap()
+
+	var listed bool
+	for _, area := range Areas() {
+		listed = listed || area == AreaPrompt
+	}
+	if !listed {
+		t.Fatal("AreaPrompt is not one of the areas the help lists")
+	}
+	if len(k.Bindings(AreaPrompt)) == 0 {
+		t.Fatal("the prompt area declares no bindings")
+	}
+
+	model := help.New()
+	model.Styles = HelpStyles(NewTheme(Options{Dark: true}))
+	model.SetWidth(400)
+	rendered := model.FullHelpView(k.For(AreaSidebar).FullHelp())
+	for _, b := range k.Bindings(AreaPrompt) {
+		if !strings.Contains(rendered, b.Help().Desc) {
+			t.Fatalf("the overlay does not mention the prompt binding %q:\n%s", b.Help().Desc, rendered)
+		}
+	}
+}
+
+// The chord that quits from inside a text input is declared, not typed into a
+// comparison, and the app-level quit advertises it too.
+func TestQuitIsReachableFromInsideAPrompt(t *testing.T) {
+	k := DefaultKeyMap()
+	if !slices.Contains(k.ForceQuit.Keys(), "ctrl+q") {
+		t.Fatalf("ForceQuit is bound to %v, want ctrl+q", k.ForceQuit.Keys())
+	}
+	if !slices.Contains(k.Quit.Keys(), "ctrl+q") {
+		t.Fatalf("Quit is bound to %v; the chord it documents must be one of them", k.Quit.Keys())
+	}
+}
+
+// A dialog footer is assembled from the bindings that answer it, so rebinding
+// a key moves the hint with it instead of leaving a lie in the box.
+func TestPromptHintComesFromTheBindings(t *testing.T) {
+	k := DefaultKeyMap()
+	if got, want := promptHint(does(k.PromptSubmit, "connects"), does(k.PromptCancel, "cancels")),
+		"enter connects · esc cancels"; got != want {
+		t.Fatalf("promptHint() = %q, want %q", got, want)
+	}
+	if got, want := promptHint(note("empty or 0 shows all"), does(k.PromptSubmit, "applies")),
+		"empty or 0 shows all · enter applies"; got != want {
+		t.Fatalf("promptHint() with a note = %q, want %q", got, want)
+	}
+
+	k.PromptCancel = key.NewBinding(key.WithKeys("ctrl+g"), key.WithHelp("ctrl+g", "cancel"))
+	if got, want := promptHint(does(k.PromptCancel, "cancels")), "ctrl+g cancels"; got != want {
+		t.Fatalf("a rebound key did not move its hint: %q, want %q", got, want)
+	}
+	k.ConfirmNo = key.NewBinding(key.WithKeys("ctrl+g"), key.WithHelp("ctrl+g", "no"))
+	if got, want := confirmHint(k), "enter/y confirms · ctrl+g cancels"; got != want {
+		t.Fatalf("confirmHint() = %q, want %q", got, want)
 	}
 }
 

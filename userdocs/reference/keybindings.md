@@ -105,8 +105,13 @@ switch the broadcast mode.
 |---|---|
 | ++enter++ | send / confirm |
 | ++esc++ | abandon |
+| ++tab++ | in the connect prompt: complete the first matching `~/.ssh/config` alias |
 | ++up++ / ++down++ | walk this run's command history |
-| ++ctrl+q++ | quit |
+| ++ctrl+q++ | quit — no prompt can trap you |
+
+These keys are bindings like every other, in their own **prompts** group. The
+++question++ overlay carries that group whatever has focus, since you cannot
+open the overlay while a box already has the keyboard.
 
 Most prompts — new group, save as, connect a host, split size — open as a
 **centred box** over the layout, with the keys that answer them printed in the

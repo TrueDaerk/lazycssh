@@ -3,6 +3,9 @@ package ui
 import (
 	"fmt"
 	"strings"
+
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 )
 
 // metaPrefix marks a command line entry as an instruction to lazycssh rather
@@ -120,26 +123,28 @@ func (a App) runSelect(sel Selector, arg string) string {
 // These are the same operations the command line spells out; the keys exist
 // because building a selection by hand is the common case and typing a glob is
 // the precise one.
-func (a App) handleSelectionKey(keystroke string) (App, bool) {
+func (a App) handleSelectionKey(msg tea.KeyPressMsg) (App, bool) {
+	bound := key.Matches(msg, a.keys.SelectAll, a.keys.Invert, a.keys.ClearSel,
+		a.keys.SelectUp, a.keys.SelectDwn)
+
 	sel, ok := a.selector()
 	if !ok {
 		// Without a router there is nothing to select, but the keys are still
 		// consumed rather than falling through to something unrelated.
-		return a, keystroke == "a" || keystroke == "i" || keystroke == "c" ||
-			keystroke == "u" || keystroke == "d"
+		return a, bound
 	}
 
-	switch keystroke {
-	case "a":
+	switch {
+	case key.Matches(msg, a.keys.SelectAll):
 		a.lastDelivery = fmt.Sprintf("selected every host (%d selected)", sel.SelectAll())
-	case "i":
+	case key.Matches(msg, a.keys.Invert):
 		a.lastDelivery = fmt.Sprintf("inverted the selection (%d selected)", sel.InvertSelection())
-	case "c":
+	case key.Matches(msg, a.keys.ClearSel):
 		sel.ClearSelection()
 		a.lastDelivery = "cleared the selection"
-	case "u":
+	case key.Matches(msg, a.keys.SelectUp):
 		a.lastDelivery = fmt.Sprintf("selected the hosts that are up (%d selected)", sel.SelectConnected())
-	case "d":
+	case key.Matches(msg, a.keys.SelectDwn):
 		a.lastDelivery = fmt.Sprintf("selected the hosts that are down (%d selected)", sel.SelectDisconnected())
 	default:
 		return a, false

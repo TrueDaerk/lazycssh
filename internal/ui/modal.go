@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -42,8 +43,10 @@ const (
 )
 
 // confirmHint is the footer of every yes/no dialog: the keys that answer it,
-// inside the box that asks.
-const confirmHint = "enter/y confirms · esc cancels"
+// inside the box that asks, named by the bindings that answer it.
+func confirmHint(k KeyMap) string {
+	return promptHint(does(k.ConfirmYes, "confirms"), does(k.ConfirmNo, "cancels"))
+}
 
 // modal is one dialog: a titled box with body lines, an optional error, and a
 // footer naming the keys that answer it.
@@ -73,7 +76,7 @@ func (a App) confirm(title, question string, notes ...string) modal {
 	for _, note := range notes {
 		lines = append(lines, a.theme.Muted.Render(note))
 	}
-	return modal{Title: title, Lines: lines, Hint: confirmHint, CursorLine: noCursor}
+	return modal{Title: title, Lines: lines, Hint: confirmHint(a.keys), CursorLine: noCursor}
 }
 
 // prompt builds a dialog around one text input: any context lines, then the
@@ -112,18 +115,21 @@ func (a App) activeModal() (modal, bool) {
 		return m, true
 
 	case a.saveInput.Focused():
-		m := a.prompt("Save group as", "name", a.saveInput, "enter saves · esc cancels")
+		m := a.prompt("Save group as", "name", a.saveInput,
+			promptHint(does(a.keys.PromptSubmit, "saves"), does(a.keys.PromptCancel, "cancels")))
 		m.Err = a.saveErr
 		return m, true
 
 	case a.groupStage == groupStageName:
-		m := a.prompt("New group", "name", a.groupNameInput, "enter continues · esc cancels")
+		m := a.prompt("New group", "name", a.groupNameInput,
+			promptHint(does(a.keys.PromptSubmit, "continues"), does(a.keys.PromptCancel, "cancels")))
 		m.Err = a.groupErr
 		return m, true
 
 	case a.groupStage == groupStageHosts:
 		m := a.prompt("New group", "hosts", a.groupHostsInput,
-			"space-separated patterns · enter creates · esc cancels",
+			promptHint(note("space-separated patterns"),
+				does(a.keys.PromptSubmit, "creates"), does(a.keys.PromptCancel, "cancels")),
 			a.field("name", strings.TrimSpace(a.groupNameInput.Value())))
 		m.Err = a.groupErr
 		return m, true
@@ -141,7 +147,8 @@ func (a App) activeModal() (modal, bool) {
 
 	case a.splitInput.Focused():
 		return a.prompt("Split view", "panes per view", a.splitInput,
-			"empty or 0 shows all · enter applies · esc keeps"), true
+			promptHint(note("empty or 0 shows all"),
+				does(a.keys.PromptSubmit, "applies"), does(a.keys.PromptCancel, "keeps"))), true
 	}
 
 	return modal{}, false
@@ -214,15 +221,16 @@ const (
 	answerNo
 )
 
-// readConfirm reads a key as an answer to a confirm dialog. enter and y
-// confirm, esc and n withdraw the question, and everything else is ignored -
-// these dialogs guard a file delete and a fleet-wide ctrl+c, and a stray
-// keystroke must not be able to answer either one.
-func readConfirm(msg tea.KeyPressMsg) confirmAnswer {
-	switch msg.String() {
-	case "enter", "y", "Y":
+// readConfirm reads a key as an answer to a confirm dialog, through the
+// [KeyMap.ConfirmYes] and [KeyMap.ConfirmNo] bindings the box's footer is also
+// generated from. Everything else is ignored - these dialogs guard a file
+// delete and a fleet-wide ctrl+c, and a stray keystroke must not be able to
+// answer either one.
+func (a App) readConfirm(msg tea.KeyPressMsg) confirmAnswer {
+	switch {
+	case key.Matches(msg, a.keys.ConfirmYes):
 		return answerYes
-	case "esc", "n", "N":
+	case key.Matches(msg, a.keys.ConfirmNo):
 		return answerNo
 	}
 	return answerNone

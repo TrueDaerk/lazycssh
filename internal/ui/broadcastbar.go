@@ -112,11 +112,11 @@ func (a App) handleBroadcastViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // assembled line: a prefixed key is a control sequence, not command text.
 func (a App) resolveBroadcastEscape(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	a.broadcastPending = false
-	switch msg.String() {
-	case "esc":
+	switch {
+	case key.Matches(msg, a.keys.PromptCancel):
 		a.broadcastView = true
 		return a, nil
-	case "ctrl+a", "a":
+	case key.Matches(msg, a.keys.BroadcastLiteral):
 		return a.sendBroadcastRaw([]byte{0x01})
 	}
 	return a.forwardBroadcastKey(msg)
