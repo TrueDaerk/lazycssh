@@ -4,7 +4,7 @@ title: Broadcast scope
 description: What `BROADCAST all` means when a working set is active, and how the target count is made unmissable.
 resource: internal/broadcast
 tags: [broadcast, working-set, safety]
-timestamp: 2026-07-31T22:00:00Z
+timestamp: 2026-08-09T00:00:00Z
 ---
 
 # Broadcast scope
@@ -122,7 +122,7 @@ mode needs no limit — the focused pane is always visible.
 
 Typing into a focused pane goes through `PaneWriter` — one host's writer, directly — and never
 through the router. The scope governs broadcast sends — the `:` command line and the live
-broadcast bar (`6`) — not the terminal behaviour of a single pane; a keystroke typed into
+broadcast bar (`5`) — not the terminal behaviour of a single pane; a keystroke typed into
 `web-01` cannot fan out, whatever mode is active.
 
 ## Forgetting hosts
@@ -206,6 +206,30 @@ looking accepted:
 The count in the bar's title, the targets `Send` resolves and the delivered count all come from
 the same `Router` inside the same `Update` pass; the status line after each keystroke is what
 makes a mismatch visible the moment it happens.
+
+## Holding a multiline paste
+
+A pasted block is N commands landing on M hosts with no review — the sharpest edge broadcasting
+has (issue #248). Bracketed paste delivers the whole block as one `tea.PasteMsg`, which the
+broadcast bar (`5`) reads against the router's resolved target count before it decides what to
+do with it:
+
+- **one line, or `Router.Count()` is one or fewer** — sent immediately, byte for byte, the same
+  path as `ctrl+a a`'s literal (`Router.Send`). This covers `single` mode and a working set of
+  one: there is exactly one host to read it back on.
+- **more than one line and `Router.Count()` is more than one** — held. The bar shows
+  `paste: N lines → M hosts  [enter send / esc cancel]` and stops listening for anything else:
+  enter releases the paste verbatim, esc drops it, every other key is ignored so a stray
+  keystroke cannot silently answer either way.
+
+The paste is never mangled: what was copied is what is written, with no line-ending changes and
+no trailing newline appended. It goes out through `Router.Send`, exactly like the `:` command
+line, so it is subject to the same per-host write failures and the same `Delivery` reporting —
+the only difference is the review gate in front of it.
+
+The hold is a UI-level decision, not a router one: `broadcast.Router` has no notion of a pending
+paste. It only answers "how many lines, how many hosts" through the same `Count()` every other
+send in this package reads.
 
 ## What this package does not do
 

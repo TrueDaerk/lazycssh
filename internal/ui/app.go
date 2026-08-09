@@ -184,6 +184,11 @@ type App struct {
 	broadcastView    bool
 	broadcastPending bool
 
+	// pendingPaste is a multiline paste addressed to more than one host, held
+	// until enter releases it or esc drops it; see broadcastbar.go (issue
+	// #248). Nil the rest of the time.
+	pendingPaste *pendingPaste
+
 	// connectErr is the last connect request's resolve error, shown in the
 	// Status panel until the fleet changes.
 	connectErr string
@@ -491,6 +496,9 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		return a.handleKey(msg)
+
+	case tea.PasteMsg:
+		return a.handlePaste(msg)
 
 	case tea.MouseClickMsg:
 		if msg.Button == tea.MouseLeft {
