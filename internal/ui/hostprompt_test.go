@@ -86,6 +86,33 @@ func TestHostPromptOffersAndCompletesAliases(t *testing.T) {
 	}
 }
 
+// The live expansion preview (issue #249): what enter would connect is shown
+// under the input as it is typed, and a bad pattern reports its parse error
+// there instead, without closing the prompt.
+func TestHostPromptShowsLiveExpansionPreview(t *testing.T) {
+	a := promptApp(t, nil, "web-01")
+	a = pressKey(t, a, "n")
+
+	for _, r := range "web{01..08}" {
+		a = pressKey(t, a, string(r))
+	}
+	view := plain(a.View().Content)
+	if !strings.Contains(view, "web01, web02, web03 … (8 hosts)") {
+		t.Fatalf("the prompt does not show the expansion preview:\n%s", view)
+	}
+
+	a = pressKey(t, a, "backspace")
+	a = pressKey(t, a, "backspace")
+	// a.hostInput now reads "web{01..0" - a truncated, unmatched range.
+	view = plain(a.View().Content)
+	if !strings.Contains(view, "invalid host pattern") {
+		t.Fatalf("the prompt does not show the parse error inline:\n%s", view)
+	}
+	if !a.ConnectPromptOpen() {
+		t.Fatal("the invalid pattern closed the prompt; it must stay editable")
+	}
+}
+
 func TestHostPromptEscCloses(t *testing.T) {
 	a := promptApp(t, nil, "web-01")
 	a = pressKey(t, a, "n")

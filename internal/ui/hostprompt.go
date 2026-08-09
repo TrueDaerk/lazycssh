@@ -47,6 +47,12 @@ func (a App) connectModal() modal {
 	m := a.prompt("Connect host", "host", a.hostInput,
 		promptHint(does(a.keys.PromptSubmit, "connects"), does(a.keys.PromptCancel, "cancels")))
 
+	// The expansion preview (issue #249): what enter would connect, updated on
+	// every keystroke so a typo in a range is caught before 40 panes dial.
+	if line := a.hostPatternPreviewLine(a.hostInput.Value()); line != "" {
+		m.Lines = append(m.Lines, line)
+	}
+
 	hints := a.aliasHints()
 	shown := min(len(hints), maxAliasHints)
 	for _, alias := range hints[:shown] {

@@ -194,11 +194,30 @@ func TestHostPickerFreeTextConnectsWhatIsTyped(t *testing.T) {
 	if !strings.Contains(view, "no match") {
 		t.Fatalf("the picker does not say what enter would do:\n%s", view)
 	}
+	if !strings.Contains(view, "db-01, db-02 (2 hosts)") {
+		t.Fatalf("the picker does not preview the typed pattern's expansion:\n%s", view)
+	}
 
 	_, msg := submit(t, a)
 	connect, ok := msg.(HostConnectMsg)
 	if !ok || !slices.Equal(connect.Patterns, []string{"db-{01..02}"}) {
 		t.Fatalf("enter produced %#v, want the typed pattern", msg)
+	}
+}
+
+// The live expansion preview (issue #249) also covers the picker's free-text
+// fallback: a bad pattern reports its parse error where the preview would go,
+// and the picker stays open and editable.
+func TestHostPickerFreeTextInvalidPatternShowsParseError(t *testing.T) {
+	a := openPicker(t, pickerApp(t, []string{"web-01"}))
+	a = typeInto(t, a, "db-{01..0")
+
+	view := plain(a.View().Content)
+	if !strings.Contains(view, "invalid host pattern") {
+		t.Fatalf("the picker does not show the parse error inline:\n%s", view)
+	}
+	if !a.HostPickerOpen() {
+		t.Fatal("the invalid pattern closed the picker; it must stay editable")
 	}
 }
 

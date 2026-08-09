@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-09T18:17:29Z
+timestamp: 2026-08-09T19:25:28Z
 ---
 
 # TUI shell
@@ -499,13 +499,19 @@ and `!` jumps to the next failure. What a dedicated Hosts panel used to add live
 
 - **connect** — `n` works from anywhere: it selects the Status panel and opens a free-text
   [dialog](#dialogs) accepting any host pattern — `host`, `user@host:port`, brace expansion
-  like `web-{01..04}`. Inside the box, the concrete aliases of `~/.ssh/config` that are not in
-  the run yet are listed beneath the input, filtered by what has been typed; `tab` completes the
-  first match, `enter` connects, `esc` abandons. The prompt owns the keyboard while open: a pattern
-  containing `b` must not switch the broadcast mode (`ctrl+q` still quits). A connect that
-  fails to resolve shows its error in the Status panel until the fleet next changes. The UI
-  cannot dial: it emits `HostConnectMsg`; the program resolves, skips hosts already in the run
-  (double-enter must not mint `host-2`), and adds the rest via `Manager.Add`,
+  like `web-{01..04}`. Below the input, a live **expansion preview** updates on every
+  keystroke: up to the first three resolved names plus the total count, e.g.
+  `web01, web02, web03 … (8 hosts)` (`internal/ui/hostpreview.go`, issue #249). It calls only
+  [`hosts.Expand`](./host-expansion.md) — pure string expansion, never ssh-config lookup, DNS or
+  a dial — so it is cheap enough to run on every keystroke; a pattern that fails to parse shows
+  its `SyntaxError` there instead, and the input stays open and editable. The concrete aliases
+  of `~/.ssh/config` that are not in the run yet are listed further down, filtered by what has
+  been typed; `tab` completes the first match, `enter` connects, `esc` abandons. The prompt owns
+  the keyboard while open: a pattern containing `b` must not switch the broadcast mode (`ctrl+q`
+  still quits). A connect that fails to *resolve* — as opposed to fails to *parse* — shows its
+  error in the Status panel until the fleet next changes. The UI cannot dial: it emits
+  `HostConnectMsg`; the program resolves, skips hosts already in the run (double-enter must not
+  mint `host-2`), and adds the rest via `Manager.Add`,
 - **browse and connect** — `A` opens the [host picker](#the-host-picker), which lists what the
   run *could* connect to rather than asking for a pattern,
 - **selection** — `alt+space` toggles the focused pane's host, from the grid and the app level,
@@ -540,7 +546,10 @@ is for browsing and for connecting several machines at once.
 - **enter** — connects the marked hosts if there are any, otherwise the highlighted one,
   otherwise the typed text as a **literal host pattern**, brace expansion included. That last
   case is how a machine `~/.ssh/config` has never heard of is reached from here; the footer says
-  which of the three `enter` would do,
+  which of the three `enter` would do. Only in that fallback case — nothing marked, nothing
+  matching — does the "no match" line grow the same live [expansion
+  preview](#connecting-and-selecting-without-a-hosts-panel) as the new-host prompt, since that is
+  the only case where what is typed is what `enter` would connect (issue #249),
 - **esc** — closes with nothing done, and nothing typed or marked survives into the next opening.
 
 The picker never dials. Like every other connect path it emits `HostConnectMsg` and lets

@@ -245,7 +245,14 @@ func (a App) hostPickerRows(matches []string) []string {
 		if strings.TrimSpace(p.input.Value()) == "" {
 			return []string{a.theme.Muted.Render("  no hosts to offer — type a host pattern")}
 		}
-		return []string{a.theme.Muted.Render("  no match — enter connects what is typed")}
+		lines := []string{a.theme.Muted.Render("  no match — enter connects what is typed")}
+		// The expansion preview (issue #249): typed text is only ever used as a
+		// pattern once nothing in the source matches it, so that is the only
+		// case previewing it here means anything.
+		if line := a.hostPatternPreviewLine(p.input.Value()); line != "" {
+			lines = append(lines, line)
+		}
+		return lines
 	}
 
 	cursor := clamp(p.cursor, 0, len(matches)-1)

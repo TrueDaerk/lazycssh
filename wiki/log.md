@@ -2,6 +2,15 @@
 
 ## 2026-08-09
 
+- Live expansion preview for typed host patterns (issue #249). The new-host prompt and the host
+  picker's free-text fallback now show, below the input, up to the first three names `Expand`
+  would produce plus the total count — `web01, web02, web03 … (8 hosts)` — updated on every
+  keystroke. A malformed pattern shows its `SyntaxError` there instead, and the input stays
+  editable; nothing else changes. The preview calls only `hosts.Expand` — pure string expansion,
+  never ssh-config lookup, DNS or a dial — so a typo in a range is caught before 40 panes dial
+  instead of after. New `internal/ui/hostpreview.go`; `core/tui.md` and `core/host-expansion.md`
+  updated.
+
 - Hold multiline paste to multiple hosts (issue #248). Bracketed paste arrives as one
   `tea.PasteMsg`; the broadcast bar now reads it against `Router.Count()` before deciding what
   to do with it. One line, or a target count of one (including `single` mode), goes out
