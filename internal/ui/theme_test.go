@@ -142,6 +142,12 @@ func TestFrameHelpers(t *testing.T) {
 	if th.PanelTitle(true).Render("x") == th.PanelTitle(false).Render("x") {
 		t.Fatal("PanelTitle does not distinguish focus")
 	}
+	if !th.PanelTitle(true).GetBold() {
+		t.Fatal("the focused panel title is not bold")
+	}
+	if th.PanelTitle(false).GetBold() {
+		t.Fatal("the unfocused panel title is bold; bold should be reserved for focus")
+	}
 }
 
 func TestExitStatusStyle(t *testing.T) {

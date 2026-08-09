@@ -201,7 +201,7 @@ func NewTheme(opts Options) Theme {
 
 	t.Base = fg(palette.Text)
 	t.Muted = fg(palette.Muted)
-	t.Title = fg(palette.Text).Bold(true).Padding(0, 1)
+	t.Title = fg(palette.Text).Padding(0, 1)
 	t.TitleFocused = fg(palette.Focus).Bold(true).Padding(0, 1)
 
 	border := func(b lipgloss.Border, c color.Color) lipgloss.Style {
