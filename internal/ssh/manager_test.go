@@ -3,6 +3,7 @@ package ssh
 import (
 	"context"
 	"errors"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -303,6 +304,109 @@ func TestManagerReconnectUnknownSession(t *testing.T) {
 
 	if err := m.Reconnect(t.Context(), "nope"); err == nil {
 		t.Error("Reconnect of an unknown session returned no error")
+	}
+}
+
+func TestManagerReconnectAll(t *testing.T) {
+	fleet := fakeFleet(4)
+	m, lookup := newTestManager(t, fleet, func(h hosts.Host, f *Fake) {
+		if h.Alias == "srv4" {
+			// Still dialing when ReconnectAll runs, so it must be left alone.
+			f.ConnectDelay = time.Second
+		}
+	})
+
+	m.Start(t.Context())
+	waitFor(t, "the three fast hosts to connect", func() bool {
+		return m.Counts().Connected == 3
+	})
+
+	lookup("srv1").Disconnect(ErrDisconnected()) // -> failed
+	lookup("srv2").Disconnect(nil)               // -> closed
+	// srv3 stays connected, srv4 stays dialing.
+
+	dialing, _ := m.Session("srv4")
+	connected, _ := m.Session("srv3")
+
+	ids := m.ReconnectAll(t.Context())
+	m.Wait()
+
+	sort.Strings(ids)
+	if got, want := strings.Join(ids, ","), "srv1,srv2"; got != want {
+		t.Fatalf("ReconnectAll() = %q, want %q", got, want)
+	}
+
+	if got, _ := m.Session("srv1"); got.State() != StateConnected {
+		t.Errorf("srv1 state = %s, want reconnected to %s", got.State(), StateConnected)
+	}
+	if got, _ := m.Session("srv2"); got.State() != StateConnected {
+		t.Errorf("srv2 state = %s, want reconnected to %s", got.State(), StateConnected)
+	}
+
+	if still, _ := m.Session("srv3"); still != connected {
+		t.Error("ReconnectAll touched the already-connected host")
+	}
+	if still, _ := m.Session("srv4"); still != dialing {
+		t.Error("ReconnectAll touched the still-dialing host")
+	}
+	if got := m.Counts(); got.Connected != 4 {
+		t.Errorf("Counts() = %+v, want all four connected once srv4 finishes dialing", got)
+	}
+}
+
+func TestManagerReconnectAllIsANoOpWithNothingDown(t *testing.T) {
+	m, _ := newTestManager(t, fakeFleet(3), nil)
+
+	m.Start(t.Context())
+	m.Wait()
+
+	if ids := m.ReconnectAll(t.Context()); len(ids) != 0 {
+		t.Errorf("ReconnectAll() = %v, want none - nothing is failed or closed", ids)
+	}
+	if got := m.Counts(); got.Connected != 3 {
+		t.Errorf("Counts() = %+v, want the three connected sessions undisturbed", got)
+	}
+}
+
+func TestManagerReconnectAllBoundsParallelDials(t *testing.T) {
+	var inFlight, peak atomic.Int32
+
+	factory := func(req SessionRequest) Session {
+		f := NewFake(req.ID, req.Host, req.Events)
+		f.ConnectDelay = 20 * time.Millisecond
+		return f
+	}
+	counting := func(req SessionRequest) Session {
+		return &countingSession{Session: factory(req), inFlight: &inFlight, peak: &peak}
+	}
+
+	m, err := NewManager(ManagerConfig{
+		Hosts:            fakeFleet(20),
+		NewSession:       counting,
+		MaxParallelDials: 4,
+	})
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	t.Cleanup(func() { m.CloseAll() })
+
+	m.Start(t.Context())
+	m.Wait()
+
+	for _, id := range m.IDs() {
+		s, _ := m.Session(id)
+		s.(*countingSession).Session.(*Fake).Disconnect(ErrDisconnected())
+	}
+
+	peak.Store(0)
+	m.ReconnectAll(t.Context())
+	m.Wait()
+
+	if got := peak.Load(); got > 4 {
+		t.Errorf("peak concurrent redials = %d, want at most 4: ReconnectAll must respect the dial semaphore", got)
+	}
+	if got := m.Counts().Connected; got != 20 {
+		t.Errorf("connected = %d, want all 20 reconnected despite the bound", got)
 	}
 }
 

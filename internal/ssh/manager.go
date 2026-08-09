@@ -260,6 +260,40 @@ func (m *Manager) Reconnect(ctx context.Context, id string) error {
 	return nil
 }
 
+// ReconnectAll re-dials every session currently in [StateFailed] or
+// [StateClosed] - a bulk version of [Manager.Reconnect] for a network blip or
+// jump-host restart that drops several hosts at once (issue #244). A session
+// that is connected, or still on its way to being connected, is left alone.
+// It returns the identifiers it redialed, in host order.
+//
+// Each redial goes through [Manager.Reconnect], so it keeps the same dial
+// concurrency cap and the same scrollback-preserving handoff a single
+// reconnect gets. One host's redial failing is recorded on that host alone,
+// the same way Reconnect's own error is - it cannot affect the others.
+func (m *Manager) ReconnectAll(ctx context.Context) []string {
+	var ids []string
+	for _, s := range m.Sessions() {
+		if s.State().Done() {
+			ids = append(ids, s.ID())
+		}
+	}
+
+	var wg sync.WaitGroup
+	for _, id := range ids {
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+			// The error is dropped for the same reason startOne drops it: it
+			// is already recorded on the session as state, and a fleet-wide
+			// return would say nothing about which host it was.
+			_ = m.Reconnect(ctx, id)
+		}(id)
+	}
+	wg.Wait()
+
+	return ids
+}
+
 // Remove takes one session out of the fleet entirely: it is closed and no
 // longer listed, so its pane disappears. Close leaves a dead pane on screen to
 // be read; Remove is the user saying they are done with it.

@@ -167,6 +167,33 @@ func TestReconnectRequestReachesTheManager(t *testing.T) {
 	}
 }
 
+func TestReconnectAllRequestReachesTheManager(t *testing.T) {
+	m, lookup := testModel(t, "srv1", "srv2", "srv3")
+	m.Init()
+	m.Manager().Wait()
+
+	lookup("srv1").Disconnect(ssh.ErrDisconnected()) // failed
+	lookup("srv2").Disconnect(nil)                   // closed
+	// srv3 stays connected.
+
+	cmd := drive(t, m, ui.ReconnectAllMsg{})
+	if cmd == nil {
+		t.Fatal("a reconnect-all request produced no command")
+	}
+	cmd()
+	m.Manager().Wait()
+
+	if !m.Manager().Connected("srv1") {
+		t.Error("srv1 (failed) did not reconnect")
+	}
+	if !m.Manager().Connected("srv2") {
+		t.Error("srv2 (closed) did not reconnect")
+	}
+	if !m.Manager().Connected("srv3") {
+		t.Error("reconnecting the others disturbed srv3")
+	}
+}
+
 func TestCloseRequestReachesTheManager(t *testing.T) {
 	m, _ := testModel(t, "srv1", "srv2")
 	m.Init()

@@ -327,6 +327,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return fleetEventMsg{inner: ui.FleetUpdatedMsg{}}
 		}
 
+	case ui.ReconnectAllMsg:
+		return m, func() tea.Msg {
+			// Same reasoning as ReconnectHostMsg: each redial's error is
+			// already on its session as state, which is what the panes show.
+			m.mgr.ReconnectAll(m.ctx)
+			return fleetEventMsg{inner: ui.FleetUpdatedMsg{}}
+		}
+
 	case ui.CloseHostMsg:
 		id := msg.ID
 		return m, func() tea.Msg {
