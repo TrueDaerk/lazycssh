@@ -213,7 +213,9 @@ type App struct {
 	sessionCursor int
 	logCursor     int
 	showHelp      bool
-	fullScreen    bool
+
+	// screen is how much of the terminal the focused area gets; see screen.go.
+	screen ScreenMode
 }
 
 // newLineInput builds a text input the way every prompt here uses it: no
@@ -280,7 +282,7 @@ func NewApp(cfg Config) App {
 // run's *view* state does not outlive its hosts.
 func (a App) resetToStart() App {
 	a.hadHosts = false
-	a.fullScreen = false
+	a.screen = ScreenNormal
 	a.paneIndex = 0
 	a.page = 0
 	a.splitSize = 0
@@ -322,14 +324,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// every message can move that: a resize repages the grid, an arrow key
 	// turns a page, a host leaving reflows the run. Resyncing once here is the
 	// only way the limit cannot drift out of step with the panes (issue #199).
-	return app.syncBroadcastLimit(), cmd
+	return app.syncLayout().syncBroadcastLimit(), cmd
 }
 
 // update is the real message handler; [App.Update] wraps it.
 func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		a.layout = ComputeLayout(msg.Width, msg.Height)
+		a.layout = ComputeScreenLayout(msg.Width, msg.Height, a.screen, a.focus)
 		a.help.SetWidth(max(0, a.layout.Width-2))
 		return a, nil
 
@@ -831,14 +833,14 @@ func (a App) closeOrRemove(id string) tea.Cmd {
 // grid is the current tiling of the main area, minus the overflow footer's
 // line when it is drawn. It tiles for the kept slot count, which is the host
 // count unless a departure left an empty cell behind.
-func (a App) grid() Grid { return TileGrid(a.gridArea(), a.gridSlots()) }
+func (a App) grid() Grid { return TileGridCapped(a.gridArea(), a.gridSlots(), a.gridPaneCap()) }
 
 // Grid returns the tiling the view is drawing, which is what the tests and the
 // paging logic ask about.
 func (a App) Grid() Grid { return a.grid() }
 
 // FullScreen reports whether one pane fills the main area.
-func (a App) FullScreen() bool { return a.fullScreen }
+func (a App) FullScreen() bool { return a.screen == ScreenFull }
 
 // panelForKey maps a number key to the panel it selects.
 func (a App) panelForKey(msg tea.KeyPressMsg) (Panel, bool) {
@@ -937,7 +939,7 @@ func (a App) renderSidebar() string {
 	focused := a.focus == AreaSidebar
 
 	panels := Panels()
-	heights := SidebarHeights(r.Height, len(panels), int(a.panel))
+	heights := a.sidebarHeights()
 
 	boxes := make([]string, 0, len(panels))
 	for i, panel := range panels {
@@ -985,7 +987,7 @@ func (a App) renderMain() string {
 
 	// Full screen is one pane in the whole area, which is what reading a stack
 	// trace or driving an interactive program needs.
-	if a.fullScreen {
+	if a.screen == ScreenFull {
 		return a.renderPane(a.paneIndex, r, focused)
 	}
 
@@ -1125,6 +1127,11 @@ func (a App) renderStatusBar() string {
 	if label := a.splitLabel(); label != "" {
 		// The split narrows what a keystroke reaches, so it renders in the
 		// warning style for as long as it is in force.
+		parts = append(parts, a.theme.StatusWarning.Render(label))
+	}
+	if label := a.screenLabel(); label != "" {
+		// A non-normal screen mode is why panes are missing from the grid, so
+		// it says so rather than letting a capped page read as the whole run.
 		parts = append(parts, a.theme.StatusWarning.Render(label))
 	}
 	if label := a.windowLabel(); label != "" {

@@ -112,6 +112,7 @@ type KeyMap struct {
 	PaneUp       key.Binding
 	PaneDown     key.Binding
 	FullScreen   key.Binding
+	ScreenMode   key.Binding
 	Reconnect    key.Binding
 	ClosePane    key.Binding
 
@@ -219,9 +220,15 @@ func DefaultKeyMap() KeyMap {
 		PaneRight:  key.NewBinding(key.WithKeys("alt+shift+right"), key.WithHelp("shift+alt+→", "pane right")),
 		PaneUp:     key.NewBinding(key.WithKeys("alt+shift+up"), key.WithHelp("shift+alt+↑", "pane up")),
 		PaneDown:   key.NewBinding(key.WithKeys("alt+shift+down"), key.WithHelp("shift+alt+↓", "pane down")),
-		FullScreen: key.NewBinding(key.WithKeys("alt+z"), key.WithHelp("alt+z", "full screen this pane")),
-		Reconnect:  key.NewBinding(key.WithKeys("alt+r"), key.WithHelp("alt+r", "reconnect this host")),
-		ClosePane:  key.NewBinding(key.WithKeys("alt+x"), key.WithHelp("alt+x", "close this host, again to remove")),
+		FullScreen: key.NewBinding(key.WithKeys("alt+z"), key.WithHelp("alt+z", "full screen this pane, again to return")),
+		// lazygit cycles screen modes with +; here the chord is the same key
+		// with alt, because a pane forwards plain + to the shell. Both the
+		// shifted and the unshifted form are bound: which one a terminal
+		// reports for that key with alt held is not worth guessing at.
+		ScreenMode: key.NewBinding(key.WithKeys("alt++", "alt+=", "alt+shift+="),
+			key.WithHelp("alt++", "cycle screen mode: normal / half / full")),
+		Reconnect: key.NewBinding(key.WithKeys("alt+r"), key.WithHelp("alt+r", "reconnect this host")),
+		ClosePane: key.NewBinding(key.WithKeys("alt+x"), key.WithHelp("alt+x", "close this host, again to remove")),
 
 		// Copy goes through OSC 52, so it reaches the local clipboard even
 		// when lazycssh itself runs over SSH; a terminal without OSC 52
@@ -269,7 +276,7 @@ func (k KeyMap) grid() []key.Binding {
 	return []key.Binding{
 		k.LeaveTyping, k.ToggleSelect,
 		k.PaneLeft, k.PaneRight, k.PaneUp, k.PaneDown,
-		k.FullScreen, k.Reconnect, k.ClosePane,
+		k.FullScreen, k.ScreenMode, k.Reconnect, k.ClosePane,
 		k.CopyPane, k.CopyBuffer,
 		k.ScrollUp, k.ScrollDown, k.ScrollTop, k.ScrollBottom,
 		k.SearchPane, k.NextMatch, k.PrevMatch, k.ClearSearch,
@@ -335,7 +342,7 @@ func (c contextHelp) ShortHelp() []key.Binding {
 	case AreaGrid:
 		// While typing, every plain key goes to the host - the hints may only
 		// name chords lazycssh actually keeps.
-		return []key.Binding{k.LeaveTyping, k.PaneLeft, k.PaneRight, k.FullScreen, k.ClosePane}
+		return []key.Binding{k.LeaveTyping, k.PaneLeft, k.PaneRight, k.FullScreen, k.ScreenMode, k.ClosePane}
 	case AreaBroadcast:
 		return []key.Binding{k.LeaveTyping, k.BroadcastEscape, k.BroadcastEdit}
 	default:

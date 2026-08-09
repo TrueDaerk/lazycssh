@@ -291,3 +291,46 @@ func TestGridRendersOnlyTheCurrentPage(t *testing.T) {
 		t.Fatalf("the first page shows a host from another page:\n%s", view)
 	}
 }
+
+// The pane cap is how half mode enlarges panes: fewer cells on a page, bigger
+// cells, and the hosts that no longer fit page instead of vanishing.
+func TestTileGridCapped(t *testing.T) {
+	area := Rect{Width: 200, Height: 60}
+
+	full := TileGrid(area, 6)
+	capped := TileGridCapped(area, 6, HalfScreenPanes)
+
+	if capped.PerPage != HalfScreenPanes {
+		t.Fatalf("PerPage = %d, want %d", capped.PerPage, HalfScreenPanes)
+	}
+	if len(capped.Cells) != HalfScreenPanes {
+		t.Fatalf("the grid holds %d cells, want %d", len(capped.Cells), HalfScreenPanes)
+	}
+	if capped.Pages != 3 {
+		t.Fatalf("Pages = %d, want six hosts over pages of two", capped.Pages)
+	}
+	if capped.Cells[0].Width <= full.Cells[0].Width {
+		t.Fatalf("capping did not widen the panes: %+v then %+v", full.Cells[0], capped.Cells[0])
+	}
+
+	// A cap of zero or less means "as many as fit", and no cap can produce a
+	// page holding nothing.
+	if got := TileGridCapped(area, 6, 0); got.PerPage != full.PerPage {
+		t.Fatalf("PerPage = %d with no cap, want %d", got.PerPage, full.PerPage)
+	}
+	for _, cap := range []int{-3, 1, 2, 5, 99} {
+		g := TileGridCapped(area, 6, cap)
+		if g.PerPage <= 0 || g.Pages <= 0 {
+			t.Fatalf("cap %d: PerPage = %d over %d pages", cap, g.PerPage, g.Pages)
+		}
+		if cap > 0 && g.PerPage > cap {
+			t.Fatalf("cap %d: PerPage = %d", cap, g.PerPage)
+		}
+	}
+
+	// A narrow area cannot honour the cap by widening; it must still tile.
+	tiny := TileGridCapped(Rect{Width: MinPaneWidth, Height: MinPaneHeight}, 6, HalfScreenPanes)
+	if tiny.PerPage != 1 || tiny.Pages != 6 {
+		t.Fatalf("a one-pane area gave PerPage %d over %d pages", tiny.PerPage, tiny.Pages)
+	}
+}

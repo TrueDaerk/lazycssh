@@ -111,9 +111,12 @@ func (a App) handlePaneKey(msg tea.KeyPressMsg) (App, tea.Cmd, bool) {
 			a.cfg.Targets.Toggle(id)
 		}
 		return a, nil, true
+	case key.Matches(msg, a.keys.ScreenMode):
+		next, cmd := a.cycleScreen()
+		return next, cmd, true
 	case key.Matches(msg, a.keys.FullScreen):
-		a.fullScreen = !a.fullScreen
-		return a, nil, true
+		next, cmd := a.toggleFullScreen()
+		return next, cmd, true
 	case key.Matches(msg, a.keys.Reconnect):
 		if id := a.FocusedHost(); id != "" {
 			return a, func() tea.Msg { return ReconnectHostMsg{ID: id} }, true

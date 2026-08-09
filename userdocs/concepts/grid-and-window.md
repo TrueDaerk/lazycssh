@@ -95,9 +95,27 @@ anything. An empty prompt or `0` clears it; ++esc++ keeps it. It is a view, not
 a removal: chunks are cut from the session's host list, and a host that
 reconnects reappears in its chunk without a keypress.
 
+**Screen modes** — ++alt+plus++ cycles three of them, the way lazygit's ++plus++
+does: **normal**, **half**, **full**. lazygit uses a bare ++plus++; here it needs
+++alt++, because a plain ++plus++ inside a pane belongs to the remote shell.
+
+- *normal* — the sidebar is a quarter of the width and every host that fits is
+  tiled.
+- *half* — whatever has the keyboard gets about half the terminal. With a panel
+  focused, the sidebar takes half the width and the other panels shrink to their
+  titles. With a pane focused, the grid shows two panes, so the focused one is
+  half the screen; the rest of the hosts page, and the overflow footer says how
+  many are hiding.
+- *full* — the focused pane fills the main area.
+
+The status bar carries `screen half` or `screen full` for as long as the mode is
+not normal. Half mode follows the keyboard: entering a pane hands the width to
+the grid, ++ctrl+bracket-right++ hands it back to the panels. Screen modes are a
+view only — they never change which hosts your next keystroke reaches.
+
 **Full screen** — ++alt+z++ zooms the focused pane to the whole main area,
-++alt+z++ again returns. Full screen skips the overflow footer: an explicit zoom
-has its own way back.
+++alt+z++ again returns, from whatever mode you were in. Full screen skips the
+overflow footer: an explicit zoom has its own way back.
 
 Inside a pane, ++ctrl+a++ is start-of-line and ++ctrl+s++ is flow control for
 the remote shell. ++ctrl+s++ is an app-level command only when no pane has the

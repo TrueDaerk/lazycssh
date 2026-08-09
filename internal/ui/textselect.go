@@ -36,10 +36,10 @@ type textSelection struct {
 	body Rect
 	// The view the selection was made over. If any of it changes the
 	// selection is stale.
-	scroll     int
-	page       int
-	chunk      int
-	fullScreen bool
+	scroll int
+	page   int
+	chunk  int
+	screen ScreenMode
 	// The anchor (press) and head (current) cells, absolute screen
 	// coordinates clamped into body.
 	startX, startY, x, y int
@@ -75,15 +75,15 @@ func (a App) beginTextSelection(index int, x, y int) App {
 		return a
 	}
 	a.textSel = textSelection{
-		active:     true,
-		host:       id,
-		index:      index,
-		body:       body,
-		scroll:     a.scrollOffset(id),
-		page:       a.clampedPage(a.grid()),
-		chunk:      a.splitChunk,
-		fullScreen: a.fullScreen,
-		startX:     x, startY: y, x: x, y: y,
+		active: true,
+		host:   id,
+		index:  index,
+		body:   body,
+		scroll: a.scrollOffset(id),
+		page:   a.clampedPage(a.grid()),
+		chunk:  a.splitChunk,
+		screen: a.screen,
+		startX: x, startY: y, x: x, y: y,
 	}
 	return a
 }
@@ -140,7 +140,7 @@ func (a App) textSelectionValid() bool {
 	if a.hostIDAt(s.index) != s.host || a.scrollOffset(s.host) != s.scroll {
 		return false
 	}
-	if a.clampedPage(a.grid()) != s.page || a.splitChunk != s.chunk || a.fullScreen != s.fullScreen {
+	if a.clampedPage(a.grid()) != s.page || a.splitChunk != s.chunk || a.screen != s.screen {
 		return false
 	}
 	body, ok := a.paneBodyRect(s.index)

@@ -19,7 +19,8 @@ lazycssh keeps exactly two kinds of key for itself while you type:
 - ++ctrl+bracket-right++ — the reserved escape. It returns you to the app level,
   on the Status panel, which answers where the keys go now. It is the telnet
   escape on purpose: one sequence that always means "give me my keyboard back".
-- the ++alt++ and ++shift++ pane chords — ++alt+arrows++, ++alt+z++, ++alt+x++,
+- the ++alt++ and ++shift++ pane chords — ++alt+arrows++, ++alt+z++,
+  ++alt+plus++, ++alt+x++,
   ++alt+r++, ++alt+y++, ++alt+space++, ++shift+page-up++ and friends.
   Combinations the encoder never produced, so intercepting them forwards
   nothing you could otherwise have sent.

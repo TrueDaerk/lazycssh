@@ -87,6 +87,13 @@ type Model struct {
 	ctx context.Context
 
 	width, height int
+
+	// paneWidth and paneHeight are the pane content size the remotes were last
+	// told about. The size follows more than the terminal - the screen mode
+	// and which area has focus both move it (issue #219) - so every UI update
+	// is a candidate for a resize, and this is what keeps that from sending a
+	// window-change request per keystroke.
+	paneWidth, paneHeight int
 }
 
 // Build assembles a run. Nothing is dialled yet; [Model.Init] starts the fleet
@@ -363,6 +370,10 @@ func (m *Model) forward(msg tea.Msg) tea.Cmd {
 	if app, ok := model.(ui.App); ok {
 		m.app = app
 	}
+	// The pane size can change without the terminal changing: entering a pane
+	// in half screen mode widens the grid (issue #219). Only a size that
+	// actually moved is sent, so this costs nothing per keystroke.
+	m.resizePTYsIfChanged()
 	return cmd
 }
 
@@ -481,24 +492,45 @@ func (m *Model) dropPattern(id string) {
 	m.patterns = out
 }
 
-// resizePTYs tells every remote PTY how big its pane's content is right now.
-// The grid is recomputed the way the UI draws it, so what the remote believes
-// matches what the user sees.
-func (m *Model) resizePTYs() {
-	if m.width <= 0 || m.height <= 0 {
+// resizePTYsIfChanged is [Model.resizePTYs] for the messages that only
+// sometimes move the geometry - every UI update, in other words. A session
+// that just joined the run is sized by the explicit call the change already
+// makes, so skipping an unchanged size here cannot leave a new remote at the
+// dialling default.
+func (m *Model) resizePTYsIfChanged() {
+	if w, h := m.paneExtent(); w == m.paneWidth && h == m.paneHeight {
 		return
+	}
+	m.resizePTYs()
+}
+
+// paneExtent is the pane content size the remotes should believe, 0x0 when
+// there is nothing drawn to take it from.
+func (m *Model) paneExtent() (width, height int) {
+	if m.width <= 0 || m.height <= 0 {
+		return 0, 0
 	}
 	// The UI knows which panes are drawn - the foreground session, not the
 	// fleet - so its grid is the shape the remotes must match.
 	grid := m.app.Grid()
 	if grid.Empty() {
-		return
+		return 0, 0
 	}
 	cell := grid.Cells[0]
 	// One line of header and the border on each side never belong to the
 	// remote shell.
-	width := max(1, cell.Width-2)
-	height := max(1, cell.Height-3)
+	return max(1, cell.Width-2), max(1, cell.Height-3)
+}
+
+// resizePTYs tells every remote PTY how big its pane's content is right now.
+// The grid is recomputed the way the UI draws it, so what the remote believes
+// matches what the user sees.
+func (m *Model) resizePTYs() {
+	width, height := m.paneExtent()
+	if width <= 0 || height <= 0 {
+		return
+	}
+	m.paneWidth, m.paneHeight = width, height
 	_ = m.mgr.Resize(width, height)
 }
 

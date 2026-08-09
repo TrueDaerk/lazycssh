@@ -44,6 +44,15 @@ const (
 // selected panel gets the whole column. Heights are never negative and always
 // sum to at most total, so a hostile resize cannot push a renderer below zero.
 func SidebarHeights(total, panels, selected int) []int {
+	return SidebarHeightsMode(total, panels, selected, false)
+}
+
+// SidebarHeightsMode is [SidebarHeights] with the half-mode variant: when
+// expanded is true the unselected panels give up their preview rows and
+// collapse to bare titled boxes, so the selected panel takes every row the
+// column can spare. That is what half mode means on the sidebar - the panel
+// under the keyboard gets the height, the others still say they are there.
+func SidebarHeightsMode(total, panels, selected int, expanded bool) []int {
 	if panels <= 0 {
 		return nil
 	}
@@ -57,8 +66,9 @@ func SidebarHeights(total, panels, selected int) []int {
 	switch {
 	case total >= CollapsedPanelHeight*panels:
 		// Room for every box plus a selected panel at least as tall. Any
-		// surplus beyond that buys preview rows for the unselected panels.
-		if panels > 1 {
+		// surplus beyond that buys preview rows for the unselected panels -
+		// unless half mode asked for the selected panel to have them.
+		if panels > 1 && !expanded {
 			surplus := total - CollapsedPanelHeight*panels
 			preview := surplus / 2 / (panels - 1)
 			collapsed = min(CollapsedPanelHeight+preview, PreviewPanelMaxHeight)
@@ -129,6 +139,24 @@ func (l Layout) BroadcastVisible() bool { return !l.Broadcast.Empty() }
 // sizes no terminal would report: a resize must never produce a negative width
 // that a renderer then tries to fill.
 func ComputeLayout(width, height int) Layout {
+	return ComputeScreenLayout(width, height, ScreenNormal, AreaSidebar)
+}
+
+// ComputeScreenLayout is [ComputeLayout] for a given screen mode and focused
+// area.
+//
+// Only [ScreenHalf] changes the geometry, and it changes exactly one number -
+// how the columns are split between the sidebar and the grid:
+//
+//   - sidebar focused: the panel column takes half the width instead of a
+//     quarter, so a group or session list can be read without opening it.
+//   - grid or broadcast focused: the panel column shrinks to its minimum, so
+//     the panes get every column it can spare.
+//
+// [ScreenFull] is a property of the grid, not of the frame: it draws one pane
+// in the main area (see renderMain), which is what alt+z has always meant, so
+// the rects here are the normal ones.
+func ComputeScreenLayout(width, height int, mode ScreenMode, focus Area) Layout {
 	l := Layout{Width: width, Height: height}
 
 	if width < MinWidth || height < MinHeight {
@@ -144,12 +172,23 @@ func ComputeLayout(width, height int) Layout {
 
 	sidebarWidth := 0
 	if width >= SidebarMinWidth+MainMinWidth {
-		sidebarWidth = width / 4
-		if sidebarWidth < SidebarMinWidth {
+		switch {
+		case mode == ScreenHalf && focus == AreaSidebar:
+			// Half the terminal, and the cap that keeps the sidebar modest on
+			// a wide screen does not apply: the user asked for the room.
+			sidebarWidth = max(width/2, SidebarMinWidth)
+		case mode == ScreenHalf:
+			// The grid (or the bar under it) has the keyboard, so the panel
+			// column keeps only what it needs to stay legible.
 			sidebarWidth = SidebarMinWidth
-		}
-		if sidebarWidth > SidebarMaxWidth {
-			sidebarWidth = SidebarMaxWidth
+		default:
+			sidebarWidth = width / 4
+			if sidebarWidth < SidebarMinWidth {
+				sidebarWidth = SidebarMinWidth
+			}
+			if sidebarWidth > SidebarMaxWidth {
+				sidebarWidth = SidebarMaxWidth
+			}
 		}
 		// Never at the cost of the grid: on a narrow terminal the panel list
 		// gives up its share rather than squeezing the output to nothing.

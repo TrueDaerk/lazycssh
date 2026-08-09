@@ -67,7 +67,8 @@ from the app level too.
 | ++cmd+left++ / ++cmd+right++ | line start / end on the remote line (sent as ++ctrl+a++ / ++ctrl+e++) |
 | ++cmd+backspace++ | kill to line start (sent as ++ctrl+u++) |
 | ++alt+space++ | toggle this pane's host in the selection |
-| ++alt+z++ | full-screen this pane |
+| ++alt+z++ | full-screen this pane; again to return |
+| ++alt+plus++ | cycle the screen mode: normal / half / full |
 | ++alt+r++ | reconnect this host |
 | ++alt+x++ | close this host; on a dead host, remove its pane |
 | ++alt+y++ | copy this pane's visible text (OSC 52) |

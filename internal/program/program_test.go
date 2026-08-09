@@ -219,6 +219,41 @@ func TestWindowSizeResizesTheRemotePTYs(t *testing.T) {
 	}
 }
 
+// keyPress synthesises the two chords this file needs: the modifiers are
+// spelled out rather than parsed, because a program-level test only has to
+// press keys, not model a keyboard.
+func keyPress(chord string) tea.KeyPressMsg {
+	switch chord {
+	case "alt+shift+left":
+		return tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModAlt | tea.ModShift}
+	case "alt++":
+		return tea.KeyPressMsg{Code: '+', Mod: tea.ModAlt}
+	default:
+		panic("keyPress cannot synthesise " + chord)
+	}
+}
+
+// The pane size follows the screen mode as well as the terminal (issue #219):
+// half mode gives the focused pane more room, and the remote has to be told.
+func TestScreenModeResizesTheRemotePTYs(t *testing.T) {
+	m, lookup := testModel(t, "srv1", "srv2", "srv3", "srv4")
+	m.Init()
+	m.Manager().Wait()
+
+	drive(t, m, tea.WindowSizeMsg{Width: 200, Height: 60})
+	tiled, tiledHeight := lookup("srv1").Size()
+
+	// Entering a pane, then cycling to half mode: both are focus-or-mode
+	// changes with no window size message behind them.
+	drive(t, m, keyPress("alt+shift+left"))
+	drive(t, m, keyPress("alt++"))
+
+	w, h := lookup("srv1").Size()
+	if w <= tiled && h <= tiledHeight {
+		t.Fatalf("half mode left the remote at %dx%d, it was %dx%d", w, h, tiled, tiledHeight)
+	}
+}
+
 func TestViewIsFullScreen(t *testing.T) {
 	m, _ := testModel(t, "srv"+strconv.Itoa(1))
 	drive(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})

@@ -132,3 +132,116 @@ func TestRectEmpty(t *testing.T) {
 		}
 	}
 }
+
+// The geometry at every screen mode, from the same arithmetic: half mode moves
+// the column split towards whatever has focus, normal and full leave it alone.
+func TestComputeScreenLayoutPerMode(t *testing.T) {
+	const width, height = 200, 60
+
+	tests := []struct {
+		name             string
+		mode             ScreenMode
+		focus            Area
+		wantSidebar      int
+		wantSameAsNormal bool
+	}{
+		{name: "normal", mode: ScreenNormal, focus: AreaSidebar, wantSameAsNormal: true},
+		{name: "full is a grid property", mode: ScreenFull, focus: AreaGrid, wantSameAsNormal: true},
+		{name: "half on the sidebar", mode: ScreenHalf, focus: AreaSidebar, wantSidebar: width / 2},
+		{name: "half on the grid", mode: ScreenHalf, focus: AreaGrid, wantSidebar: SidebarMinWidth},
+		{name: "half on the bar", mode: ScreenHalf, focus: AreaBroadcast, wantSidebar: SidebarMinWidth},
+	}
+
+	normal := ComputeLayout(width, height)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			l := ComputeScreenLayout(width, height, tc.mode, tc.focus)
+			if tc.wantSameAsNormal {
+				if l != normal {
+					t.Fatalf("layout = %+v, want the normal %+v", l, normal)
+				}
+				return
+			}
+			if l.Sidebar.Width != tc.wantSidebar {
+				t.Fatalf("Sidebar.Width = %d, want %d", l.Sidebar.Width, tc.wantSidebar)
+			}
+			if l.Sidebar.Width+l.Main.Width != width {
+				t.Fatalf("the columns do not add up: %+v", l)
+			}
+			if l.Main.Width < MainMinWidth {
+				t.Fatalf("the grid was squeezed to %d columns", l.Main.Width)
+			}
+			if l.Main.X != l.Sidebar.Width || l.Broadcast.X != l.Sidebar.Width {
+				t.Fatalf("the grid and the bar do not start where the sidebar ends: %+v", l)
+			}
+		})
+	}
+}
+
+// Half mode must survive the sizes a boolean never had to: a terminal only just
+// wide enough for both columns still gets a usable grid.
+func TestComputeScreenLayoutNeverReturnsNegativeRects(t *testing.T) {
+	for _, mode := range []ScreenMode{ScreenNormal, ScreenHalf, ScreenFull} {
+		for _, focus := range []Area{AreaGlobal, AreaSidebar, AreaGrid, AreaBroadcast} {
+			for width := -5; width < 200; width++ {
+				for height := -5; height < 60; height++ {
+					l := ComputeScreenLayout(width, height, mode, focus)
+					for name, r := range map[string]Rect{
+						"sidebar": l.Sidebar, "main": l.Main,
+						"broadcast": l.Broadcast, "status": l.StatusBar,
+					} {
+						if r.Width < 0 || r.Height < 0 || r.X < 0 || r.Y < 0 {
+							t.Fatalf("%v/%v at %dx%d: %s = %+v", mode, focus, width, height, name, r)
+						}
+					}
+					if l.TooSmall {
+						continue
+					}
+					if l.Sidebar.Width+l.Main.Width != width {
+						t.Fatalf("%v/%v at %dx%d: columns do not add up: %+v",
+							mode, focus, width, height, l)
+					}
+					if l.SidebarVisible() && l.Main.Width < MainMinWidth {
+						t.Fatalf("%v/%v at %dx%d: the grid is %d columns",
+							mode, focus, width, height, l.Main.Width)
+					}
+				}
+			}
+		}
+	}
+}
+
+// The half-mode height split: the selected panel takes the preview rows, and
+// the column still adds up at every size.
+func TestSidebarHeightsModeExpanded(t *testing.T) {
+	const panels = 4
+
+	for total := 0; total < 80; total++ {
+		for selected := range panels {
+			normal := SidebarHeights(total, panels, selected)
+			expanded := SidebarHeightsMode(total, panels, selected, true)
+
+			sum := 0
+			for i, h := range expanded {
+				if h < 0 {
+					t.Fatalf("total %d: panel %d got %d rows", total, i, h)
+				}
+				sum += h
+			}
+			if sum > total {
+				t.Fatalf("total %d: the panels want %d rows", total, sum)
+			}
+			if expanded[selected] < normal[selected] {
+				t.Fatalf("total %d: the selected panel shrank in half mode: %d < %d",
+					total, expanded[selected], normal[selected])
+			}
+			if total >= CollapsedPanelHeight*panels {
+				for i, h := range expanded {
+					if i != selected && h != CollapsedPanelHeight {
+						t.Fatalf("total %d: unselected panel %d got %d rows", total, i, h)
+					}
+				}
+			}
+		}
+	}
+}

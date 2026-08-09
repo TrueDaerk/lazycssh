@@ -15,12 +15,12 @@ import (
 // tiles the *full* main area: whether the footer itself costs a row must not
 // change the answer, or the layout would flap.
 func (a App) overflowFooterVisible() bool {
-	if a.fullScreen {
+	if a.FullScreen() {
 		// Full screen is an explicit zoom; alt+z is the way back and the
 		// status bar still carries the counts.
 		return false
 	}
-	g := TileGrid(a.layout.Main, a.gridSlots())
+	g := TileGridCapped(a.layout.Main, a.gridSlots(), a.gridPaneCap())
 	return g.Pages > 1 || a.splitChunks() > 1 || len(a.open) > 1
 }
 

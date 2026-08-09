@@ -207,7 +207,7 @@ func TestViewSurvivesHostListShrinkingMidRender(t *testing.T) {
 	flaky := &flakyFleet{fakeFleet: fleet, flaky: "web-03", flipAfter: 2}
 	a.cfg.Fleet = flaky
 
-	a.fullScreen = true
+	a.screen = ScreenFull
 	a.paneIndex = 2 // the pane whose host is about to vanish
 
 	flaky.armed = true
