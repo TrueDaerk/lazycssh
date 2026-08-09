@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-10T12:00:00Z
+timestamp: 2026-08-10T13:00:00Z
 ---
 
 # TUI shell
@@ -394,6 +394,17 @@ ignores the sequence, and the status line reports what was attempted either way.
 is plain: ANSI styling is stripped and clear markers are excluded, because a paste target wants
 the ID or the error message, not the colours around it. Both chords appear in the `?` overlay,
 generated from the keymap as ever.
+
+### Export
+
+`alt+w` (issue #252) is the postmortem grain: the clipboard copies above only reach the local
+machine, and only until the next copy overwrites them. `alt+w` writes the focused pane's whole
+retained scrollback — same content as `alt+d`, ANSI stripped the same way — to a file,
+`lazycssh-<alias>-<timestamp>.log`, in the working directory the program was started from. The
+write happens off the event loop, in a `tea.Cmd`, landing back as `PaneExportedMsg` (issue
+#225's disk-I/O rule); the status line reports the line count and path, or the failure. This is
+deliberately not [session logging](./session-logging.md#one-shot-export-vs-session-logging): that
+is opt-in for the whole run and every host, this is one pane, one keypress, one file.
 
 **Mouse selection** (issue #149) is the finer grain: press and drag the left button over a
 pane's body and the covered text highlights in reverse video, stream-shaped like a terminal's

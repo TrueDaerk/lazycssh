@@ -185,6 +185,27 @@ Clipboard text is plain: ANSI styling is stripped and dropped-line markers are
 excluded, because a paste target wants the ID or the error message, not the
 colours around it.
 
+## Exporting to a file
+
+The clipboard only reaches your local machine, and only until the next copy.
+For a postmortem you want to keep — the one host that broke, out of the forty
+you ran a command on — ++alt+w++ writes the focused pane's whole retained
+scrollback to a file:
+
+```
+lazycssh-<alias>-<timestamp>.log
+```
+
+in the directory lazycssh was started from, ANSI escapes stripped, same as
+the clipboard copies. The status bar confirms it — `wrote 214 lines of
+web-03's scrollback to lazycssh-web-03-2026-08-10_09-14-02.log` — or says why
+it did not, if the write failed.
+
+This is a one-shot, explicit export, not the same thing as
+[logging a run to disk](#logging-a-run-to-disk) (`--log-dir`): nothing is
+written until you press the key, and only the one pane you are looking at,
+never every host for the whole run.
+
 ### Mouse selection
 
 Press and drag the left button over a pane's body: the covered text highlights

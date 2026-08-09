@@ -2,6 +2,21 @@
 
 ## 2026-08-10
 
+- Export the focused pane's scrollback to a file, `alt+w` (issue #252). The clipboard copies
+  (`alt+y`/`alt+d`) only reach the local machine and only for as long as the next paste; a
+  postmortem on one host after a run against forty needs the text to outlive the program.
+  `alt+w` writes the pane's whole retained ring — history plus screen, ANSI escapes stripped —
+  to `lazycssh-<alias>-<timestamp>.log` in the working directory, and the status bar reports
+  the line count and path (or the failure). It follows the alt-chord convention `alt+y`/`alt+d`
+  already set rather than the plain `y`/`Y`/`w` the issue first proposed: a focused pane is a
+  terminal, so every grid binding is alt or shift (`TestGridBindingsAreAllModified`) — a plain
+  key would either leak into `vim`/a shell prompt or silently swallow it, and no amount of
+  scoping avoids that ambiguity. Disk I/O runs in a `tea.Cmd`, landing as `PaneExportedMsg`, the
+  same issue #225 rule every other write in `internal/ui` follows. Deliberately not routed
+  through `internal/sessionlog`: that package is continuous, opt-in-at-start, every host; this is
+  one pane, one keypress, one file — see the new "One-shot export vs session logging" section in
+  `core/session-logging.md`. `internal/ui/export.go` (new), `keys.go`, `typing.go`, `app.go`.
+
 - Per-command exit status in the pane headers (issue #251). The exit indicator stopped being "the
   last code this session reported" and became "how the last command *sent from the command line*
   ended on this host": `·` while it is out, `✓` for zero, `exit N` for a failure, and nothing at
