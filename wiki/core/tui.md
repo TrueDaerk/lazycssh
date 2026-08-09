@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-09T19:25:28Z
+timestamp: 2026-08-10T02:00:00Z
 ---
 
 # TUI shell
@@ -362,11 +362,32 @@ never involved and the layout can never shift by a cell.
 
 ### Search
 
-`alt+/` opens a search prompt that owns the keyboard while it is open. `enter` commits the term
-and scrolls the focused pane to the **newest** match — the reader is almost always hunting the
-error that just happened; `alt+[` and `alt+]` walk to older and newer matches without wrapping.
-Matching lines are drawn in the match style, their own colours dropped: a highlight fighting the
-remote's colours would lose. `alt+c` clears the term; a bare `esc` belongs to the remote shell.
+`/` opens a search prompt that owns the keyboard while it is open — the pager key, live in the UI
+command scope where plain letters are commands, so it never collides with broadcasting a literal
+slash: a focused pane is a terminal and types `/` to its host, where `alt+/` opens the same
+prompt. `enter` commits the term and scrolls the focused pane to the **newest** match — the
+reader is almost always hunting the error that just happened.
+
+`n` and `N` (or `alt+[` and `alt+]`, which also work while typing) walk to older and newer
+matches. They **do not wrap**: running out of matches in a direction stays put, like pane
+movement, and the counter says which end the cursor is at. While a term is live these letters
+shadow the app-level ones — a declared shadow like the Groups panel's `n`/`d`, resolved by
+routing order and ended by `esc`.
+
+Every matching line is drawn in the match style, its own colours dropped: a highlight fighting
+the remote's colours would lose. The one line the cursor stands on takes the louder
+current-match style, and the status bar counts it — `search "error" 3/17`, or `search "error"
+no match` when that pane holds none. A term nothing matches moves no viewport at all.
+
+`esc` (or `alt+c`) leaves the search: the term and the highlight go, and every pane the search
+scrolled goes back to the offset it had before the first jump — recorded once per pane, at that
+jump, so returning is exact. `esc` *inside* the input abandons the editing only, leaving whatever
+term was live before it opened. While typing to a host a bare `esc` still belongs to the remote
+shell.
+
+The cursor is stored as a virtual-line index per pane, in the same coordinate space as the
+scroll offset, and each step re-reads the match list — so output arriving during a hunt cannot
+desynchronise the counter from what is highlighted.
 
 One term is shared by every pane, because "which of my hosts printed this" is a question about
 the run. The cross-pane form is the command line's `/find <text>`: it sets the shared term and

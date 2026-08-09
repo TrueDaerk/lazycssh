@@ -116,9 +116,10 @@ func TestSearchWithinAPane(t *testing.T) {
 		t.Fatalf("the active search is not named in the status bar:\n%s", bar)
 	}
 
-	// The match line carries the match style.
+	// The line the search landed on carries the current-match style; the other
+	// matches - none here - would carry the plain one.
 	styled := a.View().Content
-	if !strings.Contains(styled, a.theme.Match.Render("ERROR: broken pipe")) {
+	if !strings.Contains(styled, a.theme.MatchCurrent.Render("ERROR: broken pipe")) {
 		t.Fatal("the matching line is not highlighted")
 	}
 

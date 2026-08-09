@@ -81,7 +81,22 @@ from the app level too.
 | ++shift+home++ / ++shift+end++ | oldest retained output / back to the tail |
 | ++alt+slash++ | search the scrollback |
 | ++alt+bracket-left++ / ++alt+bracket-right++ | older / newer match |
-| ++alt+c++ | clear the search |
+| ++alt+c++ | leave the search: highlight off, panes back where they were |
+
+## Scrollback search (app level)
+
+Where plain letters are commands — the sidebar, the broadcast bar's view mode —
+the search takes the pager keys as well:
+
+| Key | Action |
+|---|---|
+| ++slash++ | search the focused pane's scrollback |
+| ++n++ / ++shift+n++ | older / newer match, while a search is live |
+| ++esc++ | leave the search, restoring the scroll position it moved |
+
+While a search is live ++n++ is "older match" rather than "connect a new host";
+++esc++ ends the search and gives the letter back. A focused pane is a terminal,
+so ++slash++ and ++n++ still reach the host while you are typing.
 
 ## The broadcast bar
 

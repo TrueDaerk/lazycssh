@@ -155,7 +155,9 @@ func (a App) handlePaneKey(msg tea.KeyPressMsg) (App, tea.Cmd, bool) {
 	case key.Matches(msg, a.keys.PrevMatch):
 		return a.stepMatch(+1), nil, true
 	case key.Matches(msg, a.keys.ClearSearch):
-		return a.clearSearch(), nil, true
+		// Same as esc from the app level: the highlight goes and every pane the
+		// search scrolled goes back to where it was.
+		return a.exitSearch(), nil, true
 	}
 	return a, nil, false
 }

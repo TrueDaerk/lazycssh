@@ -31,6 +31,11 @@ const (
 	// other key, generate the footers of the boxes that use them, and appear
 	// in the `?` overlay (issue #226).
 	AreaPrompt
+	// AreaSearch covers the scrollback search of the focused pane. Like
+	// AreaPrompt it is not a focus target but a mode: `/` opens it from the UI
+	// command scope, and while a term is live its plain letters shadow the
+	// app-level ones until esc ends the search (issue #250).
+	AreaSearch
 )
 
 // String returns the name shown as a help column heading.
@@ -46,6 +51,8 @@ func (a Area) String() string {
 		return "broadcast"
 	case AreaPrompt:
 		return "prompts"
+	case AreaSearch:
+		return "search"
 	default:
 		return "unknown(" + strconv.Itoa(int(a)) + ")"
 	}
@@ -141,6 +148,15 @@ type KeyMap struct {
 	NextMatch    key.Binding
 	PrevMatch    key.Binding
 	ClearSearch  key.Binding
+
+	// Scrollback search from the UI command scope. These are the plain keys a
+	// pager trained everyone to press; they are live only where no terminal-like
+	// input owns the keyboard, and the letters only while a term is live, so a
+	// pane still types `/` and `n` to its host (issue #250).
+	SearchOpen  key.Binding
+	MatchOlder  key.Binding
+	MatchNewer  key.Binding
+	SearchLeave key.Binding
 
 	// Prompts and dialogs. These keys are matched before any area binding,
 	// because whatever prompt is open owns the keyboard while it is open.
@@ -297,6 +313,19 @@ func DefaultKeyMap() KeyMap {
 		PrevMatch:    key.NewBinding(key.WithKeys("alt+]"), key.WithHelp("alt+]", "newer match")),
 		ClearSearch:  key.NewBinding(key.WithKeys("alt+c"), key.WithHelp("alt+c", "clear the search")),
 
+		// The pager keys, for the scope where plain letters are commands. `n`
+		// and `N` shadow "connect a new host" and nothing, and only while a
+		// search is live: hunting an error is a mode, and the mode ends with
+		// esc.
+		SearchOpen: key.NewBinding(key.WithKeys("/"),
+			key.WithHelp("/", "search the focused pane's scrollback")),
+		MatchOlder: key.NewBinding(key.WithKeys("n"),
+			key.WithHelp("n", "older match (while searching)")),
+		MatchNewer: key.NewBinding(key.WithKeys("N"),
+			key.WithHelp("N", "newer match (while searching)")),
+		SearchLeave: key.NewBinding(key.WithKeys("esc"),
+			key.WithHelp("esc", "leave the search: highlight off, scroll back where it was")),
+
 		PromptSubmit: key.NewBinding(key.WithKeys("enter"),
 			key.WithHelp("enter", "apply what was typed")),
 		// One esc backs out of everything transient: a prompt, a dialog, a
@@ -431,6 +460,13 @@ func (k KeyMap) prompts() []key.Binding {
 	}
 }
 
+// search returns the bindings of the scrollback search mode. They are their own
+// group for the same reason the prompts are: they are live only while the
+// search is, and while it is they decide what a plain `n` means.
+func (k KeyMap) search() []key.Binding {
+	return []key.Binding{k.SearchOpen, k.MatchOlder, k.MatchNewer, k.SearchLeave}
+}
+
 // Bindings returns the bindings of one area.
 func (k KeyMap) Bindings(area Area) []key.Binding {
 	switch area {
@@ -442,6 +478,8 @@ func (k KeyMap) Bindings(area Area) []key.Binding {
 		return k.broadcastBar()
 	case AreaPrompt:
 		return k.prompts()
+	case AreaSearch:
+		return k.search()
 	default:
 		return k.global()
 	}
@@ -455,6 +493,7 @@ func (k KeyMap) All() []key.Binding {
 	// The bar shares LeaveTyping with the grid; only its own three are new here.
 	out = append(out, k.BroadcastEscape, k.BroadcastLiteral, k.BroadcastEdit)
 	out = append(out, k.prompts()...)
+	out = append(out, k.search()...)
 	return out
 }
 
@@ -462,7 +501,7 @@ func (k KeyMap) All() []key.Binding {
 // they are not a focus target, so the column answers "what will the box in
 // front of me take" rather than "what can I do here".
 func Areas() []Area {
-	return []Area{AreaGlobal, AreaSidebar, AreaGrid, AreaBroadcast, AreaPrompt}
+	return []Area{AreaGlobal, AreaSidebar, AreaGrid, AreaBroadcast, AreaPrompt, AreaSearch}
 }
 
 // For returns a [help.KeyMap] describing the bindings that apply while area has
@@ -496,6 +535,8 @@ func (c contextHelp) ShortHelp() []key.Binding {
 		return []key.Binding{k.LeaveTyping, k.BroadcastEscape, k.BroadcastEdit}
 	case AreaPrompt:
 		return []key.Binding{k.PromptSubmit, k.PromptCancel, k.ConfirmYes, k.ConfirmNo}
+	case AreaSearch:
+		return []key.Binding{k.MatchOlder, k.MatchNewer, k.SearchLeave}
 	default:
 		return []key.Binding{k.NextTab, k.CommandLine, k.Help, k.Quit}
 	}
