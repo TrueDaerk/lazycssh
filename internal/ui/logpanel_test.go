@@ -101,7 +101,9 @@ func TestEnterResendsTheSelectedCommand(t *testing.T) {
 	}
 }
 
-func TestLogCursorMovesAndLeavesThePanelAtTheTop(t *testing.T) {
+// At the top of the list, up is a no-op: it never switches away from the
+// Command log panel (issue #212).
+func TestLogCursorMovesAndStaysInThePanelAtTheTop(t *testing.T) {
 	a, log := logApp(t, 0)
 	log.Record("one", broadcast.ModeAll, 1)
 	log.Record("two", broadcast.ModeAll, 1)
@@ -112,7 +114,10 @@ func TestLogCursorMovesAndLeavesThePanelAtTheTop(t *testing.T) {
 	}
 	a = pressKey(t, a, "k")
 	a = pressKey(t, a, "k")
-	if a.Panel() != PanelSessions {
+	if a.LogCursor() != 0 {
+		t.Fatalf("LogCursor() = %d after running off the top", a.LogCursor())
+	}
+	if a.Panel() != PanelCommandLog {
 		t.Fatalf("Panel() = %v after moving off the top", a.Panel())
 	}
 }

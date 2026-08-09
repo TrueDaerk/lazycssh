@@ -86,6 +86,8 @@ type KeyMap struct {
 	// Sidebar.
 	Up          key.Binding
 	Down        key.Binding
+	Left        key.Binding
+	Right       key.Binding
 	Choose      key.Binding
 	Toggle      key.Binding
 	SaveSet     key.Binding
@@ -186,8 +188,15 @@ func DefaultKeyMap() KeyMap {
 		SelectUp:  key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "select the hosts that are up")),
 		SelectDwn: key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "select the hosts that are down")),
 
-		Up:        key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
-		Down:      key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
+		Up:   key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
+		Down: key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
+		// left/right have no other meaning while the sidebar has focus - a
+		// pane and the broadcast bar keep them as keystrokes for the hosts -
+		// so here they are free for an explicit panel switch, bounded to the
+		// panel list unlike tab/shift+tab, which also reach the broadcast bar
+		// (issue #212).
+		Left:      key.NewBinding(key.WithKeys("left"), key.WithHelp("←", "previous panel")),
+		Right:     key.NewBinding(key.WithKeys("right"), key.WithHelp("→", "next panel")),
 		Choose:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open / bring to the foreground")),
 		Toggle:    key.NewBinding(key.WithKeys("space", " "), key.WithHelp("space", "open / bring to the foreground")),
 		SaveSet:   key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "save the run as a group")),
@@ -258,7 +267,7 @@ func (k KeyMap) global() []key.Binding {
 // sidebar returns the bindings that act on the panel list.
 func (k KeyMap) sidebar() []key.Binding {
 	return []key.Binding{
-		k.Up, k.Down, k.Choose, k.Toggle,
+		k.Up, k.Down, k.Left, k.Right, k.Choose, k.Toggle,
 		k.SaveSet, k.NextChunk, k.PrevChunk,
 		k.GroupNew, k.GroupDelete, k.SessionEnd,
 	}
@@ -345,7 +354,7 @@ func (c contextHelp) ShortHelp() []key.Binding {
 	k := c.keys
 	switch c.area {
 	case AreaSidebar:
-		return []key.Binding{k.Up, k.Down, k.Choose, k.Toggle, k.NextTab, k.Help}
+		return []key.Binding{k.Up, k.Down, k.Left, k.Right, k.Choose, k.Toggle, k.Help}
 	case AreaGrid:
 		// While typing, every plain key goes to the host - the hints may only
 		// name chords lazycssh actually keeps.

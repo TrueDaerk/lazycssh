@@ -1,5 +1,16 @@
 # Log
 
+## 2026-08-09
+
+- Up/down no longer switch the focused sidebar panel (issue #212): they moved a list cursor
+  inside the Groups/Sessions/Command-log panels, but jumped to the next/previous panel at the
+  first/last entry and did nothing useful on the Status panel's absent cursor — the same key
+  meant two different things depending on cursor position. The boundary `movePanel` calls in
+  `handleGroupsKey`, `handleSessionsKey` and `handleLogKey` are gone; up/down are now a no-op at
+  the ends. `left`/`right` are the new explicit panel switch while the sidebar has focus, since
+  neither key means anything else there — bounded to the panel list, unlike `tab`/`shift+tab`,
+  which still reach the broadcast bar. `core/keys.md` and the user docs updated. Version 0.10.3.
+
 ## 2026-08-07
 
 - Issue creation aligned with the ike process (issue #210): `contributing/workflow.md` now

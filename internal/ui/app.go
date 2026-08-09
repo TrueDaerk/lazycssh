@@ -685,9 +685,20 @@ func (a App) handleHostInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return a, cmd
 }
 
-// handleSidebarKey moves within the panel list, or within the selected panel
-// when that panel owns a list of its own.
+// handleSidebarKey switches panels on left/right, or dispatches up/down and
+// the rest to the panel that owns a list of its own. Up/down never switch the
+// panel (issue #212): they move a cursor inside the focused panel. Left/right
+// - which mean nothing else while the sidebar has focus - are the explicit way
+// to change which panel is focused, stopping at the ends; tab/shift+tab still
+// own reaching the broadcast bar.
 func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, a.keys.Left):
+		return a.movePanel(-1), nil
+	case key.Matches(msg, a.keys.Right):
+		return a.movePanel(+1), nil
+	}
+
 	switch a.panel {
 	case PanelGroups:
 		return a.handleGroupsKey(msg)
@@ -698,10 +709,6 @@ func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch {
-	case key.Matches(msg, a.keys.Up):
-		return a.movePanel(-1), nil
-	case key.Matches(msg, a.keys.Down):
-		return a.movePanel(+1), nil
 	case key.Matches(msg, a.keys.Choose):
 		// Choosing a host is choosing its pane; the panel that owns the list
 		// says which host, and the grid is where the user wanted to end up.
@@ -744,12 +751,12 @@ func (a App) handleLogKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, a.keys.Up):
 		if a.logCursor <= 0 {
-			return a.movePanel(-1), nil
+			return a, nil
 		}
 		return a.moveLogCursor(-1), nil
 	case key.Matches(msg, a.keys.Down):
 		if a.logCursor >= entries-1 {
-			return a.movePanel(+1), nil
+			return a, nil
 		}
 		return a.moveLogCursor(+1), nil
 	case key.Matches(msg, a.keys.Choose):
@@ -766,12 +773,12 @@ func (a App) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, a.keys.Up):
 		if a.sessionCursor <= 0 {
-			return a.movePanel(-1), nil
+			return a, nil
 		}
 		return a.moveSessionCursor(-1), nil
 	case key.Matches(msg, a.keys.Down):
 		if a.sessionCursor >= rows-1 {
-			return a.movePanel(+1), nil
+			return a, nil
 		}
 		return a.moveSessionCursor(+1), nil
 	case key.Matches(msg, a.keys.Choose), key.Matches(msg, a.keys.Toggle):
@@ -792,12 +799,12 @@ func (a App) handleGroupsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, a.keys.Up):
 		if a.groupCursor <= 0 {
-			return a.movePanel(-1), nil
+			return a, nil
 		}
 		return a.moveGroupCursor(-1), nil
 	case key.Matches(msg, a.keys.Down):
 		if a.groupCursor >= rows-1 {
-			return a.movePanel(+1), nil
+			return a, nil
 		}
 		return a.moveGroupCursor(+1), nil
 	case key.Matches(msg, a.keys.Choose), key.Matches(msg, a.keys.Toggle):

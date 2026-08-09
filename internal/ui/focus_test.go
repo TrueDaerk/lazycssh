@@ -65,27 +65,50 @@ func TestPaneFocusDoesNotWrap(t *testing.T) {
 	}
 }
 
-func TestArrowsMoveWithinTheSidebar(t *testing.T) {
+// Up/down never switch the focused sidebar panel (issue #212): on the Status
+// panel there is no list cursor for them to move, so they are a no-op.
+func TestUpDownNeverSwitchTheSidebarPanel(t *testing.T) {
 	a := resize(t, testApp(), 120, 40)
 	if a.Focus() != AreaSidebar {
 		t.Fatal("setup: the sidebar does not have focus")
 	}
+	if a.Panel() != PanelStatus {
+		t.Fatal("setup: the Status panel does not have focus")
+	}
 
 	a = pressKey(t, a, "j")
-	if a.Panel() != PanelGroups {
-		t.Fatalf("Panel() = %v after moving down", a.Panel())
+	if a.Panel() != PanelStatus {
+		t.Fatalf("Panel() = %v after down", a.Panel())
 	}
 	a = pressKey(t, a, "k")
 	if a.Panel() != PanelStatus {
-		t.Fatalf("Panel() = %v after moving up", a.Panel())
+		t.Fatalf("Panel() = %v after up", a.Panel())
 	}
-	a = pressKey(t, a, "k")
+}
+
+// left/right are the explicit way to switch panels while the sidebar has
+// focus, since neither key means anything else there.
+func TestLeftRightSwitchTheSidebarPanel(t *testing.T) {
+	a := resize(t, testApp(), 120, 40)
+	if a.Panel() != PanelStatus {
+		t.Fatal("setup: the Status panel does not have focus")
+	}
+
+	a = pressKey(t, a, "right")
+	if a.Panel() != PanelGroups {
+		t.Fatalf("Panel() = %v after right", a.Panel())
+	}
+	a = pressKey(t, a, "left")
+	if a.Panel() != PanelStatus {
+		t.Fatalf("Panel() = %v after left", a.Panel())
+	}
+	a = pressKey(t, a, "left")
 	if a.Panel() != PanelStatus {
 		t.Fatal("the sidebar selection moved above the first panel")
 	}
 
 	for range 10 {
-		a = pressKey(t, a, "j")
+		a = pressKey(t, a, "right")
 	}
 	if a.Panel() != PanelCommandLog {
 		t.Fatalf("Panel() = %v after running off the end", a.Panel())
@@ -94,7 +117,7 @@ func TestArrowsMoveWithinTheSidebar(t *testing.T) {
 
 // A plain key means one thing at a time: while a pane is focused it is a
 // keystroke for the host, and only the alt chords move the pane focus; at the
-// app level the same letters drive the panel lists.
+// app level the same key drives the sidebar instead.
 func TestTheSameKeyMeansOneThingAtATime(t *testing.T) {
 	a := fleetApp(t, 4)
 
@@ -107,9 +130,9 @@ func TestTheSameKeyMeansOneThingAtATime(t *testing.T) {
 		t.Fatalf("PaneIndex() = %d, want one row down", a.PaneIndex())
 	}
 
-	a = pressKey(t, a, "ctrl+]") // back to the app level
+	a = pressKey(t, a, "ctrl+]") // back to the app level, on the Status panel
 	paneBefore := a.PaneIndex()
-	a = pressKey(t, a, "j")
+	a = pressKey(t, a, "right")
 	if a.PaneIndex() != paneBefore {
 		t.Fatal("a key handled by the sidebar also moved the pane focus")
 	}
