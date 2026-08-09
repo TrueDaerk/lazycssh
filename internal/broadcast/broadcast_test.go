@@ -908,3 +908,85 @@ func TestOneShellAmongEditorsRestoresTheExclusion(t *testing.T) {
 		t.Fatalf("AltScreenSkipped() = %q, want the editors", got)
 	}
 }
+
+// A delivery names the hosts it reached, not only how many: the command log
+// records that set so a later send can be aimed at its complement (issue #256).
+func TestSendReportsWhoReceivedIt(t *testing.T) {
+	r, _ := router(t, 3)
+	sessions := newFakeSessions("web-01", "web-02", "web-03")
+	sessions.up["web-02"] = false
+	r.Attach(sessions)
+
+	d, _ := r.Send([]byte("uptime\n"))
+	if strings.Join(d.To, ",") != "web-01,web-03" {
+		t.Fatalf("To = %v", d.To)
+	}
+}
+
+// SendTo is the "these hosts, nobody else" send: it ignores the mode, the
+// working set and the selection, because the caller has already decided.
+func TestSendToReachesOnlyTheHostsNamed(t *testing.T) {
+	r, ws := router(t, 4)
+	sessions := newFakeSessions("web-01", "web-02", "web-03", "web-04")
+	r.Attach(sessions)
+
+	// A working set and a selection that would both send somewhere else.
+	if err := ws.ApplySpec("first 1", nil); err != nil {
+		t.Fatalf("ApplySpec: %v", err)
+	}
+	r.Select("web-01")
+
+	d, err := r.SendTo([]string{"web-03", "web-04"}, []byte("uptime\n"))
+	if err != nil {
+		t.Fatalf("SendTo: %v", err)
+	}
+	if d.Scope != 2 || d.Targets != 2 || d.Delivered != 2 {
+		t.Fatalf("Delivery = %+v", d)
+	}
+	if strings.Join(d.To, ",") != "web-03,web-04" {
+		t.Fatalf("To = %v", d.To)
+	}
+	for _, id := range []string{"web-01", "web-02"} {
+		if sessions.writes[id] != "" {
+			t.Fatalf("%s received %q from a send it was not named in", id, sessions.writes[id])
+		}
+	}
+}
+
+// A named host that cannot take input is counted as meant but not reached, the
+// same way an unreachable host in scope is.
+func TestSendToSkipsHostsThatAreDown(t *testing.T) {
+	r, _ := router(t, 3)
+	sessions := newFakeSessions("web-01", "web-02", "web-03")
+	sessions.up["web-02"] = false
+	sessions.failing["web-03"] = true
+	r.Attach(sessions)
+
+	d, err := r.SendTo([]string{"web-01", "web-02", "web-03"}, []byte("uptime\n"))
+	if err == nil {
+		t.Fatal("SendTo hid a write failure")
+	}
+	if d.Scope != 3 || d.Targets != 2 || d.Delivered != 1 {
+		t.Fatalf("Delivery = %+v", d)
+	}
+	if strings.Join(d.To, ",") != "web-01" {
+		t.Fatalf("To = %v", d.To)
+	}
+	if got := d.String(); got != "sent to 1/3 hosts (2 did not receive it)" {
+		t.Fatalf("String() = %q", got)
+	}
+}
+
+// Without a transport nothing is sent and the caller is told, rather than
+// being handed a delivery that claims success.
+func TestSendToWithoutATransport(t *testing.T) {
+	r, _ := router(t, 2)
+
+	d, err := r.SendTo([]string{"web-01"}, []byte("uptime\n"))
+	if err == nil {
+		t.Fatal("SendTo reported success without a transport")
+	}
+	if d.Delivered != 0 || d.To != nil {
+		t.Fatalf("Delivery = %+v", d)
+	}
+}

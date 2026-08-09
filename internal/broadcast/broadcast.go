@@ -521,6 +521,51 @@ func (r *Router) Send(p []byte) (Delivery, error) {
 			continue
 		}
 		d.Delivered++
+		d.To = append(d.To, id)
+	}
+	return d, errors.Join(d.Errs...)
+}
+
+// SendTo writes to exactly the hosts named, skipping the ones that cannot take
+// input right now. It is how a command is aimed at a host list computed
+// elsewhere - the hosts that missed an earlier send (issue #256) - rather than
+// at the current scope.
+//
+// The current mode, working set, selection and visibility limit are all
+// bypassed: the caller has already decided who receives this. The alt-screen
+// exclusion is bypassed for the same reason - an explicit host list is an
+// explicit choice, not a broadcast that might stray into somebody's vim. The
+// mode is still reported, because the audit trail asks what the run was doing
+// at the time.
+func (r *Router) SendTo(ids []string, p []byte) (Delivery, error) {
+	d := Delivery{Mode: r.mode, Scope: len(ids)}
+
+	if r.sessions == nil {
+		return d, fmt.Errorf("broadcast: no transport attached")
+	}
+
+	for _, id := range ids {
+		if !r.sessions.Connected(id) {
+			// Not a failure to report per host: a host that is down was never
+			// going to receive this, and Scope already counts it as meant. The
+			// report's "N did not receive it" is what says so.
+			continue
+		}
+		d.Targets++
+
+		w, ok := r.sessions.Writer(id)
+		if !ok {
+			d.Failed = append(d.Failed, id)
+			d.Errs = append(d.Errs, fmt.Errorf("write to %s: session lost its writer", id))
+			continue
+		}
+		if _, err := w.Write(p); err != nil {
+			d.Failed = append(d.Failed, id)
+			d.Errs = append(d.Errs, fmt.Errorf("write to %s: %w", id, err))
+			continue
+		}
+		d.Delivered++
+		d.To = append(d.To, id)
 	}
 	return d, errors.Join(d.Errs...)
 }
@@ -544,6 +589,7 @@ func (r *Router) SendKey(k term.KeyEvent) (Delivery, error) {
 			continue
 		}
 		d.Delivered++
+		d.To = append(d.To, id)
 	}
 	return d, errors.Join(d.Errs...)
 }
@@ -558,6 +604,10 @@ type Delivery struct {
 	Targets int
 	// Delivered is how many actually took it.
 	Delivered int
+	// To lists the hosts that took it, in host order. It is what the command
+	// log records as the send's target set, so a later resend can be aimed at
+	// the hosts that were *not* in it (issue #256).
+	To []string
 	// Failed lists the hosts that did not, in host order.
 	Failed []string
 	// Errs are the write errors behind Failed.

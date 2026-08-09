@@ -34,7 +34,7 @@ func logApp(t *testing.T, capacity int) (App, *commandlog.Log) {
 // target count, not 40 times.
 func TestLogPanelShowsOneLinePerCommand(t *testing.T) {
 	a, log := logApp(t, 0)
-	log.Record("systemctl restart nginx", broadcast.ModeAll, 40)
+	log.Record("systemctl restart nginx", broadcast.ModeAll, hostIDs(40))
 
 	view := plain(a.panelBody(PanelCommandLog, 70, 20, true))
 	if got := strings.Count(view, "systemctl restart nginx"); got != 1 {
@@ -50,8 +50,8 @@ func TestLogPanelNeverShowsSingleModeInput(t *testing.T) {
 	const password = "hunter2-typed-at-a-sudo-prompt"
 
 	a, log := logApp(t, 0)
-	log.Record(password, broadcast.ModeSingle, 1)
-	log.Record("uptime", broadcast.ModeAll, 2)
+	log.Record(password, broadcast.ModeSingle, hostIDs(1))
+	log.Record("uptime", broadcast.ModeAll, hostIDs(2))
 
 	view := plain(a.panelBody(PanelCommandLog, 70, 20, true))
 	if strings.Contains(view, password) {
@@ -64,8 +64,8 @@ func TestLogPanelNeverShowsSingleModeInput(t *testing.T) {
 
 func TestLogPanelIsOldestFirst(t *testing.T) {
 	a, log := logApp(t, 0)
-	log.Record("first", broadcast.ModeAll, 1)
-	log.Record("second", broadcast.ModeAll, 2)
+	log.Record("first", broadcast.ModeAll, hostIDs(1))
+	log.Record("second", broadcast.ModeAll, hostIDs(2))
 
 	view := plain(a.panelBody(PanelCommandLog, 70, 20, true))
 	if strings.Index(view, "first") > strings.Index(view, "second") {
@@ -77,8 +77,8 @@ func TestLogPanelIsOldestFirst(t *testing.T) {
 // originally reached.
 func TestEnterResendsTheSelectedCommand(t *testing.T) {
 	a, log := logApp(t, 0)
-	log.Record("uptime", broadcast.ModeAll, 2)
-	log.Record("df -h", broadcast.ModeSelected, 1)
+	log.Record("uptime", broadcast.ModeAll, hostIDs(2))
+	log.Record("df -h", broadcast.ModeSelected, hostIDs(1))
 
 	a = pressKey(t, a, "j")
 	if a.SelectedCommand() != "df -h" {
@@ -105,8 +105,8 @@ func TestEnterResendsTheSelectedCommand(t *testing.T) {
 // Command log panel (issue #212).
 func TestLogCursorMovesAndStaysInThePanelAtTheTop(t *testing.T) {
 	a, log := logApp(t, 0)
-	log.Record("one", broadcast.ModeAll, 1)
-	log.Record("two", broadcast.ModeAll, 1)
+	log.Record("one", broadcast.ModeAll, hostIDs(1))
+	log.Record("two", broadcast.ModeAll, hostIDs(1))
 
 	a = pressKey(t, a, "j")
 	if a.LogCursor() != 1 {
@@ -126,7 +126,7 @@ func TestLogCursorMovesAndStaysInThePanelAtTheTop(t *testing.T) {
 func TestDroppedEntriesAreReported(t *testing.T) {
 	a, log := logApp(t, 2)
 	for _, command := range []string{"one", "two", "three"} {
-		log.Record(command, broadcast.ModeAll, 1)
+		log.Record(command, broadcast.ModeAll, hostIDs(1))
 	}
 
 	view := plain(a.panelBody(PanelCommandLog, 70, 20, true))
@@ -142,8 +142,8 @@ func TestDroppedEntriesAreReported(t *testing.T) {
 // reads the way the decision felt.
 func TestFleetCommandsAreMarked(t *testing.T) {
 	a, log := logApp(t, 0)
-	log.Record("uptime", broadcast.ModeAll, 2) // the cursor sits here
-	log.Record("reboot", broadcast.ModeFleet, 40)
+	log.Record("uptime", broadcast.ModeAll, hostIDs(2)) // the cursor sits here
+	log.Record("reboot", broadcast.ModeFleet, hostIDs(40))
 
 	entry, _ := log.Last()
 	styled := a.panelBody(PanelCommandLog, 70, 20, true)
@@ -157,7 +157,7 @@ func TestFleetCommandsAreMarked(t *testing.T) {
 // keeps a muted marker so the position is never lost (issue #222).
 func TestLogCursorHighlightOnlyWhenPanelFocused(t *testing.T) {
 	a, log := logApp(t, 0)
-	log.Record("uptime", broadcast.ModeAll, 2)
+	log.Record("uptime", broadcast.ModeAll, hostIDs(2))
 	entry, _ := log.Last()
 	th := a.Theme()
 
@@ -210,7 +210,7 @@ func TestLogPanelWithNothingSent(t *testing.T) {
 // path and the panel offers no way to name one.
 func TestLogPanelHasNoPathToDisk(t *testing.T) {
 	a, log := logApp(t, 0)
-	log.Record("uptime", broadcast.ModeAll, 2)
+	log.Record("uptime", broadcast.ModeAll, hostIDs(2))
 
 	view := plain(a.panelBody(PanelCommandLog, 70, 20, true))
 	for _, unwanted := range []string{"/", ".log", "written"} {
@@ -227,9 +227,9 @@ func TestLogPanelHasNoPathToDisk(t *testing.T) {
 // budgeted in visual lines, and up/down still moves exactly one entry.
 func TestLogPanelBudgetsWrappedEntriesByVisualLines(t *testing.T) {
 	a, log := logApp(t, 0)
-	log.Record(strings.Repeat("very-long-command ", 6), broadcast.ModeAll, 2) // wraps
+	log.Record(strings.Repeat("very-long-command ", 6), broadcast.ModeAll, hostIDs(2)) // wraps
 	for i := 0; i < 5; i++ {
-		log.Record(fmt.Sprintf("short-%d", i), broadcast.ModeAll, 2)
+		log.Record(fmt.Sprintf("short-%d", i), broadcast.ModeAll, hostIDs(2))
 	}
 
 	const width, height = 40, 5
@@ -253,9 +253,9 @@ func TestLogPanelBudgetsWrappedEntriesByVisualLines(t *testing.T) {
 // an entry index, never a visual line.
 func TestLogCursorStepsOneEntryAcrossWrappedNeighbours(t *testing.T) {
 	a, log := logApp(t, 0)
-	log.Record("first", broadcast.ModeAll, 2)
-	log.Record(strings.Repeat("wrapped ", 10), broadcast.ModeAll, 2)
-	log.Record("last", broadcast.ModeAll, 2)
+	log.Record("first", broadcast.ModeAll, hostIDs(2))
+	log.Record(strings.Repeat("wrapped ", 10), broadcast.ModeAll, hostIDs(2))
+	log.Record("last", broadcast.ModeAll, hostIDs(2))
 
 	a.panels.log.cursor = 0
 	a = pressKey(t, a, "down")

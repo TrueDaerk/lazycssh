@@ -113,6 +113,20 @@ Resending an entry from the command log (++4++, ++enter++) takes the same path,
 so it goes to the set that is active **now** — replaying the old target list
 would send a command to machines you have since paged away from.
 
+### Catching up a host that missed a command
+
+A host that reconnects after the fleet already ran a command missed it, and
+resending to everybody would run it twice on the machines that did not. In the
+command log, ++m++ on an entry sends it to the hosts that are up **now** and
+were **not** among its targets — and to nobody else. The panel preview names
+them and counts them (`missing → 2 hosts`) before you press the key; with
+nothing missing it says `all hosts already received this` and sends nothing.
+
+A host that *did* receive the command is never offered again, even if it has
+reconnected since and its shell has forgotten what the command did — re-running
+there is the ordinary ++enter++ resend. A clone, or a host that joined the run
+after the send, has never received it and is offered.
+
 ## Switching what you address
 
 | Key | Mode |

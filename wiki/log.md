@@ -1,5 +1,29 @@
 # Log
 
+## 2026-08-11
+
+- Resend a logged command to the hosts that **missed** it, `m` in the Command log panel
+  (issue #256). A host that reconnects into a fleet that already ran three commands missed
+  them; re-sending to the whole scope would run them a second time on the thirty-nine machines
+  that did not. Every log entry now stores its **target set** rather than only a count
+  (`Entry.Hosts`, fed by the new `broadcast.Delivery.To`, which names the hosts a send actually
+  reached), `Entry.Missing(connected)` is the set difference, and the new `Router.SendTo`
+  delivers to exactly that list — bypassing the mode, the working set, the selection, the
+  visibility limit and the alt-screen exclusion, because an explicit host list is already a
+  decision rather than a broadcast that might stray.
+  The semantic decision the issue asked for: **membership is by session identifier, and a host
+  that received the command is never missing again** — not even after a reconnect that gave it a
+  fresh shell. Guessing otherwise would re-run a destructive command on a machine nobody asked
+  about, and `enter` is one keypress away for that. A clone or a host that joined after the send
+  has its own identifier, was never a target, and is therefore missing; a host that is down now
+  is not offered at all.
+  The resolved target list and its count are on screen **before** the key is pressed — the panel
+  preview renders `missing → 2 hosts` and names them — which is the broadcast-count rule applied
+  to an action that is not a broadcast. Nothing missing is a true no-op reporting
+  `all hosts already received this`. The resend is recorded in the **original** entry's mode: it
+  repeats that decision rather than making a new one. `core/command-log.md`, `core/keys.md` and
+  `userdocs/reference/keybindings.md` updated. Version 0.10.32.
+
 ## 2026-08-10
 
 - Filter the grid by pane output, `f` (issue #255). The prompt takes a

@@ -19,9 +19,24 @@ type fakeSender struct {
 	sent     []string
 	delivery broadcast.Delivery
 	err      error
+	// sentTo are the explicit host lists SendTo was aimed at, in order.
+	sentTo [][]string
+	// deliverTo makes SendTo report a delivery to exactly the hosts it was
+	// given, rather than the canned one.
+	deliverTo bool
 	// onSend, when set, runs while the command is in flight - the window a
 	// host that answers immediately would land in.
 	onSend func()
+}
+
+// hostIDs is a fleet of n synthetic host identifiers, the target set of a
+// logged command in tests that only care about the count.
+func hostIDs(n int) []string {
+	out := make([]string, 0, n)
+	for i := range n {
+		out = append(out, fmt.Sprintf("host-%02d", i+1))
+	}
+	return out
 }
 
 func (f *fakeSender) Send(p []byte) (broadcast.Delivery, error) {
@@ -30,6 +45,23 @@ func (f *fakeSender) Send(p []byte) (broadcast.Delivery, error) {
 		f.onSend()
 	}
 	return f.delivery, f.err
+}
+
+// SendTo records where an explicitly targeted send went, so a test can tell
+// "send to these hosts" from a broadcast.
+func (f *fakeSender) SendTo(ids []string, p []byte) (broadcast.Delivery, error) {
+	f.sentTo = append(f.sentTo, ids)
+	f.sent = append(f.sent, string(p))
+	if f.onSend != nil {
+		f.onSend()
+	}
+	d := f.delivery
+	if f.deliverTo {
+		// The default fake delivers to exactly what it was aimed at, which is
+		// what a live router does when every named host is up.
+		d.Scope, d.Targets, d.Delivered, d.To = len(ids), len(ids), len(ids), ids
+	}
+	return d, f.err
 }
 
 // SendKey records the key's canonical name in angle brackets, so a test can
@@ -49,9 +81,13 @@ func cmdApp(t *testing.T, names ...string) (App, *fakeSender, *broadcast.Router,
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)
 	}
-	sender := &fakeSender{delivery: broadcast.Delivery{
-		Mode: broadcast.ModeAll, Scope: len(names), Targets: len(names), Delivered: len(names),
-	}}
+	sender := &fakeSender{
+		delivery: broadcast.Delivery{
+			Mode: broadcast.ModeAll, Scope: len(names), Targets: len(names),
+			Delivered: len(names), To: append([]string(nil), names...),
+		},
+		deliverTo: true,
+	}
 	log := commandlog.New(0)
 
 	a := resize(t, NewApp(Config{
@@ -125,7 +161,7 @@ func TestCommandLineSendsToTheBroadcastSet(t *testing.T) {
 
 	// The audit trail gets one entry, with the count it reached.
 	entry, ok := log.Last()
-	if !ok || entry.Command != "uptime" || entry.Targets != 3 {
+	if !ok || entry.Command != "uptime" || entry.Targets() != 3 {
 		t.Fatalf("log entry = %+v (%v)", entry, ok)
 	}
 

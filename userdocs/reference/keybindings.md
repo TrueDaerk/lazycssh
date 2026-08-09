@@ -48,6 +48,7 @@ not typing into a pane, not in the broadcast bar's edit mode, not in a prompt.
 | ++n++ | *(Groups panel)* new group |
 | ++d++ | *(Groups panel)* delete the group under the cursor, after a confirm |
 | ++x++ | *(Sessions panel)* end the session under the cursor, after a confirm |
+| ++m++ | *(Command log panel)* resend the entry under the cursor to the hosts that **missed** it — the ones up now that were not among its targets. The preview names them and counts them first; with nothing missing it says `all hosts already received this` and sends nothing |
 
 The Groups panel's ++n++ and ++d++ deliberately shadow their global meanings
 while it has focus — lazygit-style panel keys.
