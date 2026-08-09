@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-09T13:00:00Z
+timestamp: 2026-08-09T18:00:00Z
 ---
 
 # TUI shell
@@ -69,6 +69,31 @@ Rules:
   width, so even the apology cannot wrap into the scrollback;
 - every rect is non-negative at every size, including sizes no terminal reports. A test sweeps
   every width from −5 to 200 and every height from −5 to 60 and asserts it.
+
+## The main area
+
+The main area is lazygit's detail view: it shows the selection of whatever side panel has the
+keyboard (issue #218). The pane grid is the fleet's detail view, so it keeps the area whenever
+the **grid** or the **Status** panel — the panel that describes the run as a whole — has focus.
+The three list panels replace it with a read-only **preview** of their cursor row, so moving the
+cursor says what `enter` would act on before it is pressed:
+
+| Panel | Preview |
+|-------|---------|
+| `[2] Groups` | the group's host count, description, whether it is already open, and its host patterns as typed |
+| `[3] Sessions` | foreground or background, ending, `n/m up`, and every host with its connection state (and the failure text behind a failed one) |
+| `[4] Command log` | the whole command, the timestamp, and the scope it went out in — the list row truncates a long command, this does not |
+
+Previews are built from model state alone — the group rows the store was last read into, the
+[fleet snapshot](#the-fleet-snapshot), the in-memory [command log](./command-log.md). Nothing in
+`internal/ui/preview.go` dials, reads a file or touches live session state, so a preview cannot
+disagree with the frame it is drawn in. A preview taller than the area says how much it hid
+(`+7 more`) rather than clipping silently, and it is drawn with `titledBox` into `Layout.Main`,
+so it degrades with the box at every size and the too-small guard still wins.
+
+While a preview is showing, the main area is not a grid: a click there brings the grid back
+instead of closing or typing into a pane that is not on screen, and the wheel over it scrolls
+nothing.
 
 ## Pane grid
 

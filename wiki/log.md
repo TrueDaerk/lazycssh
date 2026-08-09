@@ -2,6 +2,15 @@
 
 ## 2026-08-09
 
+- The main area now previews the focused sidebar panel's cursor row (issue #218), the way
+  lazygit's main view details the selected side-panel item: `[2] Groups` shows the group's
+  patterns and metadata, `[3] Sessions` its hosts and their states, `[4] Command log` the whole
+  command with its timestamp and scope. Grid and Status focus keep the pane grid — it is the
+  fleet's detail view. Previews are pure model state (`internal/ui/preview.go`), count the rows
+  they cannot fit, and render inside `Layout.Main` at every size; a click on one brings the grid
+  back rather than acting on a pane that is not drawn. Documented in `core/tui.md`. Version
+  0.10.8.
+
 - Cut `-race` test wall time (issue #230): `TestRenderSurvivesConcurrentStateFlips` renders 50
   frames instead of 500 and its flip goroutines yield per iteration instead of busy-spinning —
   that one test alone took 201s under `-race`. `TestFakeFlood` floods 10 500 lines (just past

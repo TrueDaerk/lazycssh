@@ -965,6 +965,12 @@ func (a App) renderMain() string {
 	r := a.layout.Main
 	focused := a.focus == AreaGrid
 
+	// A focused list panel takes the main area for a preview of its cursor
+	// row, lazygit style; the grid comes back with the focus (issue #218).
+	if preview, ok := a.mainPreview(); ok {
+		return preview
+	}
+
 	if len(a.hostIDs()) == 0 {
 		// The empty state says what to do next rather than showing an empty
 		// frame: this is the argumentless start.

@@ -257,7 +257,7 @@ func TestUnselectedPanelsKeepAPreview(t *testing.T) {
 
 	a = pressKey(t, a, "2")
 	view := plain(a.View().Content)
-	if !strings.Contains(view, "1 web-01") {
+	if !strings.Contains(view, "no group directory") {
 		t.Fatalf("the selected panel says nothing:\n%s", view)
 	}
 	if !strings.Contains(view, "session: prod-web") {
