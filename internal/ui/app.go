@@ -129,6 +129,9 @@ type App struct {
 	help   help.Model
 	layout Layout
 
+	// panels are the sidebar's child models; see internal/ui/sidepanel.go.
+	panels panelSet
+
 	saveInput   textinput.Model
 	cmdInput    textinput.Model
 	searchInput textinput.Model
@@ -276,9 +279,12 @@ func NewApp(cfg Config) App {
 		panel:           PanelStatus,
 		active:          -1,
 	}
+	a.panels = panelSet{
+		status: statusPanel{targets: cfg.Targets, workingSet: cfg.WorkingSet},
+	}
 	// A run that starts with hosts starts with a session holding them: the
 	// CLI arguments are a workspace like any opened group.
-	a = a.snapshotFleet().adoptNewHosts().keepGridSlots()
+	a = a.snapshotFleet().adoptNewHosts().keepGridSlots().syncPanels()
 	// An argumentless start opens with nothing focused: the empty grid says
 	// what the options are, and which of them comes first - connect, launch a
 	// session, read the help - is the user's call, not the program's. The
@@ -340,7 +346,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// every message can move that: a resize repages the grid, an arrow key
 	// turns a page, a host leaving reflows the run. Resyncing once here is the
 	// only way the limit cannot drift out of step with the panes (issue #199).
-	return app.syncLayout().syncBroadcastLimit(), cmd
+	// The panels render from a pushed snapshot the same way; syncing it here,
+	// after the message settled, is what keeps a child's view from disagreeing
+	// with the root state it describes.
+	return app.syncLayout().syncBroadcastLimit().syncPanels(), cmd
 }
 
 // update is the real message handler; [App.Update] wraps it.

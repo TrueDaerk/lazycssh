@@ -61,7 +61,7 @@ func TestAuthQuestionsAreConcurrentAndPerPane(t *testing.T) {
 	if bar := plain(a.renderStatusBar()); !strings.Contains(bar, "AUTH 2 hosts") {
 		t.Fatalf("the status bar does not count the prompts:\n%s", bar)
 	}
-	if panel := plain(a.statusPanel(80)); !strings.Contains(panel, "auth: 2 prompts open — localhost localhost#2") {
+	if panel := plain(a.panelBody(PanelStatus, 80, 20, false)); !strings.Contains(panel, "auth: 2 prompts open — localhost localhost#2") {
 		t.Fatalf("the Status panel does not name the prompts:\n%s", panel)
 	}
 }
