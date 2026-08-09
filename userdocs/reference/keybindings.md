@@ -108,7 +108,7 @@ switch the broadcast mode.
 | ++enter++ | send / confirm |
 | ++esc++ | abandon |
 | ++tab++ | in the connect prompt: complete the first matching `~/.ssh/config` alias |
-| ++up++ / ++down++ | walk this run's command history |
+| ++up++ / ++down++ | walk the command history (persists across restarts) |
 | ++ctrl+q++ | quit — no prompt can trap you |
 
 These keys are bindings like every other, in their own **prompts** group. The

@@ -43,6 +43,56 @@ type Recorder interface {
 	Record(command string, mode broadcast.Mode, targets int) bool
 }
 
+// HistoryStore is the persistent broadcast command history: what Up/Down
+// walks, loaded once on start and appended to on every send so the recall
+// survives a restart. It is separate from [Recorder]: the log there is the
+// audit trail of what was sent to hosts, this is what was typed at the
+// prompt, and only that - never a raw broadcast keystroke - reaches it.
+type HistoryStore interface {
+	// Load returns the saved commands, oldest first.
+	Load() ([]string, error)
+	// Append adds a command, once per consecutive repeat.
+	Append(command string) error
+}
+
+// HistoryLoadedMsg carries a read of the on-disk command history back into
+// Update after [App.Init] asks for it. The read is disk I/O, so it happens in
+// a tea.Cmd; Update never blocks (issue #225).
+type HistoryLoadedMsg struct {
+	// Entries are the saved commands, oldest first.
+	Entries []string
+	// Err is why the file could not be read, or nil.
+	Err error
+}
+
+// loadHistoryCmd reads the persistent command history off the Update loop.
+// The result arrives as a [HistoryLoadedMsg].
+func (a App) loadHistoryCmd() tea.Cmd {
+	store := a.cfg.History
+	if store == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		entries, err := store.Load()
+		return HistoryLoadedMsg{Entries: entries, Err: err}
+	}
+}
+
+// applyHistoryLoaded seeds Up/Down recall with a read of the history file. The
+// load races Init's first render against whatever the user manages to type and
+// send before it returns, so the loaded entries are prepended rather than
+// replacing what is there: anything sent already this run stays, in order,
+// after the older entries the file remembers.
+func (a App) applyHistoryLoaded(msg HistoryLoadedMsg) App {
+	if msg.Err != nil {
+		a.lastDelivery = "history: " + msg.Err.Error()
+		return a
+	}
+	a.cmdHistory = append(append([]string(nil), msg.Entries...), a.cmdHistory...)
+	a.cmdHistoryPos = len(a.cmdHistory)
+	return a
+}
+
 // CommandLineOpen reports whether the command line has the keyboard.
 func (a App) CommandLineOpen() bool { return a.cmdInput.Focused() }
 
@@ -124,6 +174,12 @@ func (a App) sendCommandLine() (tea.Model, tea.Cmd) {
 	}
 
 	a.cmdHistory = appendHistory(a.cmdHistory, command)
+	if a.cfg.History != nil {
+		// Best effort: a disk write failing must not block a send that is
+		// otherwise fine, and the in-memory copy Up/Down already walks is
+		// unaffected either way.
+		_ = a.cfg.History.Append(command)
+	}
 	a = a.closeCommandLine()
 
 	// A find instruction is for lazycssh too: it sets the shared search term

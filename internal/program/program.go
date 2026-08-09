@@ -18,6 +18,7 @@ import (
 
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 	"github.com/TrueDaerk/lazycssh/internal/commandlog"
+	"github.com/TrueDaerk/lazycssh/internal/history"
 	"github.com/TrueDaerk/lazycssh/internal/hosts"
 	"github.com/TrueDaerk/lazycssh/internal/sessionlog"
 	"github.com/TrueDaerk/lazycssh/internal/sessions"
@@ -46,6 +47,11 @@ type Config struct {
 	// When set, every host's output is copied to its file and the status bar
 	// says SESSION LOGGING ON for the whole run.
 	Logs *sessionlog.Run
+	// History is the persistent broadcast command history the command line
+	// reads on start and appends to on every send. Nil means the run has no
+	// history file: recall starts empty and nothing is persisted, which keeps
+	// tests that build a Model without one off the disk.
+	History *history.Store
 
 	// NewSession overrides the session factory. Nil means the real one, which
 	// dials; tests inject fakes here so nothing in this package needs a
@@ -179,6 +185,9 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 	// leave it absent instead.
 	if cfg.Store != nil {
 		uiCfg.Sessions = cfg.Store
+	}
+	if cfg.History != nil {
+		uiCfg.History = cfg.History
 	}
 	app := ui.NewApp(uiCfg)
 
