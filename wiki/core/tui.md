@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-10T01:00:00Z
+timestamp: 2026-08-09T18:17:29Z
 ---
 
 # TUI shell
@@ -517,7 +517,9 @@ and `!` jumps to the next failure. What a dedicated Hosts panel used to add live
 
 An argumentless start opens on the Status panel with **no** input focused: the empty grid names
 the options — `A` to pick hosts, `n` to type one, the Groups panel, the CLI — and which of them
-comes first is the user's call, not the program's.
+comes first is the user's call, not the program's. The status bar echoes the same nudge next to
+the host count — `0 hosts — press A to add` — since it is the one line that stays on screen
+whichever panel has focus (issue #247).
 
 ### The host picker
 
