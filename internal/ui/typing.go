@@ -127,6 +127,11 @@ func (a App) handlePaneKey(msg tea.KeyPressMsg) (App, tea.Cmd, bool) {
 			return a, func() tea.Msg { return ReconnectHostMsg{ID: id} }, true
 		}
 		return a, nil, true
+	case key.Matches(msg, a.keys.Clone):
+		if id := a.FocusedHost(); id != "" {
+			return a, func() tea.Msg { return CloneHostMsg{ID: id} }, true
+		}
+		return a, nil, true
 	case key.Matches(msg, a.keys.ClosePane):
 		if id := a.FocusedHost(); id != "" {
 			return a, a.closeOrRemove(id), true

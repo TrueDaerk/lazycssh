@@ -2,6 +2,24 @@
 
 ## 2026-08-10
 
+- Clone the focused pane's connection into a second, independent session, `alt+shift+c` (issue
+  #253): `tail -f` in one pane, an interactive shell in another, on the same host, without
+  restarting with the host listed twice. It is almost entirely wiring over paths that already
+  existed — `Manager.Add` already dials one more session without touching the run, and its
+  identifier disambiguation (`srv1`, `srv1#2`, …) already covered a host repeated on the command
+  line (`TestManagerAddDisambiguatesAgainstTheRun`), so the clone gets the same treatment for
+  free and the pane title, which is just the session identifier, disambiguates itself. The new
+  binding takes `alt+shift+c` rather than the plain `c` the issue sketched: a focused pane is a
+  terminal, so every grid binding is `alt`/`shift` (`TestGridBindingsAreAllModified`), and plain
+  `alt+c` was already `ClearSearch`. `handlePaneKey` reads the focused host and emits
+  `CloneHostMsg{ID}`; the program layer resolves it back to a live `ssh.Session`, reads its
+  already-resolved `Host()` — no second pass through `~/.ssh/config` — and calls `Manager.Add`
+  with it, same as a runtime connect. Both panes are fully independent from the moment the second
+  one exists: separate sessions means separate scrollback, separate close/reconnect, and the
+  broadcast router treats the clone as its own target for `all` and `selected` because it reads
+  the fleet live rather than a set captured at connect time. `internal/ui/keys.go`,
+  `internal/ui/typing.go`, `internal/ui/fleet.go`, `internal/program/program.go`.
+
 - Export the focused pane's scrollback to a file, `alt+w` (issue #252). The clipboard copies
   (`alt+y`/`alt+d`) only reach the local machine and only for as long as the next paste; a
   postmortem on one host after a run against forty needs the text to outlive the program.

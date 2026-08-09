@@ -135,6 +135,7 @@ type KeyMap struct {
 	FullScreen   key.Binding
 	ScreenMode   key.Binding
 	Reconnect    key.Binding
+	Clone        key.Binding
 	ClosePane    key.Binding
 
 	CopyPane   key.Binding
@@ -294,6 +295,10 @@ func DefaultKeyMap() KeyMap {
 		ScreenMode: key.NewBinding(key.WithKeys("alt++", "alt+=", "alt+shift+="),
 			key.WithHelp("alt++", "cycle screen mode: normal / half / full")),
 		Reconnect: key.NewBinding(key.WithKeys("alt+r"), key.WithHelp("alt+r", "reconnect this host")),
+		// Shifted on top of alt+c, which already belongs to ClearSearch: two
+		// sessions on the same host - tail -f in one, a shell in the other -
+		// without restarting with the host listed twice (issue #253).
+		Clone:     key.NewBinding(key.WithKeys("alt+shift+c"), key.WithHelp("alt+shift+c", "clone this host into a new pane")),
 		ClosePane: key.NewBinding(key.WithKeys("alt+x"), key.WithHelp("alt+x", "close this host, again to remove")),
 
 		// Copy goes through OSC 52, so it reaches the local clipboard even
@@ -436,7 +441,7 @@ func (k KeyMap) grid() []key.Binding {
 	return []key.Binding{
 		k.LeaveTyping, k.ToggleSelect,
 		k.PaneLeft, k.PaneRight, k.PaneUp, k.PaneDown,
-		k.FullScreen, k.ScreenMode, k.Reconnect, k.ClosePane,
+		k.FullScreen, k.ScreenMode, k.Reconnect, k.Clone, k.ClosePane,
 		k.CopyPane, k.CopyBuffer, k.ExportPane,
 		k.ScrollUp, k.ScrollDown, k.ScrollTop, k.ScrollBottom,
 		k.SearchPane, k.NextMatch, k.PrevMatch, k.ClearSearch,

@@ -44,6 +44,25 @@ func TestReconnectKeyEmitsReconnectHostMsg(t *testing.T) {
 	}
 }
 
+func TestCloneKeyEmitsCloneHostMsg(t *testing.T) {
+	got := keyMsgResult(t, gridApp(t), "alt+shift+c")
+	msg, ok := got.(CloneHostMsg)
+	if !ok {
+		t.Fatalf("pressing alt+shift+c produced %T, want CloneHostMsg", got)
+	}
+	if msg.ID != "web-01" {
+		t.Errorf("CloneHostMsg.ID = %q, want the focused host web-01", msg.ID)
+	}
+}
+
+func TestCloneKeyWithoutHostsEmitsNothing(t *testing.T) {
+	a := resize(t, NewApp(Config{Theme: Options{Dark: true}}), 120, 40)
+	a = pressKey(t, a, "tab")
+	if got := keyMsgResult(t, a, "alt+shift+c"); got != nil {
+		t.Fatalf("pressing alt+shift+c with no hosts produced %T, want nothing", got)
+	}
+}
+
 func TestCloseKeyEmitsCloseHostMsg(t *testing.T) {
 	got := keyMsgResult(t, gridApp(t), "alt+x")
 	msg, ok := got.(CloseHostMsg)

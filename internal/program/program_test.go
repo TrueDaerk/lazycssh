@@ -167,6 +167,57 @@ func TestReconnectRequestReachesTheManager(t *testing.T) {
 	}
 }
 
+// The clone flow (issue #253): a second, independent session to the same
+// resolved host as an existing one, dialled through the same Add path a
+// runtime connect uses, so its identifier disambiguation is exactly the
+// manager's existing srv1/srv1#2 scheme.
+func TestCloneRequestAddsASecondSessionToTheSameHost(t *testing.T) {
+	m, _ := testModel(t, "srv1", "srv2")
+	m.Init()
+	m.Manager().Wait()
+
+	settle(t, m, ui.CloneHostMsg{ID: "srv1"})
+
+	got := m.Manager().IDs()
+	if len(got) != 3 || got[0] != "srv1" || got[1] != "srv2" || got[2] != "srv1#2" {
+		t.Fatalf("IDs() = %v, want srv1, srv2, srv1#2", got)
+	}
+	if !m.Manager().Connected("srv1#2") {
+		t.Error("the cloned session did not connect")
+	}
+
+	original, ok := m.Manager().Session("srv1")
+	if !ok {
+		t.Fatal("srv1 disappeared after cloning it")
+	}
+	clone, ok := m.Manager().Session("srv1#2")
+	if !ok {
+		t.Fatal("srv1#2 was not added")
+	}
+	if clone.Host().Addr != original.Host().Addr || clone.Host().User != original.Host().User ||
+		clone.Host().Port != original.Host().Port {
+		t.Errorf("clone Host() = %+v, want the same Addr/User/Port as %+v", clone.Host(), original.Host())
+	}
+	if clone.ID() == original.ID() {
+		t.Error("the clone shares its identifier with the original")
+	}
+	if m.ws.Count() != 3 {
+		t.Errorf("working set Count() = %d, want 3 after the clone was added", m.ws.Count())
+	}
+}
+
+func TestCloneRequestForAnUnknownSessionIsANoOp(t *testing.T) {
+	m, _ := testModel(t, "srv1")
+	m.Init()
+	m.Manager().Wait()
+
+	settle(t, m, ui.CloneHostMsg{ID: "does-not-exist"})
+
+	if got := m.Manager().Len(); got != 1 {
+		t.Fatalf("Len() = %d, want 1: an unknown session must not be clonable", got)
+	}
+}
+
 func TestReconnectAllRequestReachesTheManager(t *testing.T) {
 	m, lookup := testModel(t, "srv1", "srv2", "srv3")
 	m.Init()
