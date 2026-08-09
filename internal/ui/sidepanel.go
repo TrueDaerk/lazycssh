@@ -128,6 +128,7 @@ type panelSet struct {
 	status   statusPanel
 	groups   groupsPanel
 	sessions sessionsPanel
+	log      logPanel
 }
 
 // byID resolves a panel id to its child model, nil for a panel that has none.
@@ -141,6 +142,8 @@ func (ps *panelSet) byID(p Panel) sidePanel {
 		return &ps.groups
 	case PanelSessions:
 		return &ps.sessions
+	case PanelCommandLog:
+		return &ps.log
 	default:
 		return nil
 	}
@@ -172,6 +175,7 @@ func (a App) syncPanels() App {
 	a.panels.status.ctx = ctx
 	a.panels.groups.ctx = ctx
 	a.panels.sessions.ctx = ctx
+	a.panels.log.ctx = ctx
 	// A session leaving the list must not strand the cursor past the end;
 	// the clamp lives with the cursor's owner.
 	a.panels.sessions.clampCursor()

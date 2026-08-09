@@ -200,7 +200,6 @@ type App struct {
 	panel     Panel
 	paneIndex int
 	page      int
-	logCursor int
 	showHelp  bool
 
 	// screen is how much of the terminal the focused area gets; see screen.go.
@@ -260,6 +259,7 @@ func NewApp(cfg Config) App {
 			saveInput:  newLineInput("session name"),
 		},
 		sessions: sessionsPanel{keys: keys, chosen: -1},
+		log:      logPanel{keys: keys, log: cfg.CommandLog},
 	}
 	// A run that starts with hosts starts with a session holding them: the
 	// CLI arguments are a workspace like any opened group.
@@ -722,50 +722,21 @@ func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.movePanel(+1), nil
 	}
 
-	switch a.panel {
-	case PanelGroups:
-		return a, a.panels.groups.Update(msg)
-	case PanelSessions:
-		cmd := a.panels.sessions.Update(msg)
-		if index, ok := a.panels.sessions.takeChosen(); ok {
-			// The panel asked for a session in the foreground; the switch is
-			// the root's move, because the grid and the broadcast scope hang
-			// off it.
-			return a.foregroundSession(index), tea.Batch(cmd, gridChanged())
-		}
+	cmd := a.panels.byID(a.panel).Update(msg)
+	if index, ok := a.panels.sessions.takeChosen(); ok {
+		// The Sessions panel asked for a session in the foreground; the
+		// switch is the root's move, because the grid and the broadcast
+		// scope hang off it.
+		return a.foregroundSession(index), tea.Batch(cmd, gridChanged())
+	}
+	if cmd != nil {
 		return a, cmd
-	case PanelCommandLog:
-		return a.handleLogKey(msg)
 	}
 
-	switch {
-	case key.Matches(msg, a.keys.Choose):
-		// Choosing a host is choosing its pane; the panel that owns the list
-		// says which host, and the grid is where the user wanted to end up.
+	if a.panel == PanelStatus && key.Matches(msg, a.keys.Choose) {
+		// Choosing from the Status panel is choosing the run's panes: the
+		// grid is where the user wanted to end up.
 		a.focus = AreaGrid
-		return a, nil
-	}
-	return a, nil
-}
-
-// handleLogKey drives the Command log panel: the arrows move through the
-// history and enter sends an entry again.
-func (a App) handleLogKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	entries := len(a.logEntries())
-
-	switch {
-	case key.Matches(msg, a.keys.Up):
-		if a.logCursor <= 0 {
-			return a, nil
-		}
-		return a.moveLogCursor(-1), nil
-	case key.Matches(msg, a.keys.Down):
-		if a.logCursor >= entries-1 {
-			return a, nil
-		}
-		return a.moveLogCursor(+1), nil
-	case key.Matches(msg, a.keys.Choose):
-		return a.resendSelectedCommand()
 	}
 	return a, nil
 }

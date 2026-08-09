@@ -127,10 +127,6 @@ func (a App) moveCursorToVisibleRow(panel Panel, bodyRow int) App {
 	if p := a.panels.byID(panel); p != nil {
 		p.SetCursorRow(bodyRow)
 	}
-	switch panel {
-	case PanelCommandLog:
-		a.logCursor = clamp(bodyRow, 0, max(0, len(a.logEntries())-1))
-	}
 	return a
 }
 
@@ -139,10 +135,6 @@ func (a App) moveCursorToVisibleRow(panel Panel, bodyRow int) App {
 func (a App) movePanelCursor(panel Panel, delta int) App {
 	if p := a.panels.byID(panel); p != nil {
 		p.MoveCursor(delta)
-	}
-	switch panel {
-	case PanelCommandLog:
-		a.logCursor = clamp(a.logCursor+delta, 0, max(0, len(a.logEntries())-1))
 	}
 	return a
 }

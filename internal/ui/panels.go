@@ -19,12 +19,8 @@ func (a App) panelBody(panel Panel, width, height int, focused bool) string {
 	if p := a.panels.byID(panel); p != nil {
 		return p.View(focused, width, height)
 	}
-	switch panel {
-	case PanelCommandLog:
-		return a.logPanel(width, height, focused)
-	default:
-		return a.theme.Muted.Render("not implemented yet")
-	}
+	// A panel value with no child model: nothing renders it yet.
+	return a.theme.Muted.Render("not implemented yet")
 }
 
 // statusPanel answers the question the whole panel exists for: what happens if

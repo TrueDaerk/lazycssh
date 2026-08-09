@@ -4,8 +4,6 @@ import (
 	"fmt"
 
 	"charm.land/lipgloss/v2"
-
-	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 )
 
 // The main area is lazygit's detail view: it shows the selection of whatever
@@ -58,42 +56,7 @@ func (a App) panelPreview(panel Panel, width, height int) (string, string) {
 			return title, body
 		}
 	}
-	switch panel {
-	case PanelCommandLog:
-		return a.commandPreview(width, height)
-	default:
-		return "Preview", ""
-	}
-}
-
-// commandPreview shows the whole of the command under the Command log cursor:
-// the list truncates a long command to its row, and "what exactly did I send"
-// is the question the log exists to answer.
-func (a App) commandPreview(width, height int) (string, string) {
-	entries := a.logEntries()
-	if len(entries) == 0 {
-		if a.cfg.CommandLog == nil {
-			return "Command", fitLines(a.theme, width, height, []string{a.theme.Muted.Render("no command log")})
-		}
-		return "Command", fitLines(a.theme, width, height, []string{a.theme.Muted.Render("nothing sent yet")})
-	}
-	entry := entries[clamp(a.logCursor, 0, len(entries)-1)]
-
-	scope := fmt.Sprintf("%s → %d host%s", entry.Mode, entry.Targets, plural(entry.Targets))
-	scopeLine := a.field("scope", scope)
-	if entry.Mode == broadcast.ModeFleet {
-		// A command that went to every host reads here the way it read in the
-		// list: the audit trail should feel like the decision did.
-		scopeLine = a.theme.StatusWarning.Render(scope)
-	}
-
-	lines := []string{
-		a.field("sent", entry.At.Format("2006-01-02 15:04:05")),
-		scopeLine,
-		"",
-		a.theme.Base.Render(entry.Command),
-	}
-	return "Command", fitLines(a.theme, width, height, lines)
+	return "Preview", ""
 }
 
 // fitLines renders lines into the height it was dealt, wrapping each at the
