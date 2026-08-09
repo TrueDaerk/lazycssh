@@ -67,24 +67,29 @@ type modal struct {
 	CursorCol  int
 }
 
-// confirm builds a yes/no dialog: the question, then any notes that change
-// what answering yes means.
-func (a App) confirm(title, question string, notes ...string) modal {
+// confirmModal builds a yes/no dialog: the question, then any notes that
+// change what answering yes means.
+func confirmModal(theme Theme, keys KeyMap, title, question string, notes ...string) modal {
 	// The warning style is the status bar's, which pads itself for a bar it
 	// is not in here; inside a box the padding only widens it.
-	lines := []string{a.theme.StatusWarning.Padding(0).Render(question)}
+	lines := []string{theme.StatusWarning.Padding(0).Render(question)}
 	for _, note := range notes {
-		lines = append(lines, a.theme.Muted.Render(note))
+		lines = append(lines, theme.Muted.Render(note))
 	}
-	return modal{Title: title, Lines: lines, Hint: confirmHint(a.keys), CursorLine: noCursor}
+	return modal{Title: title, Lines: lines, Hint: confirmHint(keys), CursorLine: noCursor}
 }
 
-// prompt builds a dialog around one text input: any context lines, then the
-// labelled input with the cursor in it.
-func (a App) prompt(title, label string, ti textinput.Model, hint string, above ...string) modal {
-	prefix := a.theme.Muted.Render(label + ": ")
+// confirm builds a yes/no dialog in the root's theme and keys.
+func (a App) confirm(title, question string, notes ...string) modal {
+	return confirmModal(a.theme, a.keys, title, question, notes...)
+}
+
+// promptModal builds a dialog around one text input: any context lines, then
+// the labelled input with the cursor in it.
+func promptModal(theme Theme, title, label string, ti textinput.Model, hint string, above ...string) modal {
+	prefix := theme.Muted.Render(label + ": ")
 	lines := append([]string{}, above...)
-	lines = append(lines, prefix+a.theme.Base.Render(ti.Value()))
+	lines = append(lines, prefix+theme.Base.Render(ti.Value()))
 	return modal{
 		Title:      title,
 		Lines:      lines,
@@ -92,6 +97,11 @@ func (a App) prompt(title, label string, ti textinput.Model, hint string, above 
 		CursorLine: len(lines) - 1,
 		CursorCol:  lipgloss.Width(prefix) + typedWidth(ti.Value(), ti.Position()),
 	}
+}
+
+// prompt builds an input dialog in the root's theme.
+func (a App) prompt(title, label string, ti textinput.Model, hint string, above ...string) modal {
+	return promptModal(a.theme, title, label, ti, hint, above...)
 }
 
 // typedWidth is the screen width of the first pos runes of s - the column the
@@ -107,37 +117,12 @@ func typedWidth(s string, pos int) int {
 // The order matches the guard chain in [App.handleKey]: the dialog listening
 // is the dialog drawn.
 func (a App) activeModal() (modal, bool) {
+	// The Groups panel's dialogs come first, in the same order its guards do.
+	if m, ok := a.panels.groups.modal(); ok {
+		return m, true
+	}
+
 	switch {
-	case a.confirmOverwrite:
-		m := a.confirm("Overwrite group",
-			fmt.Sprintf("overwrite %q?", strings.TrimSpace(a.saveInput.Value())))
-		m.Err = a.saveErr
-		return m, true
-
-	case a.saveInput.Focused():
-		m := a.prompt("Save group as", "name", a.saveInput,
-			promptHint(does(a.keys.PromptSubmit, "saves"), does(a.keys.PromptCancel, "cancels")))
-		m.Err = a.saveErr
-		return m, true
-
-	case a.groupStage == groupStageName:
-		m := a.prompt("New group", "name", a.groupNameInput,
-			promptHint(does(a.keys.PromptSubmit, "continues"), does(a.keys.PromptCancel, "cancels")))
-		m.Err = a.groupErr
-		return m, true
-
-	case a.groupStage == groupStageHosts:
-		m := a.prompt("New group", "hosts", a.groupHostsInput,
-			promptHint(note("space-separated patterns"),
-				does(a.keys.PromptSubmit, "creates"), does(a.keys.PromptCancel, "cancels")),
-			a.field("name", strings.TrimSpace(a.groupNameInput.Value())))
-		m.Err = a.groupErr
-		return m, true
-
-	case a.deleteGroup != "":
-		return a.confirm("Delete group", fmt.Sprintf("delete %q?", a.deleteGroup),
-			"the group file is removed; open sessions of it are untouched"), true
-
 	case a.endSession != "":
 		return a.confirm("End session", fmt.Sprintf("end %q?", a.endSession),
 			"ctrl+c and ctrl+d go to its hosts"), true
@@ -226,11 +211,11 @@ const (
 // generated from. Everything else is ignored - these dialogs guard a file
 // delete and a fleet-wide ctrl+c, and a stray keystroke must not be able to
 // answer either one.
-func (a App) readConfirm(msg tea.KeyPressMsg) confirmAnswer {
+func readConfirm(keys KeyMap, msg tea.KeyPressMsg) confirmAnswer {
 	switch {
-	case key.Matches(msg, a.keys.ConfirmYes):
+	case key.Matches(msg, keys.ConfirmYes):
 		return answerYes
-	case key.Matches(msg, a.keys.ConfirmNo):
+	case key.Matches(msg, keys.ConfirmNo):
 		return answerNo
 	}
 	return answerNone

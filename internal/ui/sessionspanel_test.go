@@ -313,8 +313,8 @@ func TestSaveWritesAGroup(t *testing.T) {
 	if a.Saving() {
 		t.Fatal("the prompt is still open after saving")
 	}
-	if !strings.Contains(plain(a.groupsPanel(60, 20, true)), "prod-web") {
-		t.Fatalf("the panel did not reload the saved group:\n%s", plain(a.groupsPanel(60, 20, true)))
+	if !strings.Contains(plain(a.panelBody(PanelGroups, 60, 20, true)), "prod-web") {
+		t.Fatalf("the panel did not reload the saved group:\n%s", plain(a.panelBody(PanelGroups, 60, 20, true)))
 	}
 
 	sess, err := store.Load("prod-web")
@@ -425,8 +425,8 @@ func TestSaveWithAnInvalidNameReportsTheError(t *testing.T) {
 	if store.Exists("not a name") {
 		t.Fatal("an invalid name was written")
 	}
-	if !strings.Contains(plain(a.groupsPanel(60, 20, true)), "not allowed") {
-		t.Fatalf("the panel does not report the error:\n%s", plain(a.groupsPanel(60, 20, true)))
+	if !strings.Contains(plain(a.panelBody(PanelGroups, 60, 20, true)), "not allowed") {
+		t.Fatalf("the panel does not report the error:\n%s", plain(a.panelBody(PanelGroups, 60, 20, true)))
 	}
 }
 
@@ -450,6 +450,7 @@ func TestSaveWithAnEmptyNameDoesNothing(t *testing.T) {
 func TestSaveRunReportsAStoreFailure(t *testing.T) {
 	a, _ := saveApp(t)
 	a.cfg.Sessions = failingStore{}
+	a.panels.groups.store = failingStore{}
 
 	a = pressKey(t, a, "S")
 	a = typeInto(t, a, "prod")
@@ -506,8 +507,8 @@ func TestSavingAnEmptyRunKeepsThePrompt(t *testing.T) {
 	if a.SaveError() == nil {
 		t.Fatal("an empty run saved without an error")
 	}
-	if !a.Saving() || a.saveInput.Value() != "prod" {
-		t.Fatalf("the prompt did not survive: saving=%v value=%q", a.Saving(), a.saveInput.Value())
+	if !a.Saving() || a.panels.groups.saveInput.Value() != "prod" {
+		t.Fatalf("the prompt did not survive: saving=%v value=%q", a.Saving(), a.panels.groups.saveInput.Value())
 	}
 	if list, _ := store.List(); len(list) != 0 {
 		t.Fatalf("an empty run wrote a session: %v", list)

@@ -54,9 +54,12 @@ func (a App) mainPreview() (string, bool) {
 // panelPreview dispatches per panel, the way panelBody does for the sidebar,
 // and returns the box title and its content.
 func (a App) panelPreview(panel Panel, width, height int) (string, string) {
+	if p := a.panels.byID(panel); p != nil {
+		if title, body, ok := p.Preview(width, height); ok {
+			return title, body
+		}
+	}
 	switch panel {
-	case PanelGroups:
-		return a.groupPreview(width, height)
 	case PanelSessions:
 		return a.sessionPreview(width, height)
 	case PanelCommandLog:
@@ -66,53 +69,11 @@ func (a App) panelPreview(panel Panel, width, height int) (string, string) {
 	}
 }
 
-// groupPreview describes the saved group under the Groups cursor: what it is
-// for, and which hosts opening it would dial.
-func (a App) groupPreview(width, height int) (string, string) {
-	if len(a.groupList) == 0 {
-		return "Group", a.fitLines(width, height, []string{a.theme.Muted.Render("no group selected")})
-	}
-	row := a.groupList[clamp(a.groupCursor, 0, len(a.groupList)-1)]
-
-	title := "Group — " + row.Name
-	if row.Err != nil {
-		// An unreadable file says why here rather than only "(unreadable)" in
-		// the list: this is the space the reason fits in.
-		return title, a.fitLines(width, height, []string{a.theme.Failure.Render(row.Err.Error())})
-	}
-
-	lines := []string{a.field("hosts", fmt.Sprintf("%d", row.Hosts))}
-	if row.Description != "" {
-		lines = append(lines, a.field("description", row.Description))
-	}
-	if open := a.openSessionNamed(row.Name); open {
-		lines = append(lines, a.theme.Selected.Render("open as a session"))
-	}
-	lines = append(lines, "")
-	if len(row.Patterns) == 0 {
-		lines = append(lines, a.theme.Muted.Render("no host patterns"))
-	}
-	for _, p := range row.Patterns {
-		lines = append(lines, a.theme.Base.Render("  "+p))
-	}
-	return title, a.fitLines(width, height, lines)
-}
-
-// openSessionNamed reports whether a group is currently open as a session.
-func (a App) openSessionNamed(name string) bool {
-	for _, s := range a.open {
-		if s.Name == name {
-			return true
-		}
-	}
-	return false
-}
-
 // sessionPreview describes the open session under the Sessions cursor: whether
 // it is the one on screen, and how each of its hosts is doing.
 func (a App) sessionPreview(width, height int) (string, string) {
 	if len(a.open) == 0 {
-		return "Session", a.fitLines(width, height, []string{a.theme.Muted.Render("no open sessions")})
+		return "Session", fitLines(a.theme, width, height, []string{a.theme.Muted.Render("no open sessions")})
 	}
 	index := clamp(a.sessionCursor, 0, len(a.open)-1)
 	s := a.open[index]
@@ -152,7 +113,7 @@ func (a App) sessionPreview(width, height int) (string, string) {
 		lines = append(lines, a.theme.Muted.Render("no hosts"))
 	}
 	lines = append(lines, hosts...)
-	return "Session — " + s.Name, a.fitLines(width, height, lines)
+	return "Session — " + s.Name, fitLines(a.theme, width, height, lines)
 }
 
 // commandPreview shows the whole of the command under the Command log cursor:
@@ -162,9 +123,9 @@ func (a App) commandPreview(width, height int) (string, string) {
 	entries := a.logEntries()
 	if len(entries) == 0 {
 		if a.cfg.CommandLog == nil {
-			return "Command", a.fitLines(width, height, []string{a.theme.Muted.Render("no command log")})
+			return "Command", fitLines(a.theme, width, height, []string{a.theme.Muted.Render("no command log")})
 		}
-		return "Command", a.fitLines(width, height, []string{a.theme.Muted.Render("nothing sent yet")})
+		return "Command", fitLines(a.theme, width, height, []string{a.theme.Muted.Render("nothing sent yet")})
 	}
 	entry := entries[clamp(a.logCursor, 0, len(entries)-1)]
 
@@ -182,13 +143,13 @@ func (a App) commandPreview(width, height int) (string, string) {
 		"",
 		a.theme.Base.Render(entry.Command),
 	}
-	return "Command", a.fitLines(width, height, lines)
+	return "Command", fitLines(a.theme, width, height, lines)
 }
 
 // fitLines renders lines into the height it was dealt, wrapping each at the
 // width and replacing the tail that does not fit with a counter. A preview
 // that silently drops rows tells the user a short list is the whole list.
-func (a App) fitLines(width, height int, lines []string) string {
+func fitLines(theme Theme, width, height int, lines []string) string {
 	avail := max(1, height)
 
 	blocks := make([]string, 0, len(lines))
@@ -196,7 +157,7 @@ func (a App) fitLines(width, height int, lines []string) string {
 	used := 0
 	shown := 0
 	for _, line := range lines {
-		block := a.theme.Base.Width(max(0, width)).Render(line)
+		block := theme.Base.Width(max(0, width)).Render(line)
 		h := lipgloss.Height(block)
 		if used+h > avail {
 			break
@@ -210,13 +171,13 @@ func (a App) fitLines(width, height int, lines []string) string {
 	if shown < len(lines) {
 		// The counter takes its line back from the bottom of what fits, so it
 		// is never itself the row that gets clipped away.
-		notice := a.theme.Muted.Render(fmt.Sprintf("+%d more", len(lines)-shown))
+		notice := theme.Muted.Render(fmt.Sprintf("+%d more", len(lines)-shown))
 		for used+1 > avail && len(blocks) > 0 {
 			used -= heights[len(heights)-1]
 			blocks = blocks[:len(blocks)-1]
 			heights = heights[:len(heights)-1]
 			shown--
-			notice = a.theme.Muted.Render(fmt.Sprintf("+%d more", len(lines)-shown))
+			notice = theme.Muted.Render(fmt.Sprintf("+%d more", len(lines)-shown))
 		}
 		if used+1 <= avail {
 			blocks = append(blocks, notice)

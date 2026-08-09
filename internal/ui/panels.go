@@ -20,8 +20,6 @@ func (a App) panelBody(panel Panel, width, height int, focused bool) string {
 		return p.View(focused, width, height)
 	}
 	switch panel {
-	case PanelGroups:
-		return a.groupsPanel(width, height, focused)
 	case PanelSessions:
 		return a.sessionsPanel(width, height, focused)
 	case PanelCommandLog:

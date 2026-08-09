@@ -126,6 +126,7 @@ func stateErrOf(states map[string]hostState, id string) string {
 // [App], so copying the root copies the panels with it.
 type panelSet struct {
 	status statusPanel
+	groups groupsPanel
 }
 
 // byID resolves a panel id to its child model, nil for a panel that has none.
@@ -135,6 +136,8 @@ func (ps *panelSet) byID(p Panel) sidePanel {
 	switch p {
 	case PanelStatus:
 		return &ps.status
+	case PanelGroups:
+		return &ps.groups
 	default:
 		return nil
 	}
@@ -164,6 +167,7 @@ func (a App) syncPanels() App {
 		bcastMode:   a.broadcastMode(),
 	}
 	a.panels.status.ctx = ctx
+	a.panels.groups.ctx = ctx
 	return a
 }
 

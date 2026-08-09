@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -46,16 +45,6 @@ func (a App) SelectedOpenSession() string {
 	return a.open[clamp(a.sessionCursor, 0, len(a.open)-1)].Name
 }
 
-// Saving reports whether the save-as prompt has the keyboard - including the
-// moment a write is in flight, so no other binding can slip in between the
-// enter and its result.
-func (a App) Saving() bool {
-	return a.saveInput.Focused() || a.confirmOverwrite || a.savePending
-}
-
-// SaveError is the last save failure, or nil.
-func (a App) SaveError() error { return a.saveErr }
-
 // moveSessionCursor moves the cursor, stopping at the ends.
 func (a App) moveSessionCursor(delta int) App {
 	a.sessionCursor = clamp(a.sessionCursor+delta, 0, max(0, len(a.open)-1))
@@ -77,7 +66,7 @@ func (a App) beginEndSession() App {
 // keystrokes, esc or n withdraws the question, and anything else leaves it
 // standing (see [App.readConfirm]).
 func (a App) handleSessionEndKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	answer := a.readConfirm(msg)
+	answer := readConfirm(a.keys, msg)
 	if answer == answerNone {
 		return a, nil
 	}
@@ -140,106 +129,6 @@ func (a App) foregroundSelectedSession() (App, tea.Cmd) {
 		return a, nil
 	}
 	return a.foregroundSession(index), gridChanged()
-}
-
-// beginSave opens the save-as prompt, pre-filled with the foreground session's
-// name, because "save it again under the same name" is the common case.
-func (a App) beginSave() App {
-	a.saveErr = nil
-	name := a.ActiveSession()
-	if name == adHocSessionName {
-		name = ""
-	}
-	a.saveInput.SetValue(name)
-	a.saveInput.CursorEnd()
-	a.saveInput.Focus()
-	return a
-}
-
-// cancelSave closes the prompt without writing anything.
-func (a App) cancelSave() App {
-	a.saveInput.Blur()
-	a.saveInput.SetValue("")
-	a.confirmOverwrite = false
-	a.savePending = false
-	return a
-}
-
-// SaveResultMsg reports what the save-as prompt's write did. The write runs in
-// a [tea.Cmd] - disk I/O never blocks Update (issue #225) - and the prompt
-// stays pending until this message says what happened.
-type SaveResultMsg struct {
-	// Name is the name the run was saved under.
-	Name string
-	// Err is why it was not, or nil. [sessions.ErrExists] means the overwrite
-	// question must be asked.
-	Err error
-}
-
-// commitSave writes the run as a group. An existing name is not replaced until
-// the user has said so: the first attempt asks, the second overwrites.
-func (a App) commitSave(overwrite bool) (App, tea.Cmd) {
-	name := strings.TrimSpace(a.saveInput.Value())
-	if name == "" || a.cfg.Sessions == nil {
-		return a.cancelSave(), nil
-	}
-	if err := sessions.ValidateName(name); err != nil {
-		// A bad name is known without the disk; report it now rather than
-		// after the round trip through the Cmd.
-		a.saveErr = err
-		return a.cancelSave(), nil
-	}
-
-	run := sessions.Run{
-		Name:      name,
-		Patterns:  a.cfg.RunPatterns,
-		Defaults:  a.cfg.RunDefaults,
-		Broadcast: a.broadcastMode(),
-	}
-	if a.cfg.WorkingSet != nil {
-		run.WorkingSet = a.cfg.WorkingSet.Active()
-	}
-	if len(run.Patterns) == 0 {
-		// Nothing was recorded about how the run was started, so the hosts as
-		// they are now is the honest thing to write.
-		run.Patterns = a.fleetIDs()
-	}
-	if len(run.Patterns) == 0 {
-		// An empty run cannot be saved, but the typed name must survive the
-		// telling: the user may connect a host and press enter again.
-		a.saveErr = errors.New("nothing to save: no hosts in the run")
-		return a, nil
-	}
-
-	// The prompt keeps the keyboard while the write is in flight - Saving()
-	// covers savePending - so a second enter cannot start a second write and
-	// the typed name survives a failure.
-	a.savePending = true
-	a.saveInput.Blur()
-	store := a.cfg.Sessions
-	return a, func() tea.Msg {
-		_, err := store.SaveRun(run, overwrite)
-		return SaveResultMsg{Name: name, Err: err}
-	}
-}
-
-// applySaveResult lands the save-as write's outcome: success closes the prompt
-// and re-reads the group directory, a taken name opens the overwrite question,
-// and any other failure reports in the panel with the prompt closed.
-func (a App) applySaveResult(msg SaveResultMsg) (App, tea.Cmd) {
-	a.savePending = false
-	if msg.Err == nil {
-		a = a.cancelSave()
-		a.cfg.SessionName = msg.Name
-		return a, func() tea.Msg { return SessionsChangedMsg{} }
-	}
-	if errors.Is(msg.Err, sessions.ErrExists) {
-		a.confirmOverwrite = true
-		a.saveInput.Blur()
-		return a, nil
-	}
-	a.saveErr = msg.Err
-	return a.cancelSave(), nil
 }
 
 // broadcastMode is the mode the run is in, defaulting to all when there is no

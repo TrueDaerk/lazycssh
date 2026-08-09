@@ -51,7 +51,7 @@ func TestGroupsPreviewFollowsTheCursor(t *testing.T) {
 // has room for "(unreadable)".
 func TestGroupsPreviewShowsTheReadError(t *testing.T) {
 	a, _ := groupsStoreApp(t)
-	a.groupList = []groupRow{{Name: "broken", Hosts: -1, Err: errRead}}
+	a.panels.groups.rows = []groupRow{{Name: "broken", Hosts: -1, Err: errRead}}
 
 	view := preview(t, a)
 	if !strings.Contains(view, "Group — broken") || !strings.Contains(view, errRead.Error()) {
