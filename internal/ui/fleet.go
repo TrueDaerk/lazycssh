@@ -101,6 +101,17 @@ type RemoveHostMsg struct {
 	ID string
 }
 
+// CloneHostMsg asks the program to open a second, independent session to the
+// same resolved host as an existing one - `tail -f` in one pane, an
+// interactive shell in another, without restarting with the host listed
+// twice (issue #253). The UI cannot dial, so it is emitted, not handled: the
+// layer that owns the transport reads the host off the existing session and
+// dials a fresh one, under its own identifier, alongside it.
+type CloneHostMsg struct {
+	// ID is the session whose host to clone.
+	ID string
+}
+
 // HostConnectMsg asks the program to connect to hosts. The UI cannot dial, so
 // it is emitted, not handled: it carries the patterns as the user gave them -
 // an ssh-config alias picked from the Hosts panel, or free text that may hold

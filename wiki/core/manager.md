@@ -4,7 +4,7 @@ title: Session manager
 description: Owning a fleet of sessions — bounded fan-out dialling, a single event channel, per-host reconnect and close.
 resource: internal/ssh/manager.go
 tags: [ssh, transport, concurrency, fleet]
-timestamp: 2026-08-09T23:55:00Z
+timestamp: 2026-08-10T05:00:00Z
 ---
 
 # Session manager
@@ -31,14 +31,19 @@ nothing about which host failed. `Counts()` and `ByState(StateFailed)` are how f
 
 **A running fleet can grow.** `Add` appends a session for one more host and dials it, without
 touching the existing sessions. Merging a saved session into a run lands here; its identifier
-goes through the same disambiguation as everyone else's.
+goes through the same disambiguation as everyone else's. So does **clone** (`alt+shift+c` on a
+focused pane, issue #253): the UI reads the focused session's already-resolved `Host` — same
+Addr/User/Port, no second round through `~/.ssh/config` — and hands it straight back to `Add`.
+The clone is a second, fully independent session under its own identifier: its own input,
+scrollback, close and reconnect, and the broadcast router picks it up like any other session
+because it reads the fleet live rather than a set captured at connect time.
 
 ## Identity
 
 Session identifiers come from the host alias, because that is what the user recognises. Aliases
-can repeat — the same host listed twice, or two patterns overlapping — so duplicates become
-`srv1`, `srv1#2`, `srv1#3`. Order always follows what the user typed; `SortedIDs` exists for
-displays that want alphabetical instead.
+can repeat — the same host listed twice, two patterns overlapping, or a clone of a host already
+in the run — so duplicates become `srv1`, `srv1#2`, `srv1#3`. Order always follows what the user
+typed; `SortedIDs` exists for displays that want alphabetical instead.
 
 ## Reconnect
 

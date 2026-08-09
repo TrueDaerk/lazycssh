@@ -344,6 +344,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return fleetEventMsg{inner: ui.FleetUpdatedMsg{}}
 		}
 
+	case ui.CloneHostMsg:
+		return m.cloneHost(msg.ID)
+
 	case ui.CloseHostMsg:
 		id := msg.ID
 		return m, func() tea.Msg {
@@ -542,6 +545,26 @@ func (m *Model) applyConnect(msg hostsResolvedMsg) (tea.Model, tea.Cmd) {
 	}
 
 	m.addPatterns(msg.patterns)
+	m.ws.SetHosts(m.mgr.IDs())
+	m.resizePTYs()
+	return m, m.forward(ui.HostsChangedMsg{Hosts: m.mgr.IDs(), Patterns: m.patterns})
+}
+
+// cloneHost opens a second, independent session to the same resolved host as
+// an existing one (issue #253): the same Addr/User/Port, dialled through
+// [ssh.Manager.Add], whose identifier disambiguation already keeps a
+// repeated host apart from the one it was cloned from - the new pane gets its
+// own input, scrollback, close and reconnect, and the broadcast router picks
+// it up the same way it does any other session, because it reads the fleet
+// live rather than a list captured at connect time. A session that closed or
+// was removed between the keypress and here has nothing to clone.
+func (m *Model) cloneHost(id string) (tea.Model, tea.Cmd) {
+	s, ok := m.mgr.Session(id)
+	if !ok {
+		return m, nil
+	}
+
+	m.mgr.Add(m.ctx, s.Host())
 	m.ws.SetHosts(m.mgr.IDs())
 	m.resizePTYs()
 	return m, m.forward(ui.HostsChangedMsg{Hosts: m.mgr.IDs(), Patterns: m.patterns})
