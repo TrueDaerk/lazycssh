@@ -109,6 +109,10 @@ type Config struct {
 	Panes PaneWriter
 	// Recorder receives the commands that were sent, for the audit trail.
 	Recorder Recorder
+	// History is the persistent command-line history: loaded once to seed
+	// Up/Down recall, appended to on every send. Nil means the run has no
+	// history file and recall starts empty, same as before this existed.
+	History HistoryStore
 	// CommandLog is the audit trail of what was sent this run. Nil means the
 	// panel says so rather than pretending the run sent nothing.
 	CommandLog CommandLog
@@ -314,7 +318,7 @@ func (a App) resetToStart() App {
 // it, and starts the first read of the group directory - disk I/O belongs in a
 // Cmd, so not even startup reads it inline.
 func (a App) Init() tea.Cmd {
-	return tea.Batch(tea.RequestBackgroundColor, a.loadGroupsCmd())
+	return tea.Batch(tea.RequestBackgroundColor, a.loadGroupsCmd(), a.loadHistoryCmd())
 }
 
 // Focus is the area that receives key presses.
@@ -391,6 +395,9 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// The re-read is disk I/O, so it happens in a Cmd; the rows arrive as
 		// a GroupsLoadedMsg (issue #225).
 		return a, a.loadGroupsCmd()
+
+	case HistoryLoadedMsg:
+		return a.applyHistoryLoaded(msg), nil
 
 	case GroupsLoadedMsg:
 		a.panels.groups.applyLoaded(msg)

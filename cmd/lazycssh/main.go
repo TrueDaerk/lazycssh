@@ -12,6 +12,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/TrueDaerk/lazycssh/internal/history"
 	"github.com/TrueDaerk/lazycssh/internal/program"
 	"github.com/TrueDaerk/lazycssh/internal/sessionlog"
 	"github.com/TrueDaerk/lazycssh/internal/sessions"
@@ -145,6 +146,15 @@ func run(args []string, stdout, stderr io.Writer, launch func(program.Config) er
 		}
 	}
 
+	// The command line's Up/Down recall survives a restart through this
+	// store; a location it cannot resolve is readable here rather than a
+	// silently empty history.
+	histStore, err := history.DefaultStore()
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return exitError
+	}
+
 	if err := launch(program.Config{
 		Patterns:    resolved.Patterns,
 		SessionName: sessionName,
@@ -153,6 +163,7 @@ func run(args []string, stdout, stderr io.Writer, launch func(program.Config) er
 		Store:       store,
 		Insecure:    *insecure,
 		Logs:        logs,
+		History:     histStore,
 	}); err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitError

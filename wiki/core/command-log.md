@@ -4,7 +4,7 @@ title: Command log
 description: The in-memory audit trail of what this run sent, to how many hosts, in which mode — and what it deliberately never records.
 resource: internal/commandlog
 tags: [audit, broadcast, security, ui]
-timestamp: 2026-08-09T00:00:00Z
+timestamp: 2026-08-09T01:00:00Z
 ---
 
 # Command log
@@ -54,6 +54,12 @@ wraps, and counting a wrapped entry as one row pushed the rows below it — the 
 past the box's clip (issue #132). Entries are wrapped individually, the window grows from the
 cursor outward while it fits, and up/down always moves exactly one entry; the dropped-entries
 notice gives up its line before the cursor entry ever does.
+
+## See also
+
+[Command history](./command-history.md) is the command line's own, separate recall: what was
+*typed*, persisted to disk across restarts, distinct from this in-memory audit trail of what was
+*sent*.
 
 ## Resending
 

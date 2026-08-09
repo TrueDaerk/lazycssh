@@ -68,6 +68,8 @@ nice to have:
 | `~/.ssh/known_hosts`, `~/.ssh/known_hosts2` | host key verification, hashed entries included |
 | `$SSH_AUTH_SOCK` | ssh-agent authentication, tried first |
 | `$XDG_CONFIG_HOME/lazycssh/sessions/` | saved groups (`~/.config/lazycssh/sessions/` when unset) |
+| `$XDG_CONFIG_HOME/lazycssh/history` | command line history (`~/.config/lazycssh/history` when unset) |
 
-Nothing is written outside the sessions directory, and nothing written there
-ever contains a credential — see [Security model](../concepts/security.md).
+Nothing is written outside the sessions directory and the history file, and
+nothing written there ever contains a credential — see
+[Security model](../concepts/security.md).

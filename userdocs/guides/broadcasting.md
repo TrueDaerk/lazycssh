@@ -101,9 +101,11 @@ it, which is why there is no confirmation dialog.
 - While the prompt is open, **every** key belongs to it: a command containing
   `b` does not switch the broadcast mode, a `:` does not open a second prompt,
   and ++ctrl+c++ while editing does not reach forty machines.
-- ++enter++ sends, ++esc++ abandons, ++up++/++down++ walk this run's history
+- ++enter++ sends, ++esc++ abandons, ++up++/++down++ walk the command history
   (repeats are not stored twice; walking past the newest entry returns to an
-  empty line).
+  empty line). History survives a restart: it is saved to `history` under
+  `~/.config/lazycssh` as you send, and reloaded the next time you open
+  lazycssh.
 - Afterwards the status bar reports against the scope:
   `sent to 2/3 hosts (1 did not receive it)`.
 

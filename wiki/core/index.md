@@ -21,5 +21,6 @@ The runtime pieces of lazycssh.
 * [Program assembly](./program.md) - the one place every layer meets: building the fleet and running the TUI over it
 
 * [Command log](./command-log.md) - what this run sent, to how many hosts, and what is deliberately never recorded
+* [Command history](./command-history.md) - the persistent Up/Down recall of the command line, and why it is not the command log
 * [Cross-host output diff](./output-diff.md) - hosts grouped by the output of the last command, so the machines that disagree stand out
 * [Session logging](./session-logging.md) - opt-in per-host output files, rotation, and why single mode pauses the pen

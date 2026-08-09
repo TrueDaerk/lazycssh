@@ -2,6 +2,17 @@
 
 ## 2026-08-09
 
+- Persistent command history (issue #245). The broadcast command line's Up/Down recall now
+  survives a restart: `internal/history.Store` is the same shape as `internal/sessions.Store` -
+  atomic write, `0600` file, `0700` directory - reading and writing `history` under
+  `$XDG_CONFIG_HOME/lazycssh` (`~/.config/lazycssh` when unset), newest last, capped at 1000
+  entries, a consecutive repeat stored once. The read is disk I/O so it happens in the `tea.Cmd`
+  `App.Init` returns, landing as `HistoryLoadedMsg`; the load is prepended rather than replacing
+  the in-memory copy so it cannot lose a command sent while the file was still loading. Only what
+  is typed into the command line ever reaches the file - a raw broadcast keystroke never does -
+  the same boundary the command log already enforces. New `core/command-history.md`;
+  `core/command-log.md`, `core/index.md` and the user docs updated.
+
 - Reconnect-all binding (issue #244). `R` is the global, bulk form of the per-pane `alt+r`: it
   re-dials every session currently `StateFailed` or `StateClosed`, leaving connected and
   still-dialling sessions untouched, so a network blip across forty hosts is one keystroke

@@ -67,3 +67,4 @@ present in `go build` output and absent in a build from a source tarball.
 | `~/.ssh/known_hosts`, `~/.ssh/known_hosts2` | host key verification |
 | `$SSH_AUTH_SOCK` | ssh-agent authentication |
 | `$XDG_CONFIG_HOME/lazycssh/sessions/*.yaml` | saved groups (`~/.config/...` when `XDG_CONFIG_HOME` is unset) |
+| `$XDG_CONFIG_HOME/lazycssh/history` | command line history, one command per line, newest last (`~/.config/...` when unset) |

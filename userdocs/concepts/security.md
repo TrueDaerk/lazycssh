@@ -114,6 +114,13 @@ What is deliberately **never** recorded:
 Both are where a sudo password gets typed, and a log that captured it would be a
 plaintext password file nobody asked for.
 
+The command line's own Up/Down recall is a separate thing from the log above, and it *is*
+written to disk (`~/.config/lazycssh/history`), so a command can be found and resent after a
+restart — see [Command history](https://github.com/TrueDaerk/lazycssh/blob/main/wiki/core/command-history.md).
+The same boundary applies:
+only what is typed into the command line reaches it, never a raw broadcast keystroke, so a sudo
+password answered character-by-character in a focused pane never reaches the file either.
+
 Session output only reaches disk when a run is started with `--log-dir` — see
 [Reading output](../guides/output.md#logging-a-run-to-disk). The same boundary
 holds there: keystrokes are never written, and output logging pauses, with a
