@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-09T22:00:00Z
+timestamp: 2026-08-09T23:00:00Z
 ---
 
 # TUI shell
@@ -64,6 +64,10 @@ Rules:
 
 - the **status bar is never dropped**. The broadcast target count is the one thing the user must
   always be able to see;
+- the status bar's app-name segment carries the version (`lazycssh v0.10.13`), read from
+  `internal/version` and passed in through `Config.Version` — `internal/ui` never imports
+  `internal/version` directly, so the layering stays one-directional. `Config.Version` empty
+  (as in most view tests) renders the bare name;
 - the sidebar is a quarter of the width, clamped to 20–34 columns (half the width, uncapped, in
   half mode with the sidebar focused; `SidebarMinWidth` in half mode with the grid or the bar
   focused), and it disappears entirely below `SidebarMinWidth + MainMinWidth`. It gives up its share before the grid does: output

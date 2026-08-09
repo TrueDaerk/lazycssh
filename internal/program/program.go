@@ -23,6 +23,7 @@ import (
 	"github.com/TrueDaerk/lazycssh/internal/sessions"
 	"github.com/TrueDaerk/lazycssh/internal/ssh"
 	"github.com/TrueDaerk/lazycssh/internal/ui"
+	"github.com/TrueDaerk/lazycssh/internal/version"
 	"github.com/TrueDaerk/lazycssh/internal/workingset"
 )
 
@@ -159,6 +160,7 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 
 	uiCfg := ui.Config{
 		SessionName: cfg.SessionName,
+		Version:     version.Version,
 		Fleet:       mgr,
 		Targets:     targets,
 		WorkingSet:  ws,

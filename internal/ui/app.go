@@ -79,6 +79,11 @@ type Config struct {
 	// RunPatterns are the host arguments as the user typed them, kept so
 	// saving the run writes patterns rather than expanded hostnames.
 	RunPatterns []string
+	// Version is the app version shown next to the name in the status bar.
+	// Empty means the bar shows the name alone. internal/ui does not import
+	// internal/version itself; the caller passes the string in to keep the
+	// layering one-directional.
+	Version string
 	// RunDefaults are the connection options the run was started with, written
 	// into a saved session.
 	RunDefaults sessions.HostOptions
@@ -1106,7 +1111,11 @@ func (a App) renderStatusBar() string {
 			"TYPING "+target+" — "+escapeKeystroke+" leaves · alt=app"))
 	}
 
-	parts = append(parts, a.theme.Base.Render("lazycssh"))
+	appLabel := "lazycssh"
+	if a.cfg.Version != "" {
+		appLabel += " v" + a.cfg.Version
+	}
+	parts = append(parts, a.theme.Base.Render(appLabel))
 	// The foreground session is what the panes and the broadcast scope are
 	// about, so its name is the one the bar carries.
 	sessionLabel := a.ActiveSession()

@@ -426,6 +426,27 @@ func TestStatusBarWithoutASession(t *testing.T) {
 	}
 }
 
+func TestStatusBarShowsTheVersion(t *testing.T) {
+	a := resize(t, NewApp(Config{
+		Hosts:   []string{"h1"},
+		Theme:   Options{Dark: true},
+		Version: "1.2.3",
+	}), 120, 40)
+
+	view := plain(a.View().Content)
+	if !strings.Contains(view, "lazycssh v1.2.3") {
+		t.Fatalf("the status bar does not show the version:\n%s", view)
+	}
+}
+
+func TestStatusBarWithoutAVersion(t *testing.T) {
+	a := resize(t, NewApp(Config{Hosts: []string{"h1"}, Theme: Options{Dark: true}}), 120, 40)
+	view := plain(a.View().Content)
+	if !strings.Contains(view, "lazycssh") || strings.Contains(view, "lazycssh v") {
+		t.Fatalf("the status bar should show the bare name without a version:\n%s", view)
+	}
+}
+
 func TestMainReportsAnEmptyRun(t *testing.T) {
 	a := resize(t, NewApp(Config{Theme: Options{Dark: true}}), 120, 40)
 	if !strings.Contains(plain(a.View().Content), "no hosts") {

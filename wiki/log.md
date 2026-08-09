@@ -2,6 +2,12 @@
 
 ## 2026-08-09
 
+- The status bar's app-name segment now carries the version (`lazycssh v0.10.13`), read from
+  `internal/version.Version` and passed in through the new `ui.Config.Version` field so
+  `internal/ui` keeps not importing `internal/version` directly (issue #224). `program.Build`
+  wires it from `version.Version`; an empty `Config.Version` renders the bare name, which is what
+  the existing view tests still do. Documented in `core/tui.md`. Version 0.10.14.
+
 - The sidebar's list cursor row shows the strong background highlight only when its panel is both
   selected and the sidebar holds the keyboard, lazygit style (issue #222). Every other case — a
   collapsed preview box, or the selected panel while the grid or broadcast bar has focus — keeps a
