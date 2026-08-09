@@ -30,6 +30,10 @@ type ExitEvent struct {
 	ID string
 	// Code is the exit status the shell reported.
 	Code int
+	// Seq is how many markers this session has reported, this one included.
+	// It is what lets a consumer tell "the command I sent has answered" from
+	// "the answer that was already there"; see [Session.LastExit].
+	Seq uint64
 }
 
 // SessionID implements [Event].
@@ -100,16 +104,24 @@ func (e *exitScanner) reset() {
 func (s *sshSession) recordExit(code int) {
 	s.mu.Lock()
 	s.lastExit = code
-	s.hasExit = true
+	s.exitSeq++
+	seq := s.exitSeq
 	s.mu.Unlock()
-	s.emit(ExitEvent{ID: s.id, Code: code})
+	s.emit(ExitEvent{ID: s.id, Code: code, Seq: seq})
 }
 
-// LastExit returns the exit status of the last command the shell reported, and
-// whether one has been reported at all. A shell without the prompt hook never
-// reports, and saying "unknown" is the honest answer there.
-func (s *sshSession) LastExit() (int, bool) {
+// LastExit returns the exit status of the last command the shell reported and
+// how many markers have arrived on this session. A zero sequence means nothing
+// has been reported - a shell without the prompt hook never reports, and
+// saying "unknown" is the honest answer there.
+//
+// The two values come out of one lock on purpose. A consumer decides whether
+// an exit belongs to the command it sent by comparing the sequence against the
+// one it recorded at the send, and a code read a moment apart from its
+// sequence would let it attribute the previous command's status to the new
+// one.
+func (s *sshSession) LastExit() (int, uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.lastExit, s.hasExit
+	return s.lastExit, s.exitSeq
 }

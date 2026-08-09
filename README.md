@@ -78,9 +78,11 @@ receive them — `BROADCAST all (7/8 up)`, `TYPING web-01 — ctrl+] leaves`.
 - **Groups and open sessions** — saved host lists on disk, opened into named
   runtime sessions; several can be open at once, one is in the foreground, and
   backgrounding never drops a connection.
-- **Failure visibility** — a pane whose last command exited non-zero gets a
-  danger border and an `exit N` marker, the status bar counts them, and `!`
-  jumps to the next failing host.
+- **Per-command exit status** — after a broadcast command each pane header says
+  how it ended on that host: `·` while it runs, `✓` for zero, `exit N` for a
+  failure plus a danger border. The status bar counts the failures and `!` jumps
+  between them. A shell that reports no exit codes shows nothing rather than a
+  tick it cannot back.
 - **Scrollback per host** — bounded ring buffer (10,000 lines), search with `/`
   (`alt+/` while typing to a host), `n`/`N` between matches with a `3/17`
   counter, `esc` back to where you were, or `/find <text>` for "which of my

@@ -184,6 +184,9 @@ type Theme struct {
 	Failure lipgloss.Style
 	// ExitOK renders a zero exit status.
 	ExitOK lipgloss.Style
+	// ExitPending renders the mark of a command that is out and has not
+	// answered yet - quiet, because it is the absence of news.
+	ExitPending lipgloss.Style
 }
 
 // NewTheme builds the styles for a terminal.
@@ -290,6 +293,7 @@ func NewTheme(opts Options) Theme {
 
 	t.Failure = fg(palette.Danger).Bold(true)
 	t.ExitOK = fg(palette.Success)
+	t.ExitPending = fg(palette.Muted)
 
 	return t
 }

@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-10T02:00:00Z
+timestamp: 2026-08-10T12:00:00Z
 ---
 
 # TUI shell
@@ -269,35 +269,88 @@ bypassing the broadcast scope entirely: typing into a pane can never fan out.
 
 ## Pane output
 
-Each pane carries a one-line header — pane number, host name, connection state and the last exit
-code (`ok` / `exit 1`) — all read from the model's fleet snapshot, which the fleet event that
-changed them refreshed, so a change is on screen the moment the redraw happens. The terminal
+Each pane carries a one-line header — pane number, host name, connection state and the last
+command's exit status (`·` / `✓` / `exit 1`) — all read from the model's fleet snapshot, which
+the fleet event that changed them refreshed, so a change is on screen the moment the redraw
+happens. The terminal
 body is the one deliberate live read left in the render path: the buffer is internally
 synchronized, and snapshotting whole terminal contents per output event
 would copy far more than a redraw reads. When the width cannot hold everything the state gives up its space
-first and the exit code second — a failure must outlive the state label — and the host name
+first and the exit status second — a failure must outlive the state label — and the host name
 truncates **from the left** (`…-1a-40.example.com`): in a fleet of near-identical names the
 suffix is the distinguishing part.
 
 ### Failure visibility
 
 The transport reports each command's exit status through a prompt hook — see
-[SSH session lifecycle](./session.md). What the interface does with it:
+[SSH session lifecycle](./session.md). What the interface does with it is **per command, not per
+session** (issue #251): a pane header answers "how did *the last command this host was sent from
+the command line* end", and nothing else.
+
+The mechanism is one map, `App.cmdExitMarks` (`internal/ui/failures.go`). A send records each
+reached target's marker sequence; the header then reads:
+
+| Header | Meaning |
+|--------|---------|
+| *(nothing)* | no command of ours is outstanding on this host, or its shell has never emitted a marker |
+| `·` (muted) | the command is out and the shell has not reached its next prompt |
+| `✓` (success) | the command's marker came back with `0` |
+| `exit N` (danger, bold) | it came back non-zero |
+
+Three shapes carry three states, so the header survives a terminal without colour. The success
+mark is one character on purpose: `ok` spelled out on two hundred panes buries the three that
+matter, while a failure spells out its code.
+
+Around that:
 
 - a pane whose last command exited non-zero gets a **danger-coloured border**, focused or not,
   and the header states `exit N` in text, because colour alone is not allowed to carry meaning;
-- the pane headers mark failing hosts with `exit N` — and only those; `ok` on two hundred panes
-  would bury the three that matter;
-- the status bar counts them: `3 hosts failed`, in the failure style;
+- the status bar counts them: `3 hosts failed`, in the failure style — the last command's
+  failures, not the run's;
 - `!` jumps the pane focus to the next failing host, from anywhere, wrapping around — the wrap
   is deliberate, unlike pane movement, because this is a search and a failure behind the cursor
   must be as reachable as one ahead;
-- a shell that never ran the hook reports nothing, and the interface shows nothing rather than
-  a made-up zero;
+- a command still out is not a failure. It is counted nowhere and its pane keeps its ordinary
+  border until the shell answers;
 - a pane whose *connection* failed says why (issue #167): the session writes its error — DNS,
   refused, auth, host key — into its own terminal the way a plain one prints it (issue
   #180), so it scrolls with the history and is reachable like any other output. The snapshot
   (`hostState.errText`) still feeds the Status panel and the failure counts.
+
+#### What the indicator refuses to claim
+
+Every silence below is deliberate. A wrong green tick on a machine that just failed is worse
+than no tick at all, so each case renders nothing rather than a guess:
+
+- **No hook, no indicator.** A shell that never emitted a marker — plain POSIX `sh`, a
+  restricted shell, a profile that overwrites `PROMPT_COMMAND`/`precmd` — leaves its sequence at
+  zero, and a host at zero shows nothing. It does not even show the muted dot: a pane greyed out
+  forever would be a claim about a command nobody can confirm ran. If the hook starts working
+  later, the first marker past the send answers that send.
+- **Raw keystrokes mark nothing.** The broadcast bar (`5`) and typing into a focused pane send
+  bytes, not commands. lazycssh cannot tell where a command starts in a stream of typing, and a
+  bare `enter` at a prompt produces a marker carrying the *previous* command's status — so
+  keystroke input opens no window and changes no header. The same reasoning keeps the
+  [output diff](./output-diff.md) window closed for bar keystrokes.
+- **Only the hosts the command reached.** The map is replaced at every send, so a host outside
+  the broadcast scope — or one the send could not reach, which the status bar already reports —
+  keeps no mark. Its previous answer belonged to an older question.
+- **A reconnect clears it.** The replacement session counts markers from zero, so a mark taken
+  against the shell that died is dropped rather than compared with a smaller number.
+
+Two honest limits remain:
+
+- The mark is taken **before** the command's bytes leave (`App.exitMarksAtSend`), read from the
+  live sessions rather than from the fleet snapshot. Read afterwards, a host that answered
+  instantly would have its own answer counted as the state the send found, and the pane would
+  sit on the dot until some later prompt produced another marker.
+- A marker already in flight when the send happens — the tail of a raw `enter` a moment
+  earlier — is still counted as the answer. Distinguishing it would need a per-command nonce in
+  the marker, which means wrapping every command the user types
+  (`cmd; printf '\033]133;D;%d\007' $?`): that rewrites what the shell records in its history,
+  breaks on multi-line and interactive input, and is visible in the echo. The prompt hook is
+  armed once, at login, and touches nothing the user types — the least invasive mechanism that
+  works on plain bash and zsh, which is why the stray-marker window is accepted instead.
 
 Below the header the pane renders its session's [terminal](./terminal.md) (issue #206):
 following the tail it shows the emulator's screen, exactly like a real terminal; scrolled

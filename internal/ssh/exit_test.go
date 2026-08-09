@@ -70,22 +70,50 @@ func TestExitScannerAcrossChunkBoundaries(t *testing.T) {
 }
 
 // The fake feeds Emit through the same scanner, so UI tests exercise the real
-// parsing.
+// parsing. The sequence counts the markers: it is what tells a consumer that
+// the command it sent has answered, rather than that an answer exists.
 func TestFakeReportsExitCodes(t *testing.T) {
-	f := NewFake("h1", hosts.Host{Alias: "h1"}, nil)
+	events := make(chan Event, 8)
+	f := NewFake("h1", hosts.Host{Alias: "h1"}, events)
 
-	if _, ok := f.LastExit(); ok {
-		t.Fatal("a fresh session claims an exit status")
+	if _, seq := f.LastExit(); seq != 0 {
+		t.Fatalf("a fresh session claims %d markers", seq)
 	}
 
 	f.ReportExit(0)
-	if code, ok := f.LastExit(); !ok || code != 0 {
-		t.Fatalf("LastExit() = %d, %v after a success", code, ok)
+	if code, seq := f.LastExit(); code != 0 || seq != 1 {
+		t.Fatalf("LastExit() = %d, %d after a success, want 0, 1", code, seq)
 	}
 
 	f.ReportExit(2)
-	if code, ok := f.LastExit(); !ok || code != 2 {
-		t.Fatalf("LastExit() = %d, %v after a failure", code, ok)
+	if code, seq := f.LastExit(); code != 2 || seq != 2 {
+		t.Fatalf("LastExit() = %d, %d after a failure, want 2, 2", code, seq)
+	}
+
+	// The same marker the emulator swallows is also an event, exactly as it is
+	// on a real session: a UI that redraws on ExitEvent must be drivable by
+	// the fake.
+	var got []ExitEvent
+	for len(events) > 0 {
+		if ev, ok := (<-events).(ExitEvent); ok {
+			got = append(got, ev)
+		}
+	}
+	if len(got) != 2 || got[0].Code != 0 || got[0].Seq != 1 || got[1].Code != 2 || got[1].Seq != 2 {
+		t.Fatalf("the fake emitted %v, want codes 0,2 with sequences 1,2", got)
+	}
+}
+
+// A repeated code is still a new command: the sequence moves even when the
+// number does not, which is the only thing that separates "ran again and
+// succeeded" from "nothing has happened since".
+func TestExitSequenceAdvancesOnAnIdenticalCode(t *testing.T) {
+	f := NewFake("h1", hosts.Host{Alias: "h1"}, nil)
+
+	f.ReportExit(0)
+	f.ReportExit(0)
+	if code, seq := f.LastExit(); code != 0 || seq != 2 {
+		t.Fatalf("LastExit() = %d, %d after two successes, want 0, 2", code, seq)
 	}
 }
 
@@ -109,24 +137,24 @@ func TestSessionTracksExitCodes(t *testing.T) {
 
 	// Graceful degradation: this tiny shell never ran the hook, so nothing has
 	// been reported yet.
-	if _, ok := s.LastExit(); ok {
-		t.Fatal("an exit status was invented before any marker arrived")
+	if _, seq := s.LastExit(); seq != 0 {
+		t.Fatalf("an exit status was invented before any marker arrived (%d markers)", seq)
 	}
 
 	if _, err := s.Write([]byte("oops\r")); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 	waitFor(t, "the failure to be reported", func() bool {
-		code, ok := s.LastExit()
-		return ok && code == 1
+		code, seq := s.LastExit()
+		return seq > 0 && code == 1
 	})
 
 	if _, err := s.Write([]byte("ok\r")); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 	waitFor(t, "the success to replace it", func() bool {
-		code, ok := s.LastExit()
-		return ok && code == 0
+		code, seq := s.LastExit()
+		return seq > 1 && code == 0
 	})
 
 	// The events carried the codes too, in order.

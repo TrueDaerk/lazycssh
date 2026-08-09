@@ -2,30 +2,69 @@
 
 ## What a pane shows
 
-A one-line header — pane number, host name, connection state, and the last
-command's exit code — over the host's scrollback, following the tail.
+A one-line header — pane number, host name, connection state, and how the last
+command ended — over the host's scrollback, following the tail.
 
-Only failures are marked. `exit N` appears on the panes that failed; `ok` on two
-hundred panes would bury the three that matter. When the width runs out, the
-state label gives up its space first and the exit code last, and the host name
-truncates **from the left** (`…-1a-40.example.com`) because in a fleet of
-near-identical names the suffix is the distinguishing part.
+When the width runs out, the state label gives up its space first and the exit
+status last, and the host name truncates **from the left**
+(`…-1a-40.example.com`) because in a fleet of near-identical names the suffix is
+the distinguishing part.
 
 Colour is never the only signal: a failed pane has a danger-coloured border
 *and* says `exit N` in text, and the focused pane's border differs in thickness
 as well as colour.
 
-## Finding what failed
+## Who failed the last command
 
-- the status bar counts failures: `3 hosts failed`;
+The exit indicator in the header is **per command**. It answers one question:
+how did the last command you sent from the command line (++colon++) end *on this
+host*?
+
+| Header | Meaning |
+|---|---|
+| nothing | no command of yours is outstanding here, or this shell reports no exit codes |
+| `·` | the command is out, this host has not come back to a prompt yet |
+| `✓` | it finished with exit code 0 |
+| `exit N` | it failed, with the code |
+
+Send a new command and every reached pane drops back to `·`, so the grid reads
+as a live scoreboard for the question you just asked instead of an archive of
+older ones. A failure spells out its code; a success is one character, because
+`ok` on two hundred panes buries the three that matter.
+
+Around it:
+
+- the status bar counts the last command's failures: `3 hosts failed`;
 - ++exclam++ jumps the pane focus to the next failing host, from anywhere,
   wrapping around — this is a search, so a failure behind the cursor must be as
   reachable as one ahead;
 - a pane whose *connection* failed prints the reason into its own scrollback,
   the way a terminal running `ssh` would.
 
-Exit codes come from a prompt hook. A shell that never ran the hook reports
-nothing, and lazycssh shows nothing rather than a made-up zero.
+### When you get no indicator
+
+Exit codes come from a prompt hook lazycssh arms once, at login: bash's
+`PROMPT_COMMAND` and zsh's `precmd` print an invisible marker carrying `$?`
+before every prompt. Nothing you type is rewritten, and nothing is added to your
+shell history.
+
+That means there are cases where lazycssh honestly cannot say, and it shows
+nothing rather than a green tick it cannot back:
+
+- **the shell does not run the hook** — a plain POSIX `sh`, a restricted shell,
+  or a profile that overwrites those variables. That host stays blank;
+- **you typed the command into a pane or the broadcast bar** instead of the
+  command line. Raw keystrokes are bytes, not commands: lazycssh cannot tell
+  where one ends, and a bare ++enter++ at a prompt reports the *previous*
+  command's code. Keystrokes therefore change no header;
+- **the command did not reach that host** — it was out of the broadcast scope,
+  or the send failed for it (the status bar says how many missed it);
+- **the host reconnected** — the new shell is a new session, and the old
+  question died with the old one.
+
+One caveat worth knowing: a pane sitting on `·` means "no prompt yet". A
+full-screen app (`vim`, `less`) or a command that never returns keeps it there,
+which is accurate — the command really has not finished.
 
 ## Which machines disagree
 

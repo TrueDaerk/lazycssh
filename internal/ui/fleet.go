@@ -122,9 +122,13 @@ type ConnectErrorMsg struct {
 // written only by [App.snapshotFleet], inside Update, so render helpers read
 // model fields instead of racing the session goroutines.
 type hostState struct {
-	state        ssh.State
-	exit         int
-	exitReported bool
+	state ssh.State
+	exit  int
+	// exitSeq is how many exit markers the session has reported. Zero means
+	// none - the shell has no prompt hook, or has not reached a prompt yet.
+	// The per-command indicator compares it against the sequence recorded at
+	// the send; see internal/ui/failures.go.
+	exitSeq uint64
 	// errText is the session's failure rendered, empty while there is none.
 	// Snapshotted so View can say *why* a pane is failed without touching
 	// live session state.
@@ -163,12 +167,12 @@ func (a App) snapshotFleet() App {
 			continue
 		}
 		st := session.State()
-		code, reported := session.LastExit()
+		code, seq := session.LastExit()
 		errText := ""
 		if err := session.Err(); err != nil {
 			errText = err.Error()
 		}
-		states[id] = hostState{state: st, exit: code, exitReported: reported, errText: errText}
+		states[id] = hostState{state: st, exit: code, exitSeq: seq, errText: errText}
 		switch st {
 		case ssh.StateConnected:
 			counts.Connected++

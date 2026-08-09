@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 	"github.com/TrueDaerk/lazycssh/internal/ssh"
 )
 
@@ -196,7 +197,7 @@ func (s spySession) Err() error {
 	return s.Session.Err()
 }
 
-func (s spySession) LastExit() (int, bool) {
+func (s spySession) LastExit() (int, uint64) {
 	s.reads.Add(1)
 	return s.Session.LastExit()
 }
@@ -208,10 +209,17 @@ func (s spySession) LastExit() (int, bool) {
 func TestViewReadsNoLiveSessionState(t *testing.T) {
 	fleet := newFakeFleet("web-01", "web-02", "web-03")
 	spy := &spyFleet{fakeFleet: fleet}
-	a := resize(t, NewApp(Config{Fleet: spy, Theme: Options{Dark: true}}), 200, 60)
+	a := resize(t, NewApp(Config{
+		Fleet:  spy,
+		Sender: &fakeSender{delivery: broadcast.Delivery{Mode: broadcast.ModeAll, Scope: 3, Targets: 3, Delivered: 3}},
+		Theme:  Options{Dark: true},
+	}), 200, 60)
 
 	fleet.connect(t, "web-01")
 	fleet.sessions["web-01"].Emit("hello\n")
+	// The exit indicator is per command, so the failure needs a command to
+	// belong to; the send is what opens the window the marker answers.
+	a = sendVia(t, a, "deploy")
 	fleet.sessions["web-01"].ReportExit(1)
 	fleet.fail(t, "web-02")
 	a = syncFleet(t, a)
