@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-09T12:00:00Z
+timestamp: 2026-08-09T13:00:00Z
 ---
 
 # TUI shell
@@ -451,25 +451,32 @@ the pane chords — and sends nothing, so commands work without leaving the inpu
 
 Mode switching is modeled on csshx, with `ctrl+a` as the escape prefix inside the bar:
 
+- `ctrl+a` `ctrl+a` — send one literal `ctrl+a` to the targets: the GNU-screen double press,
+  which is how a remote `screen` or `tmux` behind the broadcast stays reachable
+  (`ctrl+a` `ctrl+a` then `c` opens a window on every host). The literal never enters the
+  assembled line.
+- `ctrl+a` `a` — the same literal, matching `screen`'s own `ctrl+a` `a`.
 - `ctrl+a` `esc` — switch to view mode.
 - `enter` (in view mode) — back to edit mode; selecting the bar again (`5`, a click) also
   re-enters it in edit mode.
-- `ctrl+a` `a` — send one literal `ctrl+a` to the targets, which is how a remote `screen` or
-  `tmux` behind the broadcast stays reachable. The literal never enters the assembled line.
-- `ctrl+a` anything else — a **one-shot lazycssh command** (issue #148): the key is dispatched
-  to the app keymap exactly as if the bar did not have the keyboard — `ctrl+a` `?` opens the
-  help, `ctrl+a` `→` pages, `ctrl+a` `q` quits. The
-  prefix is cleared before the second key is handled, so it cannot chain, and a key with no app
-  binding is a no-op the status bar names rather than a silently swallowed keystroke. Nothing
-  after the prefix reaches the hosts except the literal `a`.
+- `ctrl+a` anything else — **forwarded to the targets** as the keystroke it is (issue #214),
+  through the same `paneKeyEvents` encoding as plain typing, but kept out of the assembled
+  line: a prefixed key is a control sequence, not command text. The exception list is exactly
+  `ctrl+a`, `a` and `esc`.
+
+The prefix is cleared before the second key is handled, so it cannot chain. Forwarding is the
+default because the prefix exists for the remote multiplexer; the one-shot lazycssh command
+dispatch of issue #148 is superseded by view mode, which is now the way to run an app command
+without leaving the bar.
 
 The mode is unmissable: the status bar carries `BROADCASTING EDIT → 7 hosts` in the warning
 style, or `BROADCAST VIEW — keys are commands` in the calm typing style, and an armed prefix
-shows as `ctrl+a… next key = command · a = literal · esc = view`. The modal state does not outlive the bar's
+shows as `ctrl+a… next key goes to the hosts · ctrl+a/a = literal · esc = view`. The modal state does not outlive the bar's
 focus — leaving in view mode and coming back lands in edit mode.
 
 The `ctrl+a` prefix shadows the readline start-of-line the bar used to forward while edit mode
-has the keyboard. That is deliberate: the literal stays reachable as `ctrl+a` `a`, and outside
+has the keyboard. That is deliberate: the literal stays reachable as `ctrl+a` `ctrl+a` and
+`ctrl+a` `a`, and outside
 the bar `ctrl+a` carries no app-level binding at all (issue #213) — inside a pane it is
 forwarded to the host unchanged.
 

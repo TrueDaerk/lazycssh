@@ -23,9 +23,11 @@ is reverse-search and ++ctrl+s++ is flow control — all of them belong to the
 remote shell. The lazycssh equivalents are the ++alt++ chords, which work while
 typing, or leave the pane first with ++ctrl+bracket-right++.
 
-Inside the broadcast bar, ++ctrl+a++ is the escape prefix: ++ctrl+a++
-++question++ opens the help, ++ctrl+a++ ++a++ sends a literal ++ctrl+a++ to the
-hosts.
+Inside the broadcast bar, ++ctrl+a++ is the escape prefix, and it forwards by
+default: ++ctrl+a++ ++ctrl+a++ or ++ctrl+a++ ++a++ sends a literal ++ctrl+a++ to
+the hosts for a remote `screen` or `tmux`, any other key after it is forwarded
+as a keystroke, and ++ctrl+a++ ++escape++ switches to view mode, where keys are
+lazycssh commands.
 
 ++ctrl+q++ quits from anywhere, including out of a text field.
 
