@@ -532,6 +532,14 @@ func TestMainReportsAnEmptyRun(t *testing.T) {
 	}
 }
 
+func TestStatusBarNudgesTowardsThePickerWhenEmpty(t *testing.T) {
+	a := resize(t, NewApp(Config{Theme: Options{Dark: true}}), 120, 40)
+	view := plain(a.View().Content)
+	if !strings.Contains(view, "0 hosts — press A to add") {
+		t.Fatalf("the status bar does not nudge an empty run towards the picker:\n%s", view)
+	}
+}
+
 func TestPanelTitles(t *testing.T) {
 	seen := make(map[string]bool)
 	// The numbers are jump keys, not positions: 5 stays the broadcast bar's,

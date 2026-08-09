@@ -2,6 +2,14 @@
 
 ## 2026-08-09
 
+- Empty-fleet start (issue #247). Verified `lazycssh` with zero host arguments already opened
+  the TUI neutrally - no dial, no forced modal, focus on the sidebar - since the argumentless
+  path (`resolvePlan`, `NewApp`) predates this issue (#67, #168, #225). The one missing piece
+  was the status bar: it counted `0 hosts` but did not say what to do about it, unlike the
+  grid's own hint text. `App.renderStatusBar` now appends `— press A to add` while the fleet is
+  empty, reading the key from `KeyMap.HostPicker` so the hint cannot drift from the binding.
+  `core/tui.md` updated.
+
 - Fuzzy host picker (issue #246). `A` opens a centred modal listing every concrete
   `~/.ssh/config` alias, narrowed as you type by a case-insensitive subsequence match (`wb1`
   matches `web-01`) - no fuzzy-matching dependency, because short structured host names do not

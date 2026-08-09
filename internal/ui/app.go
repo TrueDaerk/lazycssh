@@ -1121,7 +1121,13 @@ func (a App) renderStatusBar() string {
 			fmt.Sprintf("%d sessions", len(a.open))))
 	}
 	hosts := len(a.hostIDs())
-	parts = append(parts, a.theme.Muted.Render(fmt.Sprintf("%d host%s", hosts, plural(hosts))))
+	hostsLabel := fmt.Sprintf("%d host%s", hosts, plural(hosts))
+	if hosts == 0 {
+		// The bar is the one thing on screen whatever panel has focus, so the
+		// empty-fleet nudge belongs here as well as in the grid's hint text.
+		hostsLabel += " — press " + a.keys.HostPicker.Keys()[0] + " to add"
+	}
+	parts = append(parts, a.theme.Muted.Render(hostsLabel))
 	if a.cfg.Targets != nil {
 		scope := a.theme.Base
 		if a.cfg.Targets.Warning() {
