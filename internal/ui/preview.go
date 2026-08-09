@@ -22,7 +22,7 @@ import (
 // main area.
 func hasPreview(p Panel) bool {
 	switch p {
-	case PanelGroups, PanelSessions, PanelCommandLog:
+	case PanelGroups, PanelSessions, PanelCommandLog, PanelDiff:
 		return true
 	default:
 		return false

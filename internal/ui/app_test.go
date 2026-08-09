@@ -2,6 +2,7 @@ package ui
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -263,13 +264,15 @@ func TestNumberKeysSelectPanelsAndFocusTheSidebar(t *testing.T) {
 	a := resize(t, testApp(), 120, 40)
 	a = pressKey(t, a, "4") // start away from the first panel
 
-	for i, panel := range Panels() {
-		a = pressKey(t, a, string(rune('1'+i)))
+	for _, panel := range Panels() {
+		// The panel's own number is the key: the Output diff panel sits on 6,
+		// because 5 has meant the broadcast bar since the bar existed.
+		a = pressKey(t, a, strconv.Itoa(panel.Number()))
 		if a.Panel() != panel {
-			t.Fatalf("key %d selected %v, want %v", i+1, a.Panel(), panel)
+			t.Fatalf("key %d selected %v, want %v", panel.Number(), a.Panel(), panel)
 		}
 		if a.Focus() != AreaSidebar {
-			t.Fatalf("key %d did not move focus to the sidebar", i+1)
+			t.Fatalf("key %d did not move focus to the sidebar", panel.Number())
 		}
 	}
 }
@@ -531,9 +534,12 @@ func TestMainReportsAnEmptyRun(t *testing.T) {
 
 func TestPanelTitles(t *testing.T) {
 	seen := make(map[string]bool)
+	// The numbers are jump keys, not positions: 5 stays the broadcast bar's,
+	// so the Output diff panel skips to 6.
+	numbers := []int{1, 2, 3, 4, 6}
 	for i, panel := range Panels() {
-		if panel.Number() != i+1 {
-			t.Fatalf("%v.Number() = %d, want %d", panel, panel.Number(), i+1)
+		if panel.Number() != numbers[i] {
+			t.Fatalf("%v.Number() = %d, want %d", panel, panel.Number(), numbers[i])
 		}
 		title := panel.Title()
 		if title == "" || seen[title] {

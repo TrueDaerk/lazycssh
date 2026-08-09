@@ -110,7 +110,7 @@ func TestLeftRightSwitchTheSidebarPanel(t *testing.T) {
 	for range 10 {
 		a = pressKey(t, a, "right")
 	}
-	if a.Panel() != PanelCommandLog {
+	if a.Panel() != PanelDiff {
 		t.Fatalf("Panel() = %v after running off the end", a.Panel())
 	}
 }

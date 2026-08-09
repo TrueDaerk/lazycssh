@@ -30,11 +30,14 @@ const (
 	PanelSessions
 	// PanelCommandLog is the audit trail of what was sent this run.
 	PanelCommandLog
+	// PanelDiff groups the hosts by the output of the last sent command, so
+	// the machines that disagree stand out (issue #46).
+	PanelDiff
 )
 
 // Panels returns the panels in sidebar order.
 func Panels() []Panel {
-	return []Panel{PanelStatus, PanelGroups, PanelSessions, PanelCommandLog}
+	return []Panel{PanelStatus, PanelGroups, PanelSessions, PanelCommandLog, PanelDiff}
 }
 
 // Title is the heading shown in the sidebar.
@@ -48,13 +51,22 @@ func (p Panel) Title() string {
 		return "Sessions"
 	case PanelCommandLog:
 		return "Command log"
+	case PanelDiff:
+		return "Output diff"
 	default:
 		return "unknown(" + strconv.Itoa(int(p)) + ")"
 	}
 }
 
-// Number is the key that jumps to this panel.
-func (p Panel) Number() int { return int(p) + 1 }
+// Number is the key that jumps to this panel. The Output diff panel skips to
+// 6: 5 has meant the broadcast bar since the bar existed, in the docs and in
+// muscle memory, and a diff view is not worth renumbering it.
+func (p Panel) Number() int {
+	if p == PanelDiff {
+		return 6
+	}
+	return int(p) + 1
+}
 
 // Config is what the root model needs to exist. Everything is passed in;
 // nothing is read from a global.
@@ -192,6 +204,12 @@ type App struct {
 	cmdHistoryPos int
 	lastDelivery  string
 
+	// The Output diff panel's comparison window: the last sent command and
+	// each reached target's scrollback length at the send, which is where its
+	// tail starts; see internal/ui/diffpanel.go (issue #46).
+	diffCommand string
+	diffMarks   map[string]int
+
 	// auth is the open auth questions by session id - every dialling session
 	// may have its own at once (issue #182); see internal/ui/authpane.go.
 	auth map[string]*paneAuth
@@ -260,6 +278,7 @@ func NewApp(cfg Config) App {
 		},
 		sessions: sessionsPanel{keys: keys, chosen: -1},
 		log:      logPanel{keys: keys, log: cfg.CommandLog},
+		diff:     diffPanel{keys: keys},
 	}
 	// A run that starts with hosts starts with a session holding them: the
 	// CLI arguments are a workspace like any opened group.
@@ -351,6 +370,22 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Resending goes through the same path as typing it: the current
 		// broadcast set, the same report, the same audit entry.
 		return a.sendCommand(msg.Command)
+
+	case DiffSelectMsg:
+		// A variant's hosts become the selection, so "these three disagree"
+		// turns into a target set B can broadcast to.
+		sel, ok := a.selector()
+		if !ok {
+			a.lastDelivery = "no host selection yet"
+			return a, nil
+		}
+		sel.ClearSelection()
+		for _, id := range msg.Hosts {
+			a.cfg.Targets.Toggle(id)
+		}
+		a.lastDelivery = fmt.Sprintf("selected this variant's %d host%s",
+			len(msg.Hosts), plural(len(msg.Hosts)))
+		return a, nil
 
 	case SessionsChangedMsg:
 		// The re-read is disk I/O, so it happens in a Cmd; the rows arrive as
@@ -766,7 +801,7 @@ func (a App) FullScreen() bool { return a.screen == ScreenFull }
 
 // panelForKey maps a number key to the panel it selects.
 func (a App) panelForKey(msg tea.KeyPressMsg) (Panel, bool) {
-	numbered := []key.Binding{a.keys.Panel1, a.keys.Panel2, a.keys.Panel3, a.keys.Panel4}
+	numbered := []key.Binding{a.keys.Panel1, a.keys.Panel2, a.keys.Panel3, a.keys.Panel4, a.keys.Panel6}
 	for i, binding := range numbered {
 		if key.Matches(msg, binding) {
 			return Panel(i), true

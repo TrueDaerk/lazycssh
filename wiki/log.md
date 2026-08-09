@@ -2,6 +2,16 @@
 
 ## 2026-08-09
 
+- Cross-host output diff (issue #46). A new `[6] Output diff` sidebar panel groups the hosts
+  by the output they produced since the last command line send and lists the distinct
+  answers, largest group first — the machines that disagree stand out instead of hiding
+  among the panes. `internal/outdiff` is the pure comparison (normalization replaces a
+  host's own names with a placeholder; timestamps deliberately untouched);
+  `internal/ui/diffpanel.go` is the panel plus the comparison window the send opens
+  (`App.markDiff` records each reached target's scrollback length). `enter` on a variant
+  makes its hosts the selection. The panel sits on `6` — `5` stays the broadcast bar's.
+  New `core/output-diff.md`; `core/keys.md`, `core/tui.md` and the user docs updated.
+
 - The sidebar panels became child models (issue #228). Status, Groups, Sessions and the
   Command log are now structs behind a `sidePanel` interface (`internal/ui/sidepanel.go`) —
   `Update`/`View`/`Title`/`Number` plus cursor and preview accessors — and the root dispatches

@@ -129,6 +129,7 @@ type panelSet struct {
 	groups   groupsPanel
 	sessions sessionsPanel
 	log      logPanel
+	diff     diffPanel
 }
 
 // byID resolves a panel id to its child model, nil for a panel that has none.
@@ -144,6 +145,8 @@ func (ps *panelSet) byID(p Panel) sidePanel {
 		return &ps.sessions
 	case PanelCommandLog:
 		return &ps.log
+	case PanelDiff:
+		return &ps.diff
 	default:
 		return nil
 	}
@@ -176,9 +179,19 @@ func (a App) syncPanels() App {
 	a.panels.groups.ctx = ctx
 	a.panels.sessions.ctx = ctx
 	a.panels.log.ctx = ctx
+	a.panels.diff.ctx = ctx
+	a.panels.diff.command = a.diffCommand
+	a.panels.diff.marked = len(a.diffMarks)
+	if a.panel == PanelDiff {
+		// Grouping re-reads the marked hosts' scrollback, which is too much
+		// work to repeat on every message for a panel nobody is looking at;
+		// unselected, the panel shows the groups as of its last selection.
+		a.panels.diff.variants = a.computeDiffVariants()
+	}
 	// A session leaving the list must not strand the cursor past the end;
 	// the clamp lives with the cursor's owner.
 	a.panels.sessions.clampCursor()
+	a.panels.diff.clampCursor()
 	return a
 }
 

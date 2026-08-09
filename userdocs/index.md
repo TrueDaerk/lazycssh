@@ -79,6 +79,7 @@ knowing about.
 | ++ctrl+bracket-right++ | Stop typing, give the keyboard back to lazycssh |
 | ++colon++ | Send one command to the broadcast set |
 | ++1++ ++2++ ++3++ ++4++ | Status, Groups, Sessions, Command log panels |
+| ++6++ | Output diff panel: hosts grouped by the last command's output |
 | ++question++ | The full keybinding overlay |
 
 Everything is in the [keybinding reference](reference/keybindings.md), and the
