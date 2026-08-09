@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -190,6 +191,7 @@ func TestViewReadsNoLiveSessionState(t *testing.T) {
 // -race, which CI does; the visible list follows the flips through the
 // snapshot.
 func TestRenderSurvivesConcurrentStateFlips(t *testing.T) {
+	t.Parallel()
 	a, fleet, router, _ := statusApp(t, "web-01", "web-02", "web-03")
 	router.Attach(fleetSessions{fleet})
 
@@ -210,11 +212,18 @@ func TestRenderSurvivesConcurrentStateFlips(t *testing.T) {
 				s.Emit("tick\n")
 				s.ReportExit(i % 2)
 				s.Disconnect(ssh.ErrDisconnected())
+				// Yield so the flips interleave with renders instead of
+				// monopolizing the scheduler; under -race an unyielding
+				// loop here made this test dominate the whole package
+				// (issue #230).
+				runtime.Gosched()
 			}
 		}()
 	}
 
-	for range 500 {
+	// 50 renders are plenty for the race detector to see every unsafe
+	// interleaving; 500 only multiplied the wall time (issue #230).
+	for range 50 {
 		a = syncFleet(t, a)
 		if a.View().Content == "" {
 			t.Fatal("View rendered nothing")
