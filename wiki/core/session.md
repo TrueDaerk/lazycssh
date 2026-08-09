@@ -4,7 +4,7 @@ title: SSH session lifecycle
 description: One host, end to end — dial, handshake, PTY, streams, resize and close — and the event contract the UI depends on.
 resource: internal/ssh/session.go
 tags: [ssh, transport, concurrency, lifecycle]
-timestamp: 2026-08-09T00:00:00Z
+timestamp: 2026-08-10T12:00:00Z
 ---
 
 # SSH session lifecycle
@@ -41,7 +41,7 @@ Two event types, and one rule that governs both:
 |-------|---------|
 | `OutputEvent` | new output is available in the session's terminal |
 | `StateEvent` | the session changed state; `Err` is set for `failed` |
-| `ExitEvent` | the shell reported a command's exit status; also readable via `LastExit()` |
+| `ExitEvent` | the shell reported a command's exit status; also readable via `LastExit()`. `Seq` is how many markers this session has reported |
 
 **Events are hints, never the source of truth.** They are delivered with a non-blocking send and
 dropped when the consumer is behind. A consumer that receives any event must read `State()`,
@@ -100,9 +100,18 @@ can be split across any read boundary — records the code, and emits an `ExitEv
 themselves still reach the emulator verbatim; a terminal consumes OSC sequences invisibly and the
 marker is invisible everywhere.
 
+`LastExit()` returns the code **and a marker sequence**: how many markers this session has seen,
+counting from zero. Both come out of one lock, on purpose. The code alone cannot say whether an
+answer is new — two commands in a row can both exit `1` — so a consumer that wants to know
+whether *the command it sent* has finished records the sequence at the send and waits for a
+higher one. That is what the pane headers' per-command indicator is built on; see
+[TUI shell](./tui.md#failure-visibility). A code read a moment apart from its sequence would let
+the previous command's status be attributed to the new one, which is why there is no separate
+accessor for either half.
+
 **Degradation is graceful by design.** A shell that does not run the hook — plain POSIX `sh`, a
-restricted shell, a profile that overwrites the variables — simply never emits the marker, and
-`LastExit()` reports "nothing known" rather than a wrong number.
+restricted shell, a profile that overwrites the variables — simply never emits the marker, its
+sequence stays at zero, and everything above reports "nothing known" rather than a wrong number.
 
 The hook line's own PTY echo never reaches the user. A typed line echoes up to twice — once by
 the kernel while it waits in the input queue, once more when the shell's line editor redisplays
@@ -130,7 +139,7 @@ f.Emit("...")            // output as if from the remote
 f.Flood(20000)           // overwhelm the retained history
 f.Disconnect(err)        // drop mid-session
 f.ExitWithStatus(3)      // remote shell exits non-zero
-f.ReportExit(1)          // a command finishes; goes through the real marker parsing
+f.ReportExit(1)          // a command finishes; real marker parsing, real ExitEvent
 f.Written()              // what a broadcast actually delivered
 f.Resizes()              // that a terminal resize reached this session once
 ```

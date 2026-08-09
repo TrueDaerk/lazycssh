@@ -215,6 +215,11 @@ func (a App) sendCommand(command string) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
+	// Where each host's exit marker stands *before* the command goes out. Read
+	// after the write it would be a race against a host that answers fast, and
+	// the answer would be mistaken for the state the send found.
+	marks := a.exitMarksAtSend()
+
 	// The newline is what makes it a command rather than a line of typing.
 	delivery, err := a.cfg.Sender.Send([]byte(command + "\n"))
 	a.lastDelivery = delivery.String()
@@ -226,9 +231,12 @@ func (a App) sendCommand(command string) (tea.Model, tea.Cmd) {
 		a.cfg.Recorder.Record(command, delivery.Mode, delivery.Delivered)
 	}
 
-	// The send opens a new comparison window for the Output diff panel: each
-	// reached target's scrollback length now is where its answer starts.
+	// The send opens two windows on the same question: the Output diff
+	// panel's, where each reached target's scrollback length now is where its
+	// answer starts, and the pane headers' exit indicator, which greys out
+	// until this command's own exit marker comes back (issue #251).
 	a = a.markDiff(command, delivery)
+	a = a.markCommandExits(marks, delivery)
 
 	sent := CommandSentMsg{Command: command, Delivery: delivery}
 	return a, func() tea.Msg { return sent }

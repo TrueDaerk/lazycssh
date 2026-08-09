@@ -1,5 +1,24 @@
 # Log
 
+## 2026-08-10
+
+- Per-command exit status in the pane headers (issue #251). The exit indicator stopped being "the
+  last code this session reported" and became "how the last command *sent from the command line*
+  ended on this host": `·` while it is out, `✓` for zero, `exit N` for a failure, and nothing at
+  all when there is nothing honest to say. The transport already carried exit codes over the PTY
+  through the OSC 133;D prompt hook (issue #41), so no new mechanism was added — the least
+  invasive option was the one already armed at login, and wrapping user commands in
+  `cmd; printf '\033]133;D;%d\007' $?` was rejected for rewriting shell history and breaking on
+  interactive input. What the transport gained is a **marker sequence**: `LastExit()` now returns
+  `(code, seq)` out of one lock, because two commands in a row can both exit `1` and the code
+  alone cannot say whether an answer is new. A send records each reached target's sequence
+  (`App.exitMarksAtSend`, taken *before* the bytes leave, so a host that answers instantly does
+  not have its own answer counted as the baseline) and the header compares against it. Silences
+  are deliberate: no hook means no indicator (not even the dot), raw keystrokes mark nothing,
+  hosts the command did not reach keep no mark, and a reconnect clears it. `internal/ssh/exit.go`,
+  `session.go`, `fake.go`; `internal/ui/failures.go`, `fleet.go`, `commandline.go`, `theme.go`,
+  `pane.go`, `app.go`; `core/tui.md` and `core/session.md` updated.
+
 ## 2026-08-09
 
 - Scrollback search in the focused pane, on the pager keys (issue #250). The search that `alt+/`

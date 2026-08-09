@@ -19,10 +19,16 @@ type fakeSender struct {
 	sent     []string
 	delivery broadcast.Delivery
 	err      error
+	// onSend, when set, runs while the command is in flight - the window a
+	// host that answers immediately would land in.
+	onSend func()
 }
 
 func (f *fakeSender) Send(p []byte) (broadcast.Delivery, error) {
 	f.sent = append(f.sent, string(p))
+	if f.onSend != nil {
+		f.onSend()
+	}
 	return f.delivery, f.err
 }
 
@@ -72,6 +78,19 @@ func typeCommand(t *testing.T, a App, text string) App {
 	}
 	for _, r := range text {
 		a = pressKey(t, a, string(r))
+	}
+	return a
+}
+
+// sendVia types a command into the command line and sends it, which is the
+// path every per-command window - the output diff's and the exit indicator's -
+// opens on.
+func sendVia(t *testing.T, a App, command string) App {
+	t.Helper()
+
+	a, _ = enter(t, typeCommand(t, a, command))
+	if a.CommandLineOpen() {
+		t.Fatalf("the command line stayed open after sending %q", command)
 	}
 	return a
 }

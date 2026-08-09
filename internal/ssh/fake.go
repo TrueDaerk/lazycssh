@@ -66,7 +66,7 @@ type Fake struct {
 
 	scan     exitScanner
 	lastExit int
-	hasExit  bool
+	exitSeq  uint64
 }
 
 // NewFake returns a fake session for the given host. Events are optional.
@@ -296,17 +296,21 @@ func onlcr(s string) string {
 	return b.String()
 }
 
-// recordExit stores the newest exit status. The caller holds f.mu.
+// recordExit stores the newest exit status and reports it, exactly as the real
+// session does - a consumer that reacts to [ExitEvent] must be drivable by the
+// fake too. The caller holds f.mu; emit never takes it and never blocks.
 func (f *Fake) recordExit(code int) {
 	f.lastExit = code
-	f.hasExit = true
+	f.exitSeq++
+	f.emit(ExitEvent{ID: f.id, Code: code, Seq: f.exitSeq})
 }
 
-// LastExit reports the exit status of the last command, if one was reported.
-func (f *Fake) LastExit() (int, bool) {
+// LastExit reports the exit status of the last command and how many markers
+// this session has seen; a zero sequence means none.
+func (f *Fake) LastExit() (int, uint64) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.lastExit, f.hasExit
+	return f.lastExit, f.exitSeq
 }
 
 // ReportExit emits the exit marker a hooked shell prints before its prompt.

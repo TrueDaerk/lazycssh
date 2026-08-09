@@ -68,10 +68,13 @@ Afterwards the status bar reports against the scope:
 ## Seeing what happened
 
 Each pane header carries its number, the host name, the connection state, and
-the last command's exit code. Only failures are marked — `exit 1` on the two
-panes that matter beats `ok` on two hundred that do not — and a failing pane
-gets a danger-coloured border. The status bar counts them (`1 host failed`),
-and ++exclam++ jumps the focus to the next failing host.
+how the command you just sent ended there: `·` while it is still running, `✓`
+for exit 0, `exit N` for a failure. A failing pane also gets a danger-coloured
+border, the status bar counts them (`1 host failed`), and ++exclam++ jumps the
+focus to the next failing host. Send another command and the marks reset.
+
+Hosts whose shell reports no exit codes show nothing at all rather than a tick
+lazycssh cannot back — see [Reading output](../guides/output.md).
 
 ## Getting around
 

@@ -234,6 +234,12 @@ type App struct {
 	diffCommand string
 	diffMarks   map[string]int
 
+	// The per-command exit indicator's window: each host reached by the last
+	// command-line send, and its exit-marker sequence at that moment. A
+	// marker past the mark is that command's answer; see
+	// internal/ui/failures.go (issue #251).
+	cmdExitMarks map[string]uint64
+
 	// auth is the open auth questions by session id - every dialling session
 	// may have its own at once (issue #182); see internal/ui/authpane.go.
 	auth map[string]*paneAuth

@@ -126,9 +126,11 @@ type Session interface {
 	// the replacement session this way, so the pane keeps its history.
 	ReleaseTerminal() *term.Emulator
 	// LastExit is the exit status of the last command the remote shell
-	// reported, and whether one has been reported at all. A shell without the
-	// prompt hook never reports; see exit.go.
-	LastExit() (int, bool)
+	// reported, together with the number of markers this session has seen.
+	// A zero sequence means nothing has been reported: a shell without the
+	// prompt hook never reports. Both values come out of one lock, so a
+	// consumer can tell a fresh answer from a stale one; see exit.go.
+	LastExit() (int, uint64)
 	// Start dials, authenticates and starts a shell with a PTY. It returns once
 	// the shell is running; the session then reports asynchronously.
 	Start(ctx context.Context) error
@@ -210,7 +212,7 @@ type sshSession struct {
 	input         *stdinQueue
 	droppedEvents int
 	lastExit      int
-	hasExit       bool
+	exitSeq       uint64
 	emuReleased   bool
 
 	closeOnce sync.Once
