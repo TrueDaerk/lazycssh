@@ -125,8 +125,9 @@ func stateErrOf(states map[string]hostState, id string) string {
 // panelSet holds the four children in sidebar order. It lives by value inside
 // [App], so copying the root copies the panels with it.
 type panelSet struct {
-	status statusPanel
-	groups groupsPanel
+	status   statusPanel
+	groups   groupsPanel
+	sessions sessionsPanel
 }
 
 // byID resolves a panel id to its child model, nil for a panel that has none.
@@ -138,6 +139,8 @@ func (ps *panelSet) byID(p Panel) sidePanel {
 		return &ps.status
 	case PanelGroups:
 		return &ps.groups
+	case PanelSessions:
+		return &ps.sessions
 	default:
 		return nil
 	}
@@ -168,6 +171,10 @@ func (a App) syncPanels() App {
 	}
 	a.panels.status.ctx = ctx
 	a.panels.groups.ctx = ctx
+	a.panels.sessions.ctx = ctx
+	// A session leaving the list must not strand the cursor past the end;
+	// the clamp lives with the cursor's owner.
+	a.panels.sessions.clampCursor()
 	return a
 }
 

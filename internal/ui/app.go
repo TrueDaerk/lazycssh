@@ -136,10 +136,6 @@ type App struct {
 	searchInput textinput.Model
 	hostInput   textinput.Model
 
-	// endSession is the open session the x key asked about; the panel shows
-	// the question until y answers it or anything else withdraws it.
-	endSession string
-
 	// open are the open sessions, in open order; active is the foreground
 	// one, -1 when nothing is open.
 	open   []openSession
@@ -200,13 +196,12 @@ type App struct {
 	// may have its own at once (issue #182); see internal/ui/authpane.go.
 	auth map[string]*paneAuth
 
-	focus         Area
-	panel         Panel
-	paneIndex     int
-	page          int
-	sessionCursor int
-	logCursor     int
-	showHelp      bool
+	focus     Area
+	panel     Panel
+	paneIndex int
+	page      int
+	logCursor int
+	showHelp  bool
 
 	// screen is how much of the terminal the focused area gets; see screen.go.
 	screen ScreenMode
@@ -264,6 +259,7 @@ func NewApp(cfg Config) App {
 			hostsInput: newLineInput("host patterns, space separated"),
 			saveInput:  newLineInput("session name"),
 		},
+		sessions: sessionsPanel{keys: keys, chosen: -1},
 	}
 	// A run that starts with hosts starts with a session holding them: the
 	// CLI arguments are a workspace like any opened group.
@@ -476,7 +472,7 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, a.keys.ForceQuit) &&
 		(a.cmdInput.Focused() || a.hostInput.Focused() ||
 			a.searchInput.Focused() || a.Saving() || a.splitInput.Focused() ||
-			a.GroupDialogOpen() || a.DeleteGroupPending() != "" || a.endSession != "") {
+			a.GroupDialogOpen() || a.DeleteGroupPending() != "" || a.EndSessionPending() != "") {
 		return a, tea.Quit
 	}
 
@@ -506,7 +502,7 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// And the end-session question, for the same reason: ctrl+c on N
 	// machines is not something a stray keystroke may confirm.
-	if a.endSession != "" {
+	if a.EndSessionPending() != "" {
 		return a.handleSessionEndKey(msg)
 	}
 
@@ -730,7 +726,14 @@ func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case PanelGroups:
 		return a, a.panels.groups.Update(msg)
 	case PanelSessions:
-		return a.handleSessionsKey(msg)
+		cmd := a.panels.sessions.Update(msg)
+		if index, ok := a.panels.sessions.takeChosen(); ok {
+			// The panel asked for a session in the foreground; the switch is
+			// the root's move, because the grid and the broadcast scope hang
+			// off it.
+			return a.foregroundSession(index), tea.Batch(cmd, gridChanged())
+		}
+		return a, cmd
 	case PanelCommandLog:
 		return a.handleLogKey(msg)
 	}
@@ -763,30 +766,6 @@ func (a App) handleLogKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.moveLogCursor(+1), nil
 	case key.Matches(msg, a.keys.Choose):
 		return a.resendSelectedCommand()
-	}
-	return a, nil
-}
-
-// handleSessionsKey drives the Sessions panel: the arrows move through the
-// open sessions and enter or space brings one to the foreground.
-func (a App) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	rows := len(a.open)
-
-	switch {
-	case key.Matches(msg, a.keys.Up):
-		if a.sessionCursor <= 0 {
-			return a, nil
-		}
-		return a.moveSessionCursor(-1), nil
-	case key.Matches(msg, a.keys.Down):
-		if a.sessionCursor >= rows-1 {
-			return a, nil
-		}
-		return a.moveSessionCursor(+1), nil
-	case key.Matches(msg, a.keys.Choose), key.Matches(msg, a.keys.Toggle):
-		return a.foregroundSelectedSession()
-	case key.Matches(msg, a.keys.SessionEnd):
-		return a.beginEndSession(), nil
 	}
 	return a, nil
 }

@@ -234,7 +234,6 @@ func (a App) pruneSessions() App {
 	if a.active < 0 && len(a.open) > 0 {
 		a.active = len(a.open) - 1
 	}
-	a.sessionCursor = clamp(a.sessionCursor, 0, max(0, len(a.open)-1))
 	return a.syncBroadcastLimit()
 }
 
@@ -352,8 +351,6 @@ func (a App) reapSessions() (App, tea.Cmd) {
 			// from the ended one would be a museum of the wrong view.
 			a = a.resetGridSlots()
 		}
-		a.sessionCursor = clamp(a.sessionCursor, 0, max(0, len(a.open)-1))
-
 		// An ended session's hosts leave the run, deduplicated, unless a
 		// surviving session still holds a host that is not itself done.
 		surviving := make(map[string]bool)

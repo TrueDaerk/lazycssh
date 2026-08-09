@@ -32,7 +32,7 @@ func TestSessionsPanelListsOpenSessions(t *testing.T) {
 	fleet.connect(t, "web-01")
 	a = syncFleet(t, a)
 
-	view := plain(a.sessionsPanel(60, 20, true))
+	view := plain(a.panelBody(PanelSessions, 60, 20, true))
 	for _, want := range []string{"front (1/2 up)", "back (0/1 up)"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the Sessions panel does not show %q:\n%s", want, view)
@@ -44,8 +44,8 @@ func TestSessionsPanelListsOpenSessions(t *testing.T) {
 // survives a terminal without colour.
 func TestForegroundSessionIsMarked(t *testing.T) {
 	a := resize(t, NewApp(Config{Hosts: []string{"h1"}, SessionName: "prod", Theme: Options{NoColor: true}}), 120, 40)
-	if !strings.Contains(plain(a.sessionsPanel(60, 20, true)), "▸ prod") {
-		t.Fatalf("the foreground session is not marked:\n%s", plain(a.sessionsPanel(60, 20, true)))
+	if !strings.Contains(plain(a.panelBody(PanelSessions, 60, 20, true)), "▸ prod") {
+		t.Fatalf("the foreground session is not marked:\n%s", plain(a.panelBody(PanelSessions, 60, 20, true)))
 	}
 }
 
@@ -57,12 +57,12 @@ func TestSessionCursorHighlightOnlyWhenPanelFocused(t *testing.T) {
 	th := a.Theme()
 
 	label := "  prod-web (0/3 up)"
-	focused := a.sessionsPanel(60, 20, true)
+	focused := a.panelBody(PanelSessions, 60, 20, true)
 	if !strings.Contains(focused, th.Cursor.Render(label)) {
 		t.Fatalf("the focused panel does not use the strong cursor style:\n%s", focused)
 	}
 
-	unfocused := a.sessionsPanel(60, 20, false)
+	unfocused := a.panelBody(PanelSessions, 60, 20, false)
 	if strings.Contains(unfocused, th.Cursor.Render(label)) {
 		t.Fatalf("an unfocused panel still uses the strong cursor style:\n%s", unfocused)
 	}
@@ -227,7 +227,7 @@ func TestSessionsPanelWithNothingOpen(t *testing.T) {
 	a := resize(t, NewApp(Config{Theme: Options{Dark: true}}), 120, 40)
 	a = pressKey(t, a, "3")
 
-	if got := plain(a.sessionsPanel(60, 20, true)); !strings.Contains(got, "no open sessions") {
+	if got := plain(a.panelBody(PanelSessions, 60, 20, true)); !strings.Contains(got, "no open sessions") {
 		t.Fatalf("sessionsPanel() = %q", got)
 	}
 	if a.SelectedOpenSession() != "" {

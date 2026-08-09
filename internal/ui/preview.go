@@ -6,7 +6,6 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
-	"github.com/TrueDaerk/lazycssh/internal/ssh"
 )
 
 // The main area is lazygit's detail view: it shows the selection of whatever
@@ -60,60 +59,11 @@ func (a App) panelPreview(panel Panel, width, height int) (string, string) {
 		}
 	}
 	switch panel {
-	case PanelSessions:
-		return a.sessionPreview(width, height)
 	case PanelCommandLog:
 		return a.commandPreview(width, height)
 	default:
 		return "Preview", ""
 	}
-}
-
-// sessionPreview describes the open session under the Sessions cursor: whether
-// it is the one on screen, and how each of its hosts is doing.
-func (a App) sessionPreview(width, height int) (string, string) {
-	if len(a.open) == 0 {
-		return "Session", fitLines(a.theme, width, height, []string{a.theme.Muted.Render("no open sessions")})
-	}
-	index := clamp(a.sessionCursor, 0, len(a.open)-1)
-	s := a.open[index]
-
-	where := "background"
-	if index == a.active {
-		where = "foreground"
-	}
-	if s.Ending {
-		where += ", ending"
-	}
-
-	up := 0
-	hosts := make([]string, 0, len(s.Hosts))
-	for _, id := range s.Hosts {
-		if id == "" {
-			// A hole is a grid position a closed host left behind, not a host.
-			continue
-		}
-		state := a.state(id)
-		if state == ssh.StateConnected {
-			up++
-		}
-		line := a.theme.Base.Render("  "+id+"  ") + a.theme.State(state).Render(state.String())
-		if err := a.stateErr(id); err != "" {
-			line += a.theme.Failure.Render("  " + err)
-		}
-		hosts = append(hosts, line)
-	}
-
-	lines := []string{
-		a.field("state", where),
-		a.field("hosts", fmt.Sprintf("%d/%d up", up, len(hosts))),
-		"",
-	}
-	if len(hosts) == 0 {
-		lines = append(lines, a.theme.Muted.Render("no hosts"))
-	}
-	lines = append(lines, hosts...)
-	return "Session — " + s.Name, fitLines(a.theme, width, height, lines)
 }
 
 // commandPreview shows the whole of the command under the Command log cursor:

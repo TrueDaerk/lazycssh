@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -117,16 +116,15 @@ func typedWidth(s string, pos int) int {
 // The order matches the guard chain in [App.handleKey]: the dialog listening
 // is the dialog drawn.
 func (a App) activeModal() (modal, bool) {
-	// The Groups panel's dialogs come first, in the same order its guards do.
+	// The panels' own dialogs come first, in the same order their guards do.
 	if m, ok := a.panels.groups.modal(); ok {
+		return m, true
+	}
+	if m, ok := a.panels.sessions.modal(); ok {
 		return m, true
 	}
 
 	switch {
-	case a.endSession != "":
-		return a.confirm("End session", fmt.Sprintf("end %q?", a.endSession),
-			"ctrl+c and ctrl+d go to its hosts"), true
-
 	case a.hostInput.Focused():
 		return a.connectModal(), true
 
