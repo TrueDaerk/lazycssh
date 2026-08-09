@@ -167,14 +167,3 @@ func (a App) splitLabel() string {
 	return fmt.Sprintf("SPLIT %d/%d (%d host%s)",
 		clamp(a.splitChunk, 0, a.splitChunks()-1)+1, a.splitChunks(), visible, plural(visible))
 }
-
-// renderSplitLine draws the chunk-size prompt in place of the status bar
-// while the size is being typed.
-func (a App) renderSplitLine() string {
-	line := a.theme.Base.Render("split: "+a.splitInput.Value()) + " " +
-		a.theme.Muted.Render("→ panes per view, empty or 0 shows all — enter applies, esc keeps")
-	return a.theme.StatusBar.
-		Width(a.layout.Width).
-		MaxHeight(StatusBarHeight).
-		Render(line)
-}

@@ -38,10 +38,8 @@ func (a App) statusPanel(width int) string {
 	// but panes can be off screen, and a blocked dial must not look idle.
 	lines = append(lines, a.authPanelLines()...)
 
-	// The open new-host prompt comes first: while it has the keyboard it is
-	// the thing being interacted with, and its hints must not be pushed off a
-	// short panel.
-	lines = append(lines, a.hostPromptLines()...)
+	// The new-host prompt itself is a modal (see modal.go); what stays here
+	// is the answer to it, which outlives the box that asked.
 	if a.connectErr != "" {
 		// A connect that failed to resolve reports where it was asked for.
 		lines = append(lines, a.theme.Failure.Render(a.connectErr))

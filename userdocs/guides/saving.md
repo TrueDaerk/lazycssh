@@ -12,7 +12,7 @@ Two ways, same result:
 - ++w++ in the sidebar — save the run as a group.
 
 An existing name is **never** replaced silently: the first ++enter++ turns into
-`overwrite "x"? y/n`. Saving an empty run reports `nothing to save` and keeps
+an `overwrite "x"?` confirm — ++enter++ or ++y++ overwrites, ++esc++ backs out. Saving an empty run reports `nothing to save` and keeps
 your typed name.
 
 While you are typing into a host or the broadcast bar, ++shift+s++ is a letter
@@ -49,7 +49,7 @@ descriptions.
 |---|---|
 | ++enter++ / ++space++ | open the group as a session |
 | ++n++ | create a group — a two-question dialog: name, then host patterns |
-| ++d++ | delete the group under the cursor, after `y/n` |
+| ++d++ | delete the group under the cursor, after a confirm |
 | ++w++ | save the current run as a group |
 
 While this panel has focus, ++n++ and ++d++ shadow their global meanings
@@ -73,7 +73,7 @@ The Sessions panel (++3++) lists the **open** sessions with their up counts:
 | Key | Effect |
 |---|---|
 | ++enter++ / ++space++ | bring this session to the foreground |
-| ++x++ | end this session, after `y/n` |
+| ++x++ | end this session, after a confirm |
 
 Backgrounding a session keeps every connection — its panes leave the grid, its
 output keeps arriving. Ending one sends ++ctrl+c++ then ++ctrl+d++ to each of its

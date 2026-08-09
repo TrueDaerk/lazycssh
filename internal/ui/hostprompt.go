@@ -2,9 +2,6 @@ package ui
 
 import "strings"
 
-// newHostPrompt is what the new-host input shows while it is open.
-const newHostPrompt = "+"
-
 // maxAliasHints bounds how many ssh-config aliases the open prompt offers. The
 // hints are a completion aid, not a browser; a long list would push the status
 // lines the panel exists for off the screen.
@@ -44,26 +41,23 @@ func (a App) aliasHints() []string {
 	return hints
 }
 
-// hostPromptLines renders the open new-host prompt and its completion hints,
-// nil while the prompt is closed.
-func (a App) hostPromptLines() []string {
-	if !a.hostInput.Focused() {
-		return nil
-	}
+// connectModal is the new-host dialog: the pattern being typed, and the
+// ssh-config aliases it still matches under it.
+func (a App) connectModal() modal {
+	m := a.prompt("Connect host", "host", a.hostInput, "enter connects · esc cancels")
 
-	lines := []string{a.theme.Base.Render(newHostPrompt + a.hostInput.Value())}
 	hints := a.aliasHints()
 	shown := min(len(hints), maxAliasHints)
 	for _, alias := range hints[:shown] {
-		lines = append(lines, a.theme.Muted.Render("  "+alias))
+		m.Lines = append(m.Lines, a.theme.Muted.Render("  "+alias))
 	}
 	if hidden := len(hints) - shown; hidden > 0 {
-		lines = append(lines, a.theme.Muted.Render("  …"))
+		m.Lines = append(m.Lines, a.theme.Muted.Render("  …"))
 	}
 	if shown > 0 {
-		lines = append(lines, a.theme.Muted.Render("tab completes, enter connects"))
+		m.Hint = "tab completes · enter connects · esc cancels"
 	}
-	return lines
+	return m
 }
 
 // visibleRange returns the half-open range of rows to draw so that the cursor is

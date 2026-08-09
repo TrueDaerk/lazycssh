@@ -4,7 +4,7 @@ title: Groups and open sessions
 description: Persisted host groups, the open sessions they become, and how the foreground session scopes the grid and the broadcast.
 resource: internal/ui/opensessions.go
 tags: [groups, sessions, workspace, broadcast]
-timestamp: 2026-07-31T19:00:00Z
+timestamp: 2026-08-09T22:00:00Z
 ---
 
 # Groups and open sessions
@@ -57,7 +57,7 @@ size.
 
 ## Ending a session
 
-`x` on a row in the Sessions panel asks `end "name"? y/n`. On `y`, every **connected** terminal
+`x` on a row in the Sessions panel asks `end "name"?` in a centred confirm dialog. On `enter`/`y`, every **connected** terminal
 of the session receives `ctrl+c` then `ctrl+d` — interrupt the foreground process, log the
 shell out — via the pane write path, so it targets exactly the session's hosts whatever the
 broadcast mode is, and nothing lands in the command log. The session is marked `(ending)` and

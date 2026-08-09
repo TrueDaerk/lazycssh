@@ -69,17 +69,21 @@ func (a App) beginEndSession() App {
 	return a
 }
 
-// handleSessionEndKey answers the end question: y sends the shutdown
-// keystrokes, anything else withdraws the question.
+// handleSessionEndKey answers the end question: enter or y sends the shutdown
+// keystrokes, esc or n withdraws the question, and anything else leaves it
+// standing (see [readConfirm]).
 func (a App) handleSessionEndKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	name := a.endSession
-	a.endSession = ""
-	switch msg.String() {
-	case "y", "Y":
-		return a.endSessionNow(name)
-	default:
+	answer := readConfirm(msg)
+	if answer == answerNone {
 		return a, nil
 	}
+
+	name := a.endSession
+	a.endSession = ""
+	if answer == answerNo {
+		return a, nil
+	}
+	return a.endSessionNow(name)
 }
 
 // endSessionNow marks a session as ending and sends every connected terminal
@@ -209,14 +213,10 @@ func (a App) broadcastMode() broadcast.Mode {
 
 // sessionsPanel renders the open sessions: which exist, which is in the
 // foreground, and how many of each one's hosts are up.
+// The end question this panel asks floats over the frame rather than taking
+// its first line; see modal.go.
 func (a App) sessionsPanel(width, height int) string {
 	var b strings.Builder
-
-	if a.endSession != "" {
-		b.WriteString(a.theme.StatusWarning.Render(
-			fmt.Sprintf("end %q? y/n — ctrl+c and ctrl+d go to its hosts", a.endSession)))
-		b.WriteString("\n")
-	}
 
 	if len(a.open) == 0 {
 		b.WriteString(a.theme.Muted.Render("no open sessions — open a group in [2]"))

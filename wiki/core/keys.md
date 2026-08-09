@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-08-09T21:00:00Z
+timestamp: 2026-08-09T22:00:00Z
 ---
 
 # Keymap and help
@@ -59,8 +59,8 @@ duplicate still fails.
 | `enter` / `space` | sidebar | choose the row: open a group, foreground a session, resend a log entry |
 | `w` | sidebar | save the run as a group |
 | `n` | Groups panel | new group (shadows the global connect while the panel has focus) |
-| `d` | Groups panel | delete the group under the cursor, after `y/n` (shadows the global select-down) |
-| `x` | Sessions panel | end the session under the cursor, after `y/n`: ctrl+c and ctrl+d to its connected hosts |
+| `d` | Groups panel | delete the group under the cursor, after an `enter`/`y` confirm dialog (shadows the global select-down) |
+| `x` | Sessions panel | end the session under the cursor, after an `enter`/`y` confirm dialog: ctrl+c and ctrl+d to its connected hosts |
 | `[` / `]` | sidebar | previous / next chunk of hosts |
 | any plain key | panes | **forwarded to the focused host** — letters, enter, tab, esc, ctrl+c, arrows, all of it. Each key goes through the host's own [terminal emulator](./terminal.md) (issue #206), so the bytes honour that host's modes (application cursor keys, keypad) |
 | `alt+←`/`alt+→`, `ctrl+←`/`ctrl+→` | panes | word backward / forward on the remote line: `ESC b`/`ESC f` (opt+arrow on macOS, ctrl+arrow on Linux/Windows; issue #208) |

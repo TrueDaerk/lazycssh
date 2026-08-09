@@ -17,7 +17,7 @@ to — so a group written when the fleet had 40 machines still means "all of
 them" after it grows.
 
 The Groups panel (++2++) is a group's whole lifecycle: ++n++ creates one,
-++d++ deletes it after a `y/n`, ++w++ saves the current run as one, ++enter++
+++d++ deletes it after a confirm, ++w++ saves the current run as one, ++enter++
 opens it. Deleting a group's file does not touch an open session of that group —
 definitions and live sessions have separate lifetimes.
 
@@ -46,7 +46,7 @@ session.
 
 ### Ending a session
 
-++x++ on a row in the Sessions panel asks `end "name"? y/n`. On `y`, every
+++x++ on a row in the Sessions panel asks `end "name"?`. On ++enter++ or ++y++, every
 connected terminal of that session receives ++ctrl+c++ then ++ctrl+d++ —
 interrupt the foreground process, log the shell out — targeting exactly the
 session's hosts whatever the broadcast mode is, and leaving nothing in the

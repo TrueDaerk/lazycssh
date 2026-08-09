@@ -716,12 +716,14 @@ func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // existing session is never replaced without the user answering for it.
 func (a App) handleSaveKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if a.confirmOverwrite {
-		switch msg.String() {
-		case "y", "Y":
+		switch readConfirm(msg) {
+		case answerYes:
 			a.confirmOverwrite = false
 			return a.commitSave(true)
-		default:
+		case answerNo:
 			return a.cancelSave(), nil
+		default:
+			return a, nil
 		}
 	}
 
@@ -910,24 +912,30 @@ func (a App) View() tea.View {
 	if a.searchInput.Focused() {
 		bottom = a.renderSearchLine()
 	}
-	if a.splitInput.Focused() {
-		bottom = a.renderSplitLine()
-	}
 
-	view := lipgloss.JoinVertical(lipgloss.Left, body, bottom)
+	content := lipgloss.JoinVertical(lipgloss.Left, body, bottom)
+
+	// Dialogs and the help are popups over the frame, not replacements for
+	// it: the fleet stays visible underneath, the way lazygit's menus behave.
+	// The focused dialog's text cursor is the frame's cursor, so the terminal
+	// draws it where the typing lands; see modal.go.
+	var cursor *tea.Cursor
+	if m, ok := a.activeModal(); ok {
+		if box, x, y, c := a.renderModal(m); box != "" {
+			content, cursor = composite(content, box, x, y), c
+		}
+	}
 	if a.showHelp {
-		// The help is a popup over the frame, not a replacement for it: the
-		// fleet stays visible underneath, the way lazygit's menus behave.
 		if overlay := a.renderHelpOverlay(); overlay != "" {
 			x := max(0, (a.layout.Width-lipgloss.Width(overlay))/2)
 			y := max(0, (a.layout.Height-lipgloss.Height(overlay))/2)
-			view = lipgloss.NewCompositor(
-				lipgloss.NewLayer(view),
-				lipgloss.NewLayer(overlay).X(x).Y(y).Z(1),
-			).Render()
+			content, cursor = composite(content, overlay, x, y), nil
 		}
 	}
-	return tea.NewView(view)
+
+	view := tea.NewView(content)
+	view.Cursor = cursor
+	return view
 }
 
 // renderSidebar draws the panel column the way lazygit does: every panel is
