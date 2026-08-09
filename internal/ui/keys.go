@@ -187,9 +187,11 @@ func DefaultKeyMap() KeyMap {
 		// pane and the broadcast bar keep them as keystrokes for the hosts -
 		// so here they are free for an explicit panel switch, bounded to the
 		// panel list unlike tab/shift+tab, which also reach the broadcast bar
-		// (issue #212).
-		Left:      key.NewBinding(key.WithKeys("left"), key.WithHelp("←", "previous panel")),
-		Right:     key.NewBinding(key.WithKeys("right"), key.WithHelp("→", "next panel")),
+		// (issue #212). h/l alias them, lazygit style, matching j/k on
+		// up/down; the grid and broadcast bar still forward plain h/l to the
+		// host (issue #220).
+		Left:      key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "previous panel")),
+		Right:     key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "next panel")),
 		Choose:    key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open / bring to the foreground")),
 		Toggle:    key.NewBinding(key.WithKeys("space", " "), key.WithHelp("space", "open / bring to the foreground")),
 		SaveSet:   key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "save the run as a group")),

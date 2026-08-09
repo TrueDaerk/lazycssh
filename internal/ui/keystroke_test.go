@@ -54,6 +54,20 @@ func TestTypingReachesTheFocusedHostOnly(t *testing.T) {
 	}
 }
 
+// h and l are sidebar aliases for left/right, but that only applies while the
+// sidebar has focus; a focused pane is a terminal, so the plain letters still
+// reach the host (issue #220).
+func TestPlainHAndLReachTheHostWhileTyping(t *testing.T) {
+	a, fleet := typingApp(t, "web-01")
+
+	a = press(t, a, tea.KeyPressMsg{Code: 'h', Text: "h"})
+	press(t, a, tea.KeyPressMsg{Code: 'l', Text: "l"})
+
+	if got := string(fleet.sessions["web-01"].Written()); got != "hl" {
+		t.Fatalf("host received %q, want the literal letters", got)
+	}
+}
+
 // tab and ctrl+c belong to the remote shell while typing: completion and
 // interrupt happen on the host, not here.
 func TestTypingForwardsTabAndCtrlC(t *testing.T) {

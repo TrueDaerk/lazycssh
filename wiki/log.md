@@ -2,6 +2,12 @@
 
 ## 2026-08-09
 
+- `h`/`l` alias `←`/`→` in the sidebar, lazygit style, matching the existing `j`/`k` alias on
+  `↑`/`↓` (issue #220). The alias lives on the existing `Left`/`Right` bindings in
+  `internal/ui/keys.go`, so help and the options bar pick it up automatically; a pane and the
+  broadcast bar still forward plain `h`/`l` to the host. Documented in `core/keys.md`. Version
+  0.10.10.
+
 - Screen modes cycle in three states instead of a `fullScreen` boolean (issue #219): `alt++`
   (lazygit's `+`, taken as a chord because a pane forwards a plain `+` to the shell) walks
   normal → half → full → normal, and `alt+z` remains the direct full-screen toggle from any mode.
