@@ -162,3 +162,171 @@ func TestBroadcastRawSaysWhenNobodyReceived(t *testing.T) {
 		t.Fatalf("LastDelivery() = %q, want a zero-delivery warning", a.LastDelivery())
 	}
 }
+
+// wideBarApp is [barApp] on a terminal wide enough that every host's pane
+// fits on one page: the paste hold decision reads the router's resolved
+// target count, and a paged-away host must not be silently excluded from it.
+func wideBarApp(t *testing.T, names ...string) (App, *fakeSender) {
+	t.Helper()
+
+	a, sender := barApp(t, names...)
+	return resize(t, a, 60*(len(names)+1), 40), sender
+}
+
+// paste drives a synthetic bracketed paste, the way the terminal delivers one
+// assembled message rather than a run of key presses (issue #248).
+func paste(t *testing.T, a App, content string) App {
+	t.Helper()
+
+	model, _ := a.Update(tea.PasteMsg{Content: content})
+	next, ok := model.(App)
+	if !ok {
+		t.Fatalf("Update returned a %T, want App", model)
+	}
+	return next
+}
+
+// A multiline paste to more than one host is held rather than sent: the
+// notice names the line count and the router's resolved target count, and
+// nothing reaches a host until it is answered.
+func TestBroadcastBarHoldsMultilinePasteToMultipleHosts(t *testing.T) {
+	a, sender := wideBarApp(t, "web-01", "web-02")
+
+	a = paste(t, a, "echo one\necho two\necho three")
+
+	if len(sender.sent) != 0 {
+		t.Fatalf("sent = %v before the paste was released", sender.sent)
+	}
+	view := plain(a.View().Content)
+	if !strings.Contains(view, "paste: 3 lines → 2 hosts") {
+		t.Fatalf("bar does not show the hold notice:\n%s", view)
+	}
+	if !strings.Contains(view, "enter send") || !strings.Contains(view, "esc cancel") {
+		t.Fatalf("bar does not name enter/esc:\n%s", view)
+	}
+}
+
+// Enter releases a held paste verbatim: no trailing newline is added, and it
+// goes out as one write, not one per line or per key.
+func TestBroadcastBarReleasesHeldPasteOnEnter(t *testing.T) {
+	a, sender := wideBarApp(t, "web-01", "web-02")
+
+	content := "echo one\necho two\necho three"
+	a = paste(t, a, content)
+	a = press(t, a, tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	if len(sender.sent) != 1 {
+		t.Fatalf("sent = %v, want exactly one write", sender.sent)
+	}
+	if sender.sent[0] != content {
+		t.Fatalf("sent %q, want the paste verbatim %q", sender.sent[0], content)
+	}
+	view := plain(a.View().Content)
+	if strings.Contains(view, "paste:") {
+		t.Fatalf("the hold notice is still showing after enter:\n%s", view)
+	}
+}
+
+// Esc drops a held paste: nothing is sent and the notice clears.
+func TestBroadcastBarCancelsHeldPasteOnEsc(t *testing.T) {
+	a, sender := wideBarApp(t, "web-01", "web-02")
+
+	a = paste(t, a, "echo one\necho two")
+	a = press(t, a, tea.KeyPressMsg{Code: tea.KeyEsc})
+
+	if len(sender.sent) != 0 {
+		t.Fatalf("sent = %v, want nothing after esc", sender.sent)
+	}
+	if !strings.Contains(a.LastDelivery(), "discarded") {
+		t.Fatalf("LastDelivery() = %q, want it to say the paste was discarded", a.LastDelivery())
+	}
+	view := plain(a.View().Content)
+	if strings.Contains(view, "paste:") {
+		t.Fatalf("the hold notice is still showing after esc:\n%s", view)
+	}
+}
+
+// While a paste is held, keys other than enter and esc do not leak to the
+// hosts: a stray keystroke must not silently answer a fleet-wide paste.
+func TestBroadcastBarIgnoresOtherKeysWhileHoldingAPaste(t *testing.T) {
+	a, sender := wideBarApp(t, "web-01", "web-02")
+
+	a = paste(t, a, "echo one\necho two")
+	a = pressKey(t, a, "l")
+
+	if len(sender.sent) != 0 {
+		t.Fatalf("sent = %v, want nothing while the paste is held", sender.sent)
+	}
+	view := plain(a.View().Content)
+	if !strings.Contains(view, "paste: 2 lines → 2 hosts") {
+		t.Fatalf("the paste is no longer held:\n%s", view)
+	}
+}
+
+// A single-line paste passes straight through even with several hosts in
+// scope: only a multiline paste is the footgun this holds against.
+func TestBroadcastBarSendsSingleLinePasteImmediately(t *testing.T) {
+	a, sender := wideBarApp(t, "web-01", "web-02", "web-03")
+
+	a = paste(t, a, "uptime")
+
+	if len(sender.sent) != 1 || sender.sent[0] != "uptime" {
+		t.Fatalf("sent = %v, want the single line sent immediately", sender.sent)
+	}
+	if strings.Contains(plain(a.View().Content), "paste:") {
+		t.Fatalf("a single-line paste should not be held")
+	}
+}
+
+// A multiline paste addressed to one host — single mode, or a working set of
+// one — passes straight through: there is only one host to review it on.
+func TestBroadcastBarSendsMultilinePasteImmediatelyToOneHost(t *testing.T) {
+	a, sender := barApp(t, "web-01")
+
+	a = paste(t, a, "echo one\necho two")
+
+	if len(sender.sent) != 1 || sender.sent[0] != "echo one\necho two" {
+		t.Fatalf("sent = %v, want the paste sent immediately", sender.sent)
+	}
+	if strings.Contains(plain(a.View().Content), "paste:") {
+		t.Fatalf("a paste to one host should not be held")
+	}
+}
+
+// broadcast.ModeSingle narrows the router to the focused host regardless of
+// how many are in the working set: a multiline paste there is still a paste
+// to one host, so it is never held.
+func TestBroadcastBarSendsMultilinePasteImmediatelyInSingleMode(t *testing.T) {
+	a, sender, router, _ := cmdApp(t, "web-01", "web-02", "web-03")
+	a = resize(t, a, 260, 40)
+	a = pressKey(t, a, "5")
+	if a.Focus() != AreaBroadcast {
+		t.Fatal("5 did not focus the broadcast bar")
+	}
+
+	if err := router.SetMode(broadcast.ModeSingle); err != nil {
+		t.Fatalf("SetMode: %v", err)
+	}
+	router.SetFocus("web-01")
+
+	a = paste(t, a, "echo one\necho two")
+
+	if len(sender.sent) != 1 || sender.sent[0] != "echo one\necho two" {
+		t.Fatalf("sent = %v, want the paste sent immediately", sender.sent)
+	}
+	if strings.Contains(plain(a.View().Content), "paste:") {
+		t.Fatalf("a single-mode paste should not be held")
+	}
+}
+
+// A paste outside the broadcast bar is not this package's footgun to guard:
+// it is ignored rather than reaching a host unrouted.
+func TestPasteOutsideTheBroadcastBarIsIgnored(t *testing.T) {
+	a, sender, _, _ := cmdApp(t, "web-01", "web-02")
+
+	a = paste(t, a, "echo one\necho two")
+
+	if len(sender.sent) != 0 {
+		t.Fatalf("sent = %v, want nothing without the broadcast bar focused", sender.sent)
+	}
+}

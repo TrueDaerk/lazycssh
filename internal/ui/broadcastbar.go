@@ -22,6 +22,12 @@ import (
 // screen or tmux needs, and anything else after the prefix is forwarded to the
 // targets unchanged.
 func (a App) handleBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// A held paste owns the keyboard until it is answered: enter and esc are
+	// the only keys that mean anything, so a stray keystroke aimed at the
+	// hosts cannot silently release or drop a fleet-wide paste (issue #248).
+	if a.pendingPaste != nil {
+		return a.resolvePendingPaste(msg)
+	}
 	if key.Matches(msg, a.keys.LeaveTyping) {
 		a.focus = AreaSidebar
 		a.broadcastView, a.broadcastPending = false, false
@@ -81,6 +87,71 @@ func (a App) handleBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		a.broadcastLine = nil
 	}
 	return a, tea.Batch(authCmds...)
+}
+
+// pendingPaste is a multiline paste large enough to reach more than one host,
+// held until the user reviews it: a pasted N-line script fanned out to M
+// hosts unreviewed is the sharpest edge broadcasting has (issue #248). A
+// paste that is one line, or whose targets are one host, carries no more risk
+// than the keystrokes it replaces and is never held.
+type pendingPaste struct {
+	// content is the paste, verbatim, to send on release.
+	content string
+	// lines is how many lines it contains, for the notice.
+	lines int
+	// hosts is the resolved target count at the moment of the paste.
+	hosts int
+}
+
+// handlePaste is where a bracketed paste lands. Only the broadcast bar
+// thinks about holding it: a paste anywhere else in the app reaches at most
+// one host, which is no different from typing it.
+func (a App) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
+	if a.focus != AreaBroadcast || a.broadcastView {
+		return a, nil
+	}
+	// A paste mid ctrl+a-prefix has nothing to do with the prefix: it starts
+	// a fresh decision rather than being read as the prefix's second key.
+	a.broadcastPending = false
+
+	lines := pasteLineCount(msg.Content)
+	hosts := 0
+	if a.cfg.Targets != nil {
+		hosts = a.cfg.Targets.Count()
+	}
+	if lines > 1 && hosts > 1 {
+		a.pendingPaste = &pendingPaste{content: msg.Content, lines: lines, hosts: hosts}
+		return a, nil
+	}
+	return a.sendBroadcastRaw([]byte(msg.Content))
+}
+
+// resolvePendingPaste answers a held paste: enter sends it verbatim, esc
+// drops it, everything else is ignored.
+func (a App) resolvePendingPaste(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	p := a.pendingPaste
+	switch {
+	case key.Matches(msg, a.keys.PromptSubmit):
+		a.pendingPaste = nil
+		return a.sendBroadcastRaw([]byte(p.content))
+	case key.Matches(msg, a.keys.PromptCancel):
+		a.pendingPaste = nil
+		a.lastDelivery = fmt.Sprintf("paste discarded: %d line%s to %d host%s",
+			p.lines, plural(p.lines), p.hosts, plural(p.hosts))
+		return a, nil
+	}
+	return a, nil
+}
+
+// pasteLineCount counts a paste's lines, ignoring one trailing newline: a
+// two-line snippet copied with a trailing newline is still two lines to a
+// user deciding whether to release it.
+func pasteLineCount(content string) int {
+	trimmed := strings.TrimSuffix(content, "\n")
+	if trimmed == "" {
+		return 0
+	}
+	return strings.Count(trimmed, "\n") + 1
 }
 
 // handleBroadcastViewKey is the bar in view mode: every key is an app-level
@@ -215,6 +286,11 @@ func (a App) renderBroadcastBar() string {
 	// echo. The bar only says what state it is in.
 	var line string
 	switch {
+	case focused && a.pendingPaste != nil:
+		p := a.pendingPaste
+		line = a.theme.StatusWarning.Render(fmt.Sprintf(
+			"paste: %d line%s → %d host%s  [enter send / esc cancel]",
+			p.lines, plural(p.lines), p.hosts, plural(p.hosts)))
 	case focused && a.broadcastView:
 		// No cursor: nothing typed here is going anywhere.
 		line = a.theme.Muted.Render("view mode — keys are commands · enter returns to typing")

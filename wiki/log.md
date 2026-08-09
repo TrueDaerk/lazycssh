@@ -2,6 +2,16 @@
 
 ## 2026-08-09
 
+- Hold multiline paste to multiple hosts (issue #248). Bracketed paste arrives as one
+  `tea.PasteMsg`; the broadcast bar now reads it against `Router.Count()` before deciding what
+  to do with it. One line, or a target count of one (including `single` mode), goes out
+  immediately through `Router.Send`, byte for byte. More than one line to more than one host is
+  held instead: the bar shows `paste: N lines → M hosts  [enter send / esc cancel]` and stops
+  listening for anything else until enter releases it verbatim or esc drops it. The router
+  itself gained nothing new - the hold is a UI-level decision built entirely on `Count()` and
+  `Send`, which already existed. `internal/ui/broadcastbar.go`; `core/broadcast-scope.md`
+  updated.
+
 - Empty-fleet start (issue #247). Verified `lazycssh` with zero host arguments already opened
   the TUI neutrally - no dial, no forced modal, focus on the sidebar - since the argumentless
   path (`resolvePlan`, `NewApp`) predates this issue (#67, #168, #225). The one missing piece
