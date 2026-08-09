@@ -433,6 +433,9 @@ func TestFleetModeNeedsTheChord(t *testing.T) {
 			t.Fatalf("%q reached the fleet mode", k)
 		}
 	}
+	// `f` opens the output filter's prompt, which then owns the keyboard; the
+	// chord below is answered by the app, so the prompt is closed first.
+	a = pressKey(t, a, "esc")
 
 	model, _ := a.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl | tea.ModAlt})
 	next, ok := model.(App)

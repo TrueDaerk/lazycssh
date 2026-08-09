@@ -2,6 +2,29 @@
 
 ## 2026-08-10
 
+- Filter the grid by pane output, `f` (issue #255). The prompt takes a
+  **case-insensitive substring** — not a regexp: a filter is typed in a hurry, and a half-typed
+  pattern should narrow the grid rather than fail to compile. What it matches is the output
+  **since the last command-line send**, reusing the Output diff's watermarks (`App.diffMarks`,
+  issue #46) as the hint suggested, so "which hosts failed that command" is not answered by an
+  hour of scrollback; a host no send reached falls back to its last 200 lines. The filter slots
+  into `filteredHosts()`, the hook the split already chunked, so it composes with the split and
+  with paging for free.
+  Two decisions carry the weight. First, the match set is a **model field** recomputed inside
+  `Update` (`syncFilterMatches`, on output/fleet/host-list messages and on every send) rather
+  than evaluated in `hostIDs()`: reading a live scrollback from a render helper is exactly the
+  class of bug issues #135/#136 closed. Second, the **broadcast set is unaffected** —
+  `syncBroadcastLimit` clears the filter on a copy of the model and computes the limit from
+  that, so a hidden pane still receives what is broadcast. A filter that silently narrowed the
+  targets would break the promise the status bar makes; the status bar says
+  `filter: "error" (5/40)` in the warning style and the overflow footer adds
+  `+35 hosts hidden by the filter — f` so the view can never read as the whole run.
+  Focus is kept by identity and clamped on every re-evaluation, so it never lands on a hidden
+  pane and clearing restores the grid with a live pane focused. `esc` clears rather than keeps
+  (unlike the split's prompt): the key that means "get me out of here" must not leave panes
+  hidden. `core/tui.md`, `core/keys.md`, `userdocs/concepts/grid-and-window.md` and
+  `userdocs/reference/keybindings.md` updated. New `internal/ui/outputfilter.go`.
+
 - Merged the saved groups and a new recent-host list into the host picker (issue #254). The
   picker's one-method `HostSource` from #246 now returns tagged `PickerItem` rows, and
   `MergeHostSources` concatenates three of them — `cfg` (ssh-config aliases), `grp` (saved

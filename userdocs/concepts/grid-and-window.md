@@ -95,6 +95,34 @@ anything. An empty prompt or `0` clears it; ++esc++ keeps it. It is a view, not
 a removal: chunks are cut from the session's host list, and a host that
 reconnects reappears in its chunk without a keypress.
 
+**Output filter** — ++f++ asks for a pattern and keeps only the panes whose
+recent output holds it. With forty panes, "which of these said `error`" is a
+question the eye answers badly:
+
+```
+filter: "error" (5/40)
+```
+
+The match is a plain **case-insensitive substring**, not a regular expression,
+and what it reads is the output **since your last command** — so it answers
+"which hosts failed *that* command", not "which host ever printed this". A host
+your command never reached is matched against its last 200 lines instead. New
+output re-evaluates the matches live: a host that starts printing the pattern
+joins the grid without a keypress.
+
+An empty prompt or ++esc++ clears it, and the grid comes back whole. The status
+bar carries the filter and the match count for as long as it is in force, and the
+overflow footer says how many hosts it is holding back.
+
+!!! warning "A filter is a view, not a selection"
+
+    Hiding a pane does **not** take it out of the broadcast. A command sent while
+    a filter is in force reaches exactly the hosts it would have reached without
+    one — the target count on the status bar and in the command prompt is the
+    truth, the grid is what you are looking at. To act on the matching hosts,
+    make them a selection (`/select …`, or the Output diff panel's ++enter++) and
+    broadcast with ++shift+b++.
+
 **Screen modes** — ++alt+plus++ cycles three of them, the way lazygit's ++plus++
 does: **normal**, **half**, **full**. lazygit uses a bare ++plus++; here it needs
 ++alt++, because a plain ++plus++ inside a pane belongs to the remote shell.

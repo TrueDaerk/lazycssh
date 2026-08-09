@@ -21,7 +21,7 @@ func (a App) overflowFooterVisible() bool {
 		return false
 	}
 	g := TileGridCapped(a.layout.Main, a.gridSlots(), a.gridPaneCap())
-	return g.Pages > 1 || a.splitChunks() > 1 || len(a.open) > 1
+	return g.Pages > 1 || a.splitChunks() > 1 || len(a.open) > 1 || a.filterHidden() > 0
 }
 
 // gridArea is the rectangle the pane grid tiles: the main area, minus the
@@ -48,6 +48,14 @@ func (a App) overflowFooter() string {
 		parts = append(parts, a.theme.StatusWarning.Render(fmt.Sprintf(
 			"+%d host%s — ctrl+shift+→ · page %d/%d",
 			hidden, plural(hidden), a.clampedPage(g)+1, g.Pages)))
+	}
+
+	if hidden := a.filterHidden(); hidden > 0 {
+		// Named separately from the other three because it is the one kind of
+		// hiding that does not narrow the broadcast: the hidden panes are out
+		// of sight, not out of range.
+		parts = append(parts, a.theme.StatusWarning.Render(fmt.Sprintf(
+			"+%d host%s hidden by the filter — f", hidden, plural(hidden))))
 	}
 
 	if chunks := a.splitChunks(); chunks > 1 {

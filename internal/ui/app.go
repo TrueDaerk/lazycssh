@@ -180,6 +180,14 @@ type App struct {
 	splitSize  int
 	splitChunk int
 
+	// The output filter: the pattern typed at `f`, empty while the grid shows
+	// everything, and which hosts matched it as of the last evaluation. The
+	// match set is a model field so a render never reads a live scrollback;
+	// see internal/ui/outputfilter.go (issue #255).
+	filterInput  textinput.Model
+	outputFilter string
+	filterMatch  map[string]bool
+
 	// broadcastLine is the broadcast bar's local echo of what was typed
 	// since the last enter. The truth is on the hosts; this is the reminder.
 	broadcastLine []rune
@@ -302,6 +310,7 @@ func NewApp(cfg Config) App {
 	search := newLineInput("search")
 	host := newLineInput("host, user@host:port, web-{01..04}")
 	split := newLineInput("panes per view")
+	filter := newLineInput("text in the output")
 
 	a := App{
 		cfg:         cfg,
@@ -312,6 +321,7 @@ func NewApp(cfg Config) App {
 		searchInput: search,
 		hostInput:   host,
 		splitInput:  split,
+		filterInput: filter,
 		scroll:      make(map[string]int),
 		focus:       AreaSidebar,
 		panel:       PanelStatus,
@@ -355,6 +365,8 @@ func (a App) resetToStart() App {
 	a.page = 0
 	a.splitSize = 0
 	a.splitChunk = 0
+	a.outputFilter = ""
+	a.filterMatch = nil
 	a.scroll = make(map[string]int)
 	if a.focus == AreaGrid {
 		a.focus = AreaSidebar
@@ -490,18 +502,20 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a = a.syncBroadcastLimit()
 		}
 		next, cmd := a.reapSessions()
-		return next.followFocus(), cmd
+		return next.refreshFilter().followFocus(), cmd
 
 	case SessionOutputMsg:
 		// Nothing to store: the pane reads the scrollback - which is
 		// internally synchronized - when it renders. Redrawing is the whole
-		// effect.
-		return a, nil
+		// effect - except under an output filter, where the new output may
+		// have changed which panes match (issue #255).
+		return a.refreshFilter(), nil
 
 	case HostsChangedMsg:
 		focused := a.FocusedHost()
 		next := a.withHosts(msg.Hosts).snapshotFleet().pruneSessions().
-			adoptNewHosts().keepGridSlots().refocus(focused).followFocus()
+			adoptNewHosts().keepGridSlots().syncFilterMatches().
+			refocus(focused).followFocus()
 		// The fleet changed, so whatever a connect complained about is stale.
 		next.connectErr = ""
 		if msg.Patterns != nil {
@@ -569,6 +583,7 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, a.keys.ForceQuit) &&
 		(a.cmdInput.Focused() || a.hostInput.Focused() || a.picker.open ||
 			a.searchInput.Focused() || a.Saving() || a.splitInput.Focused() ||
+			a.filterInput.Focused() ||
 			a.GroupDialogOpen() || a.DeleteGroupPending() != "" || a.EndSessionPending() != "") {
 		return a, tea.Quit
 	}
@@ -623,6 +638,12 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// And the split prompt: it is one number, typed.
 	if a.splitInput.Focused() {
 		return a.handleSplitKey(msg)
+	}
+
+	// And the output filter's prompt, for the reason the command line has the
+	// keyboard: a pattern containing a "b" must not switch the broadcast mode.
+	if a.filterInput.Focused() {
+		return a.handleFilterKey(msg)
 	}
 
 	// While the overlay is open it is the only thing listening: a user reading
@@ -734,6 +755,8 @@ func (a App) handleAppKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, a.keys.Split):
 		return a.beginSplit(), nil
+	case key.Matches(msg, a.keys.Filter):
+		return a.beginOutputFilter(), nil
 	case key.Matches(msg, a.keys.NextSplit):
 		return a.stepView(+1)
 	case key.Matches(msg, a.keys.PrevSplit):
@@ -1183,6 +1206,12 @@ func (a App) renderStatusBar() string {
 			scope = a.theme.StatusWarning
 		}
 		parts = append(parts, scope.Render(a.cfg.Targets.Describe()))
+	}
+	if label := a.filterLabel(); label != "" {
+		// The filter hides panes, so it renders in the warning style for as
+		// long as it is in force: a grid that is showing a part must never
+		// read as the whole run (issue #255).
+		parts = append(parts, a.theme.StatusWarning.Render(label))
 	}
 	if label := a.splitLabel(); label != "" {
 		// The split narrows what a keystroke reaches, so it renders in the

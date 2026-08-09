@@ -175,6 +175,19 @@ func (a App) syncBroadcastLimit() App {
 	if a.cfg.Targets == nil {
 		return a
 	}
+	if a.outputFilter != "" {
+		// The output filter is a view, not a selection (issue #255): a pane
+		// hidden because it did not print the pattern still receives what the
+		// user broadcasts. The limit is therefore computed as if the filter
+		// were off - on a copy of the model with it cleared, which pushes the
+		// unfiltered limit into the shared router and leaves this model's own
+		// filter untouched.
+		base := a
+		base.outputFilter = ""
+		base.filterMatch = nil
+		base.syncBroadcastLimit()
+		return a
+	}
 	g := a.grid()
 	if g.PerPage <= 0 {
 		// No usable grid area yet - before the first size message, or a

@@ -20,9 +20,10 @@ import (
 func (a App) SplitSize() int { return a.splitSize }
 
 // filteredHosts is the session's hosts before the split: the list the split
-// chunks.
+// chunks. The output filter runs first, so a filtered run splits into chunks
+// of matches rather than into chunks with holes in them.
 func (a App) filteredHosts() []string {
-	return a.sessionHosts()
+	return a.outputFiltered(a.sessionHosts())
 }
 
 // visibleHosts is the session's hosts after every visibility filter: what the
