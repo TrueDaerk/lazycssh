@@ -12,8 +12,8 @@ not typing into a pane, not in the broadcast bar's edit mode, not in a prompt.
 | Key | Action |
 |---|---|
 | ++question++ | help overlay |
-| ++q++ | quit — only while no input has the keyboard |
-| ++ctrl+q++ | quit from anywhere, including out of a text field |
+| ++q++ | quit — only while no input has the keyboard. While the help overlay is open, ++q++ (like any key) closes the overlay instead |
+| ++ctrl+q++ | quit from anywhere, including out of a text field and the help overlay |
 | ++tab++ / ++shift+tab++ | next / previous stop: each sidebar panel, then the grid |
 | ++1++ ++2++ ++3++ ++4++ | Status, Groups, Sessions, Command log |
 | ++5++ | focus the broadcast bar |

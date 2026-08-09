@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-08-09T23:30:00Z
+timestamp: 2026-08-09T23:45:00Z
 ---
 
 # Keymap and help
@@ -43,7 +43,7 @@ live at the same time.
 | Key | Area | Action |
 |-----|------|--------|
 | `?` | global | help overlay |
-| `q` / `ctrl+q` | global (app level) | quit — `q` only while no input has the keyboard; in any text field it is a letter, and while typing to a host both are forwarded. `ctrl+q` also quits from inside every text input |
+| `q` / `ctrl+q` | global (app level) | quit — `q` only while no input has the keyboard; in any text field it is a letter, and while typing to a host both are forwarded. `ctrl+q` also quits from inside every text input. **Exception:** while the help overlay is open, `q` (like any other key) closes the overlay instead of quitting — only `ctrl+q` (`ForceQuit`) quits from there, lazygit's convention for a topmost overlay (issue #227) |
 | `tab` / `shift+tab` | global (app level) | next / previous stop in the cycle: each sidebar panel, then the grid; forwarded while typing |
 | `1`–`4` | global (app level) | status, groups, sessions, command log |
 | `5` | global (app level) | focus the broadcast bar |
@@ -112,9 +112,15 @@ says `EVERY`.
 `KeyMap.For(area)` returns a `help.KeyMap` describing what is live right now: the area's own
 bindings plus the global ones. The short line along the bottom lists the handful a user needs
 where they are, right-aligned on the status bar; `?` opens the keybindings popup, composited over
-the frame, which leads with the focused area's column and then lists the others. On a terminal too
-narrow for every column the help bubble drops whole columns behind an ellipsis rather than
-wrapping them.
+the frame, which leads with the focused area's column and then lists the others. Each column is
+headed with the area name it lists bindings for (`contextHelp.Titles()`, matched to
+`FullHelp()`'s groups position for position), so a column reads on its own instead of relying on
+the box title, which only ever names the focused area. On a terminal too narrow for every column,
+`renderHelpColumns` (`internal/ui/app.go`) drops trailing columns — title included — the same way
+the help bubble's own `FullHelpView` drops them, rather than wrapping.
+
+While the overlay is open it has the keyboard: any key closes it, except `ctrl+q`, which still
+force-quits the app (`TestQClosesHelpOverlayWithoutQuitting`, `TestQuitBinding`; issue #227).
 
 Styles come from the [theme](./theme.md) rather than the help bubble's defaults, so the overlay
 matches the rest of the interface.
