@@ -45,7 +45,7 @@ func (a App) handleClick(x, y int) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case RegionSidebar:
-		heights := SidebarHeights(a.layout.Sidebar.Height, len(Panels()), int(a.panel))
+		heights := a.sidebarHeights()
 		panel, bodyRow, ok := sidebarPanelAt(heights, y-a.layout.Sidebar.Y)
 		if !ok {
 			return a, nil
@@ -90,7 +90,7 @@ func (a App) handleWheel(msg tea.MouseWheelMsg) App {
 			return a.scrollHostBy(index, delta*wheelStep)
 		}
 	case RegionSidebar:
-		heights := SidebarHeights(a.layout.Sidebar.Height, len(Panels()), int(a.panel))
+		heights := a.sidebarHeights()
 		if panel, _, ok := sidebarPanelAt(heights, msg.Y-a.layout.Sidebar.Y); ok {
 			return a.movePanelCursor(Panels()[panel], -delta)
 		}
@@ -101,12 +101,12 @@ func (a App) handleWheel(msg tea.MouseWheelMsg) App {
 // paneUnder resolves a point in the main area to a host index.
 func (a App) paneUnder(x, y int) (int, bool) {
 	g := a.grid()
-	return paneAt(g, a.layout.Main, a.clampedPage(g), len(a.hostIDs()), a.paneIndex, a.fullScreen, x, y)
+	return paneAt(g, a.layout.Main, a.clampedPage(g), len(a.hostIDs()), a.paneIndex, a.FullScreen(), x, y)
 }
 
 // paneCell is the rect the pane at index is drawn in right now.
 func (a App) paneCell(index int) (Rect, bool) {
-	if a.fullScreen {
+	if a.FullScreen() {
 		return a.layout.Main, index == a.paneIndex
 	}
 	return a.grid().Cell(index)
@@ -152,6 +152,6 @@ func (a App) movePanelCursor(panel Panel, delta int) App {
 // sidebarBodyHeight is the body height of the selected panel's box, matching
 // what renderSidebar hands to panelBody.
 func (a App) sidebarBodyHeight() int {
-	heights := SidebarHeights(a.layout.Sidebar.Height, len(Panels()), int(a.panel))
+	heights := a.sidebarHeights()
 	return max(1, heights[int(a.panel)]-2)
 }

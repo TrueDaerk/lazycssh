@@ -152,7 +152,7 @@ func (a App) foregroundSession(index int) App {
 	a.active = index
 	a.page = 0
 	a.paneIndex = 0
-	a.fullScreen = false
+	a.screen = ScreenNormal
 	// A session switch is an explicit view change: it tiles for what the new
 	// session actually holds - holes compacted, kept shape dropped.
 	a.open[index].Hosts = nonHoles(a.open[index].Hosts)

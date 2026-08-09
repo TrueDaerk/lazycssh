@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-08-09T13:00:00Z
+timestamp: 2026-08-09T20:00:00Z
 ---
 
 # Keymap and help
@@ -73,7 +73,8 @@ duplicate still fails.
 | `ctrl+]` | panes | stop typing: back to the app level, on the Status panel |
 | `alt+space` | panes (and app level) | toggle the focused pane's host in the selection |
 | `shift+alt+←`/`→`/`↑`/`↓` | panes (and app level) | move between panes — plain `alt+arrow` belongs to the shell (word navigation, issue #202) |
-| `alt+z` | panes (and app level) | full-screen this pane |
+| `alt+z` | panes (and app level) | full-screen this pane, again to return — the direct toggle from any screen mode |
+| `alt++` (also `alt+=`) | panes (and app level) | cycle the screen mode: normal / half / full — see [TUI shell](./tui.md#screen-modes). lazygit uses a plain `+`; here it takes `alt`, because a pane forwards `+` to the shell |
 | `alt+r` | panes (and app level) | reconnect this host |
 | `alt+x` | panes (and app level) | close this host; on a dead host, remove its pane |
 | `alt+y` | panes (and app level) | copy this pane's visible text to the clipboard (OSC 52) |

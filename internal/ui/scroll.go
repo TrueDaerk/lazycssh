@@ -78,7 +78,7 @@ func (a App) paneExtent() (width, height int) { return a.paneExtentAt(a.paneInde
 
 // paneExtentAt is the inner text area of the pane at index.
 func (a App) paneExtentAt(index int) (width, height int) {
-	if a.fullScreen {
+	if a.FullScreen() {
 		r := a.layout.Main
 		return max(0, r.Width-2), max(0, r.Height-3)
 	}

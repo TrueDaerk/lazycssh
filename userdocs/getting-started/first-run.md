@@ -79,6 +79,7 @@ and ++exclam++ jumps the focus to the next failing host.
 |---|---|
 | ++shift+alt+left++ ++shift+alt+right++ ++shift+alt+up++ ++shift+alt+down++ | move between panes (works while typing) |
 | ++alt+z++ | full-screen the focused pane; again to return |
+| ++alt+plus++ | cycle screen modes: normal, half, full |
 | ++alt+r++ | reconnect this host |
 | ++alt+x++ | close this host — on a dead host, remove its pane |
 | ++shift+page-up++ / ++shift+page-down++ | scroll this pane's history |

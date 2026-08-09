@@ -74,6 +74,17 @@ func (g Grid) Cell(i int) (Rect, bool) {
 // size the area actually fits. When the hosts do not fit, the grid reports the
 // pages it takes rather than shrinking the panes below the floor.
 func TileGrid(area Rect, count int) Grid {
+	return TileGridCapped(area, count, 0)
+}
+
+// TileGridCapped is [TileGrid] with a ceiling on how many panes one page may
+// hold; a cap of zero or less means "as many as fit".
+//
+// The cap is how half mode enlarges panes: fewer panes on a page means bigger
+// cells, and the hosts that no longer fit page like they always have - the
+// pages count says so, and the overflow footer names the key that reaches
+// them. Capping is never allowed to produce a page holding nothing.
+func TileGridCapped(area Rect, count, maxPerPage int) Grid {
 	if area.Empty() || count <= 0 {
 		return Grid{}
 	}
@@ -81,6 +92,9 @@ func TileGrid(area Rect, count int) Grid {
 	maxColumns := max(1, area.Width/MinPaneWidth)
 	maxRows := max(1, area.Height/MinPaneHeight)
 	capacity := maxColumns * maxRows
+	if maxPerPage > 0 {
+		capacity = min(capacity, maxPerPage)
+	}
 
 	perPage := min(count, capacity)
 

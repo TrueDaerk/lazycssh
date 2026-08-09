@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-09T18:00:00Z
+timestamp: 2026-08-09T20:00:00Z
 ---
 
 # TUI shell
@@ -23,7 +23,8 @@ the sender for broadcast).
 ## Layout
 
 `ComputeLayout(width, height)` is pure arithmetic, so it can be tested at every size without a
-terminal. That matters more than it sounds: a layout that underflows to a negative width is how
+terminal. `ComputeScreenLayout(width, height, mode, focus)` is the same arithmetic for a given
+[screen mode](#screen-modes); `ComputeLayout` is the normal-mode call. That matters more than it sounds: a layout that underflows to a negative width is how
 a TUI panics on a resize.
 
 ```
@@ -56,19 +57,48 @@ Groups or Sessions box shows the top of its content. When the sidebar has height
 beyond the collapsed boxes, half of the surplus is split between the unselected panels — capped
 at `PreviewPanelMaxHeight` (8 rows) — and the selected panel keeps the rest, so it always
 dominates. The tight-sidebar degradation is unchanged: collapsed boxes, bare titles, selected
-panel only.
+panel only. `SidebarHeightsMode(total, panels, selected, expanded)` is the same split with the
+previews given up — that is what half mode does to the sidebar.
 
 Rules:
 
 - the **status bar is never dropped**. The broadcast target count is the one thing the user must
   always be able to see;
-- the sidebar is a quarter of the width, clamped to 20–34 columns, and it disappears entirely
-  below `SidebarMinWidth + MainMinWidth`. It gives up its share before the grid does: output
+- the sidebar is a quarter of the width, clamped to 20–34 columns (half the width, uncapped, in
+  half mode with the sidebar focused; `SidebarMinWidth` in half mode with the grid or the bar
+  focused), and it disappears entirely below `SidebarMinWidth + MainMinWidth`. It gives up its share before the grid does: output
   squeezed to nothing is worse than no panel list;
 - below 24×4 the interface renders a single "terminal too small" line — clipped to the actual
   width, so even the apology cannot wrap into the scrollback;
 - every rect is non-negative at every size, including sizes no terminal reports. A test sweeps
   every width from −5 to 200 and every height from −5 to 60 and asserts it.
+
+### Screen modes
+
+Three screen modes cycle with `alt++` (lazygit's `+`, taken as a chord because a pane forwards a
+plain `+` to the shell — see [Keymap and help](./keys.md)): **normal → half → full → normal**.
+`alt+z` stays the direct way in and out of full screen from any mode, because zooming one pane is
+what a user reaches for mid-typing and it must never cost two presses. `ScreenMode` lives in
+`internal/ui/screen.go`; every mode's geometry comes out of `ComputeScreenLayout`,
+`SidebarHeightsMode` and `TileGridCapped`, so there are no sizes hardcoded in a renderer.
+
+| Mode | Sidebar focused | Grid (or bar) focused |
+|------|-----------------|-----------------------|
+| normal | quarter width, unselected panels preview | quarter width, every host that fits is tiled |
+| half | **half the width**, unselected panels collapse to titles | sidebar shrinks to `SidebarMinWidth`, the grid shows at most `HalfScreenPanes` (2) panes, so the focused pane is about half the screen |
+| full | unchanged frame | one pane fills the main area |
+
+Half mode is about whatever has the keyboard: entering a pane hands the width back to the grid,
+`ctrl+]` gives it back to the panel column, with no second keypress. The mode is a *view*
+setting — it never changes who receives a keystroke — and it does not outlive the run: a run that
+empties resets to normal, like every other view state (issue #168).
+
+Half mode capping the page means hosts page out; that is announced, not implied. The status bar
+carries `screen half` / `screen full` in the warning style, the page indicator and the overflow
+footer say what is hidden and which key reaches it. The frame is recomputed after every message
+(`syncLayout`), because the geometry now depends on focus as well as on the terminal size, and
+the program re-sizes the remote PTYs whenever the pane size actually moved — a mode or focus
+change resizes them just like a window resize does (issue #219).
 
 ## The main area
 
@@ -171,7 +201,8 @@ into a one-host send: it is an explicit zoom with its own way back.
   `ctrl+shift+→`, session panel `3`).
   The visible panes must never read as the whole run; a muted counter in the status bar alone is
   too easy to read past. Full screen skips the footer — `alt+z` is an explicit zoom with its own
-  way back,
+  way back; half mode keeps it, because a capped page is exactly the case where the hidden hosts
+  must be named,
 - the page is clamped on every render: a terminal that shrinks produces more pages, and the page
   the user was on may stop existing.
 
@@ -221,7 +252,7 @@ bypassing the broadcast scope entirely: typing into a pane can never fan out.
   then the grid; once in the grid they are keystrokes for the host and `ctrl+]` is the way back,
 - `1`–`5` at the app level select a panel **and** move focus to the sidebar,
 - `shift+alt+arrows` switch panes (they work while typing and from the app level alike; plain `alt+arrows` are the shell's word navigation and are forwarded), `alt+z`
-  full-screens, `alt+x` closes/removes, `alt+r` reconnects; paging is `ctrl+shift+→`/`ctrl+shift+←`, while typing and at the
+  full-screens and `alt++` cycles the [screen modes](#screen-modes), `alt+x` closes/removes, `alt+r` reconnects; paging is `ctrl+shift+→`/`ctrl+shift+←`, while typing and at the
   app level alike,
 - key presses are dispatched by area, so a key means one thing at a time — see
   [Keymap and help](./keys.md). Commands exist only while no input pane is focused,

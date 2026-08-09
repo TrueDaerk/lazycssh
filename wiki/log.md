@@ -2,6 +2,19 @@
 
 ## 2026-08-09
 
+- Screen modes cycle in three states instead of a `fullScreen` boolean (issue #219): `alt++`
+  (lazygit's `+`, taken as a chord because a pane forwards a plain `+` to the shell) walks
+  normal → half → full → normal, and `alt+z` remains the direct full-screen toggle from any mode.
+  Half mode gives whatever has the keyboard about half the terminal: the sidebar takes half the
+  width and its unselected panels drop their previews, or the grid keeps the width and shows at
+  most `HalfScreenPanes` (2) panes so the focused pane is half the screen — the hosts that no
+  longer fit page, and the overflow footer plus the new `screen half` status flag say so. The
+  geometry is `ComputeScreenLayout`, `SidebarHeightsMode` and `TileGridCapped`; nothing is
+  hardcoded in a renderer. The frame is recomputed after every message (`syncLayout`) because it
+  now depends on focus as well as size, and `program` re-sizes the remote PTYs whenever the pane
+  size actually moved, so a mode or focus change reaches the remotes like a window resize does.
+  Documented in `core/tui.md` and `core/keys.md`. Version 0.10.9.
+
 - The main area now previews the focused sidebar panel's cursor row (issue #218), the way
   lazygit's main view details the selected side-panel item: `[2] Groups` shows the group's
   patterns and metadata, `[3] Sessions` its hosts and their states, `[4] Command log` the whole
