@@ -4,7 +4,7 @@ title: Host argument expansion
 description: Bash-style brace expansion of host arguments, performed by lazycssh itself, and where it deliberately differs from bash.
 resource: internal/hosts/expand.go
 tags: [hosts, cli, brace-expansion]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-08-09T00:00:00Z
 ---
 
 # Host argument expansion
@@ -72,6 +72,14 @@ later pattern had a typo is worse than connecting to none.
 A single argument may expand to at most 100,000 entries, and so may the arguments taken
 together. Brace expansion is multiplicative, so `{1..1000}-{1..1000}` would otherwise build a
 million strings before anyone noticed the typo.
+
+## Interactive preview
+
+Both places a pattern is typed interactively — the new-host prompt and the host picker's
+free-text fallback — show a live preview built from `Expand` alone: no ssh-config lookup, no DNS,
+no dial, so it is safe on every keystroke. See [the TUI's connect
+flow](./tui.md#connecting-and-selecting-without-a-hosts-panel) (`internal/ui/hostpreview.go`,
+issue #249).
 
 ## Parity testing
 
