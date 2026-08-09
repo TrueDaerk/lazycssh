@@ -115,6 +115,24 @@ func TestLeftRightSwitchTheSidebarPanel(t *testing.T) {
 	}
 }
 
+// h/l alias left/right in the sidebar, lazygit style, matching j/k on up/down
+// (issue #220).
+func TestHLAliasLeftRightInTheSidebar(t *testing.T) {
+	a := resize(t, testApp(), 120, 40)
+	if a.Panel() != PanelStatus {
+		t.Fatal("setup: the Status panel does not have focus")
+	}
+
+	a = pressKey(t, a, "l")
+	if a.Panel() != PanelGroups {
+		t.Fatalf("Panel() = %v after l", a.Panel())
+	}
+	a = pressKey(t, a, "h")
+	if a.Panel() != PanelStatus {
+		t.Fatalf("Panel() = %v after h", a.Panel())
+	}
+}
+
 // A plain key means one thing at a time: while a pane is focused it is a
 // keystroke for the host, and only the alt chords move the pane focus; at the
 // app level the same key drives the sidebar instead.

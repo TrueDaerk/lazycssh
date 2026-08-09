@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-08-09T20:00:00Z
+timestamp: 2026-08-09T21:00:00Z
 ---
 
 # Keymap and help
@@ -55,7 +55,7 @@ duplicate still fails.
 | `u` | global (app level) | select the hosts that are up |
 | `d` | global (app level) | select the hosts that are down |
 | `↑`/`k`, `↓`/`j` | sidebar | move the cursor inside the focused panel only — a no-op at the top/bottom of the list, and on the Status panel, which has no list. Never switches the focused panel (issue #212) |
-| `←`/`→` | sidebar | previous / next panel, stopping at Status / Command log — the explicit way to switch panels, since neither key means anything else while the sidebar has focus |
+| `←`/`h`, `→`/`l` | sidebar | previous / next panel, stopping at Status / Command log — the explicit way to switch panels, since neither key means anything else while the sidebar has focus. `h`/`l` alias `←`/`→`, lazygit style, matching `j`/`k` on `↑`/`↓`; a pane and the broadcast bar keep plain `h`/`l` as keystrokes for the hosts (issue #220) |
 | `enter` / `space` | sidebar | choose the row: open a group, foreground a session, resend a log entry |
 | `w` | sidebar | save the run as a group |
 | `n` | Groups panel | new group (shadows the global connect while the panel has focus) |
