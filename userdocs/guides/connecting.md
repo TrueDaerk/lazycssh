@@ -10,24 +10,38 @@ lazycssh @prod-web
 
 See [Command line](../getting-started/command-line.md).
 
-## Mid-run: picking from `~/.ssh/config`
+## Mid-run: picking a host
 
-++shift+a++ opens the **host picker**: a box listing every concrete alias in
-your `~/.ssh/config`, whatever has focus.
+++shift+a++ opens the **host picker**: a box listing everything you could
+connect to, whatever has focus. Every row says where it came from:
+
+| Tag | Row |
+|---|---|
+| `cfg` | a concrete alias from your `~/.ssh/config` |
+| `grp` | a [saved group](saving.md), shown as `@name` — connecting it connects all of its hosts |
+| `rec` | a host you connected to in an earlier run |
 
 Type to filter. The match is fuzzy and case-insensitive — `wb1` finds `web-01` —
-so a long config is narrowed in two or three keystrokes. ++up++ and ++down++
-move through what is left.
+and it runs across all three kinds of row at once, so a long config is narrowed
+in two or three keystrokes. ++up++ and ++down++ move through what is left.
 
 | Key | Action |
 |---|---|
-| ++enter++ | connect the highlighted host and close the picker |
-| ++space++ / ++tab++ | mark a host and step down; ++enter++ then connects everything marked |
+| ++enter++ | connect the highlighted row and close the picker |
+| ++space++ / ++tab++ | mark a row and step down; ++enter++ then connects everything marked |
 | ++esc++ | close, having done nothing |
 
-If what you typed matches no alias, ++enter++ connects it as a host pattern
+Marks mix: mark a group and two hosts, press ++enter++, and you get all of them.
+
+If what you typed matches no row, ++enter++ connects it as a host pattern
 instead — brace expansion and `user@host:port` included — so a machine that is
-not in your config is still one ++enter++ away.
+not in your config is still one ++enter++ away. It shows up as a `rec` row next
+time.
+
+The recent list lives in `~/.config/lazycssh/recent` (or
+`$XDG_CONFIG_HOME/lazycssh/recent`), most recent first, capped at 200 hosts. It
+records hosts that actually connected, and a host that is already an alias in
+your `~/.ssh/config` stays a single `cfg` row rather than appearing twice.
 
 ## Mid-run: typing a pattern
 

@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-10T13:00:00Z
+timestamp: 2026-08-10T14:00:00Z
 ---
 
 # TUI shell
@@ -614,11 +614,23 @@ whichever panel has focus (issue #247).
 
 ### The host picker
 
-`A` opens a centred [dialog](#dialogs) listing every concrete alias of `~/.ssh/config`, in file
-order (`internal/ui/hostpicker.go`, issue #246). The new-host prompt answers "connect this
-pattern"; the picker answers "which hosts are there", which needs a list rather than five
-completion hints. Both stay: the prompt is three keystrokes for a name already known, the picker
-is for browsing and for connecting several machines at once.
+`A` opens a centred [dialog](#dialogs) listing everything the run could connect to
+(`internal/ui/hostpicker.go`, issue #246). The new-host prompt answers "connect this pattern";
+the picker answers "which hosts are there", which needs a list rather than five completion hints.
+Both stay: the prompt is three keystrokes for a name already known, the picker is for browsing
+and for connecting several machines at once.
+
+Rows come from three merged sources, each tagged with a three-letter origin marker
+(`internal/ui/hostsources.go`, issue #254):
+
+| Tag | Source | Enter connects |
+|-----|--------|----------------|
+| `cfg` | the concrete aliases of `~/.ssh/config`, in file order | that alias |
+| `grp` | the [saved groups](./groups-and-sessions.md), listed as `@name` | every pattern in the group |
+| `rec` | the [recent hosts](./recent-hosts.md), most recent first | that host |
+
+The tag is text in the row rather than a colour, for the same reason the mark is: it has to
+survive a terminal without styling and stay readable inside the cursor's full-row highlight.
 
 - **filter** — everything typed that is not one of the picker's own keys narrows the list by a
   case-insensitive **subsequence** match: `wb1` matches `web-01`. Subsequence is enough for
@@ -641,10 +653,19 @@ The picker never dials. Like every other connect path it emits `HostConnectMsg` 
 [the program](./program.md) resolve and open the sessions, which is also why free text works
 here without the UI knowing anything about [expansion](./host-expansion.md).
 
-Its candidates come from a `HostSource` — a one-method interface returning the names to offer —
-read once when the picker opens, so an implementation may do real work. The default source is
-the `Config.ConfigAliases` slice the completion hints already use; the interface exists so later
-item sources can be added without the picker changing.
+Its candidates come from a `HostSource` — a one-method interface returning tagged `PickerItem`
+rows — read once when the picker opens, so an implementation may do real work: the group source
+reads the group directory there. The default is `MergeHostSources` over the three sources above,
+in that order, and the order is the preference: deduplication is by row name, first source wins,
+so a host that is both an ssh-config alias and a recent connect is one `cfg` row. Group names
+carry the `@` prefix the command line uses, which is what keeps a group and a host of the same
+name two rows rather than a collision. A source that cannot be read — an unlistable group
+directory, an unreadable recent file — costs the picker those rows and nothing else.
+
+A row carries the patterns connecting it sends, which is how a `grp` row connects a whole group
+without the picker knowing what a group is; a row without patterns connects its own name. Marks
+mix freely: a marked group and a marked host connect together, in mark order, the group
+contributing all of its patterns.
 
 ### [2] Groups
 

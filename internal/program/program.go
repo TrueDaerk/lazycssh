@@ -20,6 +20,7 @@ import (
 	"github.com/TrueDaerk/lazycssh/internal/commandlog"
 	"github.com/TrueDaerk/lazycssh/internal/history"
 	"github.com/TrueDaerk/lazycssh/internal/hosts"
+	"github.com/TrueDaerk/lazycssh/internal/recent"
 	"github.com/TrueDaerk/lazycssh/internal/sessionlog"
 	"github.com/TrueDaerk/lazycssh/internal/sessions"
 	"github.com/TrueDaerk/lazycssh/internal/ssh"
@@ -52,6 +53,11 @@ type Config struct {
 	// history file: recall starts empty and nothing is persisted, which keeps
 	// tests that build a Model without one off the disk.
 	History *history.Store
+	// Recent is the persistent recent-host list: the host picker offers it as
+	// its `rec` rows, and every session that reaches connected is recorded in
+	// it. Nil means the run has no recent file, which keeps tests that build
+	// a Model without one off the disk (issue #254).
+	Recent *recent.Store
 
 	// NewSession overrides the session factory. Nil means the real one, which
 	// dials; tests inject fakes here so nothing in this package needs a
@@ -73,6 +79,12 @@ type Model struct {
 	targets  loggedTargets
 	resolver *hosts.Resolver
 	store    *sessions.Store
+
+	// recent is the persistent recent-host list, nil when the run has none;
+	// recorded is which session identifiers already went into it, so a host
+	// that reconnects three times is written once per run (issue #254).
+	recent   *recent.Store
+	recorded map[string]bool
 
 	// patterns is how the run was assembled, as the user gave it: the CLI
 	// arguments, then everything connected or launched at runtime, deduped in
@@ -189,6 +201,9 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 	if cfg.History != nil {
 		uiCfg.History = cfg.History
 	}
+	if cfg.Recent != nil {
+		uiCfg.Recent = cfg.Recent
+	}
 	app := ui.NewApp(uiCfg)
 
 	return &Model{
@@ -199,6 +214,8 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 		targets:  targets,
 		resolver: resolver,
 		store:    cfg.Store,
+		recent:   cfg.Recent,
+		recorded: make(map[string]bool),
 		prompter: prompter,
 		secrets:  secrets,
 		patterns: append([]string(nil), cfg.Patterns...),
@@ -317,7 +334,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case fleetEventMsg:
 		cmd := m.forward(msg.inner)
-		return m, tea.Batch(cmd, m.pump())
+		return m, tea.Batch(cmd, m.recordRecent(), m.pump())
 
 	case pumpClosedMsg:
 		return m, nil
@@ -405,6 +422,44 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, m.forward(msg)
+}
+
+// recordRecent writes every session that has reached connected since the last
+// call into the recent-host list, so the picker's `rec` rows are what actually
+// answered rather than what was asked for (issue #254). A host that failed to
+// dial is not a recent host.
+//
+// It records the resolved [hosts.Host] alias rather than the session
+// identifier: a clone or a repeated host on the command line gets a
+// disambiguated id (`srv1#2`), and `srv1#2` is not something a later run can
+// connect to. The write is file I/O, so it happens in the returned Cmd; the
+// bookkeeping that must not race stays here, on the Update goroutine.
+func (m *Model) recordRecent() tea.Cmd {
+	if m.recent == nil {
+		return nil
+	}
+	var aliases []string
+	for _, s := range m.mgr.Sessions() {
+		if s.State() != ssh.StateConnected || m.recorded[s.ID()] {
+			continue
+		}
+		m.recorded[s.ID()] = true
+		aliases = append(aliases, s.Host().Alias)
+	}
+	if len(aliases) == 0 {
+		return nil
+	}
+
+	store := m.recent
+	return func() tea.Msg {
+		// Oldest first, so the last one connected ends up at the front. A
+		// list that cannot be written is not worth interrupting a run over:
+		// the picker loses a row, nothing else.
+		for _, alias := range aliases {
+			_ = store.Add(alias)
+		}
+		return nil
+	}
 }
 
 // forward hands one message to the UI and keeps the returned model.

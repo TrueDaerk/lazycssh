@@ -14,6 +14,7 @@ import (
 
 	"github.com/TrueDaerk/lazycssh/internal/history"
 	"github.com/TrueDaerk/lazycssh/internal/program"
+	"github.com/TrueDaerk/lazycssh/internal/recent"
 	"github.com/TrueDaerk/lazycssh/internal/sessionlog"
 	"github.com/TrueDaerk/lazycssh/internal/sessions"
 	"github.com/TrueDaerk/lazycssh/internal/version"
@@ -155,6 +156,14 @@ func run(args []string, stdout, stderr io.Writer, launch func(program.Config) er
 		return exitError
 	}
 
+	// The host picker's recently-connected rows come from this store, and
+	// every session that connects is recorded in it.
+	recentStore, err := recent.DefaultStore()
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return exitError
+	}
+
 	if err := launch(program.Config{
 		Patterns:    resolved.Patterns,
 		SessionName: sessionName,
@@ -164,6 +173,7 @@ func run(args []string, stdout, stderr io.Writer, launch func(program.Config) er
 		Insecure:    *insecure,
 		Logs:        logs,
 		History:     histStore,
+		Recent:      recentStore,
 	}); err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitError

@@ -22,5 +22,6 @@ The runtime pieces of lazycssh.
 
 * [Command log](./command-log.md) - what this run sent, to how many hosts, and what is deliberately never recorded
 * [Command history](./command-history.md) - the persistent Up/Down recall of the command line, and why it is not the command log
+* [Recent hosts](./recent-hosts.md) - the persistent list of hosts connected to, and how the host picker offers it back
 * [Cross-host output diff](./output-diff.md) - hosts grouped by the output of the last command, so the machines that disagree stand out
 * [Session logging](./session-logging.md) - opt-in per-host output files, rotation, and why single mode pauses the pen

@@ -121,6 +121,12 @@ The same boundary applies:
 only what is typed into the command line reaches it, never a raw broadcast keystroke, so a sudo
 password answered character-by-character in a focused pane never reaches the file either.
 
+The host names you connect to are written to disk as well
+(`~/.config/lazycssh/recent`), so the host picker can offer them back in the next run. Names
+only — no user, no port, no credential — with `0600` permissions, the same rule saved groups
+follow: it is an inventory of what this machine reaches, not a secret, and it is not
+world-readable either.
+
 Session output only reaches disk when a run is started with `--log-dir` — see
 [Reading output](../guides/output.md#logging-a-run-to-disk). The same boundary
 holds there: keystrokes are never written, and output logging pauses, with a

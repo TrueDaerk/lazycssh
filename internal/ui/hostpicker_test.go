@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/TrueDaerk/lazycssh/internal/sessions"
 )
 
 // pickerApp is a run with a fixed set of ssh-config aliases behind the picker.
@@ -305,5 +307,90 @@ func TestFuzzyMatch(t *testing.T) {
 		if got := fuzzyMatch(tc.pattern, tc.candidate); got != tc.want {
 			t.Errorf("fuzzyMatch(%q, %q) = %v, want %v", tc.pattern, tc.candidate, got, tc.want)
 		}
+	}
+}
+
+// mixedPicker is a run whose picker sees all three sources: ssh-config
+// aliases, the saved groups of a store, and a recent-host list.
+func mixedPicker(t *testing.T, aliases []string, recent []string, groups ...*sessions.Session) App {
+	t.Helper()
+
+	fleet := newFakeFleet()
+	a := resize(t, NewApp(Config{
+		Fleet:         fleet,
+		Panes:         fleet,
+		ConfigAliases: aliases,
+		Sessions:      storeWith(t, groups...),
+		Recent:        stubRecent{hosts: recent},
+		Theme:         Options{Dark: true},
+	}), 120, 40)
+	return openPicker(t, a)
+}
+
+// One filterable list, three origins, each row saying which it is (issue
+// #254).
+func TestHostPickerListsAllThreeSourcesTagged(t *testing.T) {
+	a := mixedPicker(t, []string{"web-01"}, []string{"cache-7"}, savedGroup("prod", "db-{01..02}"))
+
+	if got, want := a.HostPickerMatches(), []string{"web-01", "@prod", "cache-7"}; !slices.Equal(got, want) {
+		t.Fatalf("HostPickerMatches() = %v, want %v", got, want)
+	}
+	view := plain(a.View().Content)
+	for _, want := range []string{"cfg  web-01", "grp  @prod", "rec  cache-7"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("the picker does not show %q:\n%s", want, view)
+		}
+	}
+}
+
+// The fuzzy filter runs across the merged list, not per source.
+func TestHostPickerFilterSpansEverySource(t *testing.T) {
+	a := mixedPicker(t, []string{"web-01"}, []string{"web-cache"}, savedGroup("web-prod", "db-01"))
+
+	a = typeInto(t, a, "web")
+	if got, want := a.HostPickerMatches(), []string{"web-01", "@web-prod", "web-cache"}; !slices.Equal(got, want) {
+		t.Fatalf("HostPickerMatches() = %v, want %v", got, want)
+	}
+}
+
+// Enter on a group row connects every host in the group, unexpanded patterns
+// and all - the program resolves them the same way it resolves a typed one.
+func TestHostPickerEnterOnAGroupConnectsItsHosts(t *testing.T) {
+	a := mixedPicker(t, []string{"web-01"}, nil, savedGroup("prod", "db-{01..02}", "cache-7"))
+	a = pressKey(t, a, "down") // onto @prod
+
+	_, msg := submit(t, a)
+	connect, ok := msg.(HostConnectMsg)
+	if !ok || !slices.Equal(connect.Patterns, []string{"db-{01..02}", "cache-7"}) {
+		t.Fatalf("enter produced %#v, want the group's patterns", msg)
+	}
+}
+
+// A group can be marked alongside a host: the marks connect in mark order,
+// with the group contributing all of its patterns.
+func TestHostPickerMarkedGroupExpandsWithTheOtherMarks(t *testing.T) {
+	a := mixedPicker(t, []string{"web-01"}, nil, savedGroup("prod", "db-01", "db-02"))
+
+	a = pressKey(t, a, " ") // web-01, steps onto @prod
+	a = pressKey(t, a, " ") // @prod
+
+	_, msg := submit(t, a)
+	connect, ok := msg.(HostConnectMsg)
+	if !ok || !slices.Equal(connect.Patterns, []string{"web-01", "db-01", "db-02"}) {
+		t.Fatalf("enter produced %#v, want the host and the group's hosts", msg)
+	}
+}
+
+// A host that is both an ssh-config alias and a recent connect is one row, and
+// it is the `cfg` one.
+func TestHostPickerDedupesAcrossSources(t *testing.T) {
+	a := mixedPicker(t, []string{"web-01"}, []string{"web-01", "cache-7"})
+
+	if got, want := a.HostPickerMatches(), []string{"web-01", "cache-7"}; !slices.Equal(got, want) {
+		t.Fatalf("HostPickerMatches() = %v, want %v", got, want)
+	}
+	items := a.HostPickerItems()
+	if items[0].Kind != KindConfig {
+		t.Fatalf("the deduplicated row is tagged %q, want cfg", items[0].Kind.Tag())
 	}
 }
