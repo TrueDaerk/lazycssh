@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-09T23:00:00Z
+timestamp: 2026-08-10T00:00:00Z
 ---
 
 # TUI shell
@@ -427,6 +427,48 @@ The sidebar stacks the five panels as titled boxes; every title is always on scr
 **selected** panel shows its body. Five open panels on an 80-column terminal would show none of
 them usefully; five visible titles cost three rows each and keep the map of the interface on
 screen.
+
+### Panel child models
+
+Each sidebar panel is a **child model** (issue #228, `internal/ui/sidepanel.go`), lazygit
+style, behind one interface the root dispatches through instead of switching over the panel
+enum in every code path:
+
+```go
+type sidePanel interface {
+    Update(msg tea.KeyPressMsg) tea.Cmd        // keys routed to the focused panel
+    View(focused bool, width, height int) string
+    Title() string
+    Number() int
+    MoveCursor(delta int)                      // mouse wheel browses
+    SetCursorRow(row int)                      // click lands the cursor
+    Preview(width, height int) (title, body string, ok bool)
+}
+```
+
+The split of responsibilities:
+
+- a panel owns its **view state** — the list cursor, its dialogs (new-group, delete, save-as,
+  end-session), the rows it was last handed. That state lives in the child struct
+  (`statusPanel`, `groupsPanel`, `sessionsPanel`, `logPanel`), not on `App`;
+- the root keeps the **domain state** — open sessions, fleet snapshot, layout, focus — and
+  reduces the domain messages. A panel that needs a domain change emits it the way the
+  transport does (`GroupOpenMsg`, `CommandResendMsg`, the disk-write result messages), never
+  by reaching into the root. The one synchronous exception is the Sessions panel's foreground
+  switch: the panel records the chosen row and the root drains it right after routing the key,
+  because the grid and the broadcast scope hang off the switch;
+- what a panel reads of the domain arrives as a `panelContext` snapshot, pushed by
+  `syncPanels` on every `Update` — the same discipline the fleet snapshot enforces for the
+  grid, so a panel's `View` never reads the root model and cannot disagree with the frame.
+  Long-lived collaborators (the group store, the command log, the broadcast router, the
+  working set) are handed to the children once at construction.
+
+The children are value structs inside `App` (`panelSet`), so the root model keeps its value
+semantics: an `Update` mutates a local copy and returns it, and no pointer escapes into an
+older model. The guard chain in `handleKey` still decides which dialog owns the keyboard; it
+asks the children through accessors (`Saving()`, `GroupDialogOpen()`, `DeleteGroupPending()`,
+`EndSessionPending()`), and `activeModal` asks each panel for its floating dialog in the same
+order, so what floats is what listens.
 
 ### [1] Status
 

@@ -1,10 +1,10 @@
 package ui
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
@@ -34,57 +34,255 @@ type SessionStore interface {
 // the directory.
 type SessionsChangedMsg struct{}
 
+// sessionsPanel is the Sessions child model: the cursor over the open
+// sessions, and the end-session question. The open sessions themselves are
+// domain state - the grid and the broadcast scope hang off them - so they stay
+// on the root and arrive here as the [panelContext] snapshot; bringing one to
+// the foreground is asked for through the chosen mailbox the root drains right
+// after routing the key.
+type sessionsPanel struct {
+	ctx  panelContext
+	keys KeyMap
+
+	// cursor is the selected row.
+	cursor int
+
+	// endPending is the open session the x key asked about; the question
+	// floats until y answers it or anything else withdraws it.
+	endPending string
+
+	// chosen is the row enter or space committed, -1 while none is. The
+	// foreground switch is the root's move; this is how the panel asks for
+	// it without reaching past its interface.
+	chosen int
+}
+
+// Title is the heading shown in the sidebar.
+func (p *sessionsPanel) Title() string { return PanelSessions.Title() }
+
+// Number is the key that jumps to this panel.
+func (p *sessionsPanel) Number() int { return PanelSessions.Number() }
+
+// Cursor is the position of the cursor.
+func (p *sessionsPanel) Cursor() int { return p.cursor }
+
+// Selected is the open session under the cursor, or the empty string when
+// nothing is open.
+func (p *sessionsPanel) Selected() string {
+	if len(p.ctx.open) == 0 {
+		return ""
+	}
+	return p.ctx.open[clamp(p.cursor, 0, len(p.ctx.open)-1)].Name
+}
+
+// EndPending is the session the end question is about, empty when none is
+// being asked.
+func (p *sessionsPanel) EndPending() string { return p.endPending }
+
+// clampCursor keeps the cursor inside the list after sessions left it. The
+// root calls it whenever it pushes a fresh snapshot.
+func (p *sessionsPanel) clampCursor() {
+	p.cursor = clamp(p.cursor, 0, max(0, len(p.ctx.open)-1))
+}
+
+// MoveCursor nudges the cursor without committing - the wheel browses.
+func (p *sessionsPanel) MoveCursor(delta int) {
+	p.cursor = clamp(p.cursor+delta, 0, max(0, len(p.ctx.open)-1))
+}
+
+// SetCursorRow puts the cursor on a clicked visible body row.
+func (p *sessionsPanel) SetCursorRow(row int) {
+	p.cursor = clamp(row, 0, max(0, len(p.ctx.open)-1))
+}
+
+// Update drives the panel: the arrows move through the open sessions, enter
+// or space asks for one in the foreground, and x opens the end question.
+func (p *sessionsPanel) Update(msg tea.KeyPressMsg) tea.Cmd {
+	switch {
+	case key.Matches(msg, p.keys.Up):
+		p.MoveCursor(-1)
+	case key.Matches(msg, p.keys.Down):
+		p.MoveCursor(+1)
+	case key.Matches(msg, p.keys.Choose), key.Matches(msg, p.keys.Toggle):
+		// Nothing is dialled: the panes and the broadcast scope change, the
+		// connections do not. Choosing the foreground again is not a change.
+		if len(p.ctx.open) == 0 {
+			return nil
+		}
+		if index := clamp(p.cursor, 0, len(p.ctx.open)-1); index != p.ctx.active {
+			p.chosen = index
+		}
+	case key.Matches(msg, p.keys.SessionEnd):
+		// ctrl+c on N machines is not sent without the user answering for it.
+		p.endPending = p.Selected()
+	}
+	return nil
+}
+
+// takeChosen drains the foreground request: the committed row, and whether
+// one was committed since the last drain.
+func (p *sessionsPanel) takeChosen() (int, bool) {
+	index := p.chosen
+	p.chosen = -1
+	return index, index >= 0
+}
+
+// answerEnd reads a key as the end question's answer and reports the session
+// it was about. asked stays false until a yes or no lands - anything else
+// leaves the question standing (see [readConfirm]).
+func (p *sessionsPanel) answerEnd(msg tea.KeyPressMsg) (name string, confirmed, asked bool) {
+	answer := readConfirm(p.keys, msg)
+	if answer == answerNone {
+		return "", false, false
+	}
+	name = p.endPending
+	p.endPending = ""
+	return name, answer == answerYes, true
+}
+
+// modal is the end-session question while it is open.
+func (p *sessionsPanel) modal() (modal, bool) {
+	if p.endPending == "" {
+		return modal{}, false
+	}
+	return confirmModal(p.ctx.theme, p.keys, "End session",
+		fmt.Sprintf("end %q?", p.endPending),
+		"ctrl+c and ctrl+d go to its hosts"), true
+}
+
+// View renders the open sessions: which exist, which is in the foreground,
+// and how many of each one's hosts are up. The end question this panel asks
+// floats over the frame rather than taking its first line; see modal.go.
+// focused reports whether this panel is the one that would actually receive a
+// keystroke right now (issue #222).
+func (p *sessionsPanel) View(focused bool, width, height int) string {
+	theme := p.ctx.theme
+	var b strings.Builder
+
+	if len(p.ctx.open) == 0 {
+		b.WriteString(theme.Muted.Render("no open sessions — open a group in [2]"))
+		return theme.Base.Width(max(0, width)).Render(b.String())
+	}
+
+	cursor := clamp(p.cursor, 0, len(p.ctx.open)-1)
+	first, last := visibleRange(cursor, len(p.ctx.open), max(1, height))
+	for i := first; i < last; i++ {
+		if i > first {
+			b.WriteString("\n")
+		}
+		b.WriteString(p.line(p.ctx.open[i], i == cursor, i == p.ctx.active, focused))
+	}
+	if hidden := len(p.ctx.open) - last; hidden > 0 {
+		b.WriteString("\n")
+		b.WriteString(theme.Muted.Render(fmt.Sprintf("+%d more", hidden)))
+	}
+
+	return theme.Base.Width(max(0, width)).Render(b.String())
+}
+
+// line renders one open session. The foreground one is marked with a
+// character as well as a style, so it survives a terminal without colour.
+// focused decides whether the cursor row gets the strong highlight or the
+// muted one; see [Theme.ListCursor].
+func (p *sessionsPanel) line(s openSession, underCursor, foreground, focused bool) string {
+	theme := p.ctx.theme
+	up := 0
+	for _, id := range s.Hosts {
+		if stateOf(p.ctx.hostStates, id) == ssh.StateConnected {
+			up++
+		}
+	}
+
+	marker := "  "
+	if foreground {
+		marker = "▸ "
+	}
+	label := fmt.Sprintf("%s%s (%d/%d up)", marker, s.Name, up, len(s.Hosts))
+	if s.Ending {
+		label += " (ending)"
+	}
+	switch {
+	case underCursor:
+		return theme.ListCursor(focused).Render(label)
+	case foreground:
+		return theme.Selected.Render(label)
+	default:
+		return theme.Base.Render(label)
+	}
+}
+
+// Preview describes the open session under the cursor: whether it is the one
+// on screen, and how each of its hosts is doing (issue #218).
+func (p *sessionsPanel) Preview(width, height int) (string, string, bool) {
+	theme := p.ctx.theme
+	if len(p.ctx.open) == 0 {
+		return "Session", fitLines(theme, width, height,
+			[]string{theme.Muted.Render("no open sessions")}), true
+	}
+	index := clamp(p.cursor, 0, len(p.ctx.open)-1)
+	s := p.ctx.open[index]
+
+	where := "background"
+	if index == p.ctx.active {
+		where = "foreground"
+	}
+	if s.Ending {
+		where += ", ending"
+	}
+
+	up := 0
+	hosts := make([]string, 0, len(s.Hosts))
+	for _, id := range s.Hosts {
+		if id == "" {
+			// A hole is a grid position a closed host left behind, not a host.
+			continue
+		}
+		state := stateOf(p.ctx.hostStates, id)
+		if state == ssh.StateConnected {
+			up++
+		}
+		line := theme.Base.Render("  "+id+"  ") + theme.State(state).Render(state.String())
+		if err := stateErrOf(p.ctx.hostStates, id); err != "" {
+			line += theme.Failure.Render("  " + err)
+		}
+		hosts = append(hosts, line)
+	}
+
+	lines := []string{
+		field(theme, "state", where),
+		field(theme, "hosts", fmt.Sprintf("%d/%d up", up, len(hosts))),
+		"",
+	}
+	if len(hosts) == 0 {
+		lines = append(lines, theme.Muted.Render("no hosts"))
+	}
+	lines = append(lines, hosts...)
+	return "Session — " + s.Name, fitLines(theme, width, height, lines), true
+}
+
+// The root's accessors and the domain moves only the root can make.
+
 // SessionCursor is the position of the cursor in the Sessions panel.
-func (a App) SessionCursor() int { return a.sessionCursor }
+func (a App) SessionCursor() int { return a.panels.sessions.Cursor() }
 
 // SelectedOpenSession is the open session under the cursor, or the empty
 // string when nothing is open.
-func (a App) SelectedOpenSession() string {
-	if len(a.open) == 0 {
-		return ""
-	}
-	return a.open[clamp(a.sessionCursor, 0, len(a.open)-1)].Name
-}
-
-// Saving reports whether the save-as prompt has the keyboard - including the
-// moment a write is in flight, so no other binding can slip in between the
-// enter and its result.
-func (a App) Saving() bool {
-	return a.saveInput.Focused() || a.confirmOverwrite || a.savePending
-}
-
-// SaveError is the last save failure, or nil.
-func (a App) SaveError() error { return a.saveErr }
-
-// moveSessionCursor moves the cursor, stopping at the ends.
-func (a App) moveSessionCursor(delta int) App {
-	a.sessionCursor = clamp(a.sessionCursor+delta, 0, max(0, len(a.open)-1))
-	return a
-}
+func (a App) SelectedOpenSession() string { return a.panels.sessions.Selected() }
 
 // EndSessionPending is the session the end question is about, empty when
 // none is being asked.
-func (a App) EndSessionPending() string { return a.endSession }
-
-// beginEndSession opens the end question for the session under the cursor.
-// ctrl+c on N machines is not sent without the user answering for it.
-func (a App) beginEndSession() App {
-	a.endSession = a.SelectedOpenSession()
-	return a
-}
+func (a App) EndSessionPending() string { return a.panels.sessions.EndPending() }
 
 // handleSessionEndKey answers the end question: enter or y sends the shutdown
 // keystrokes, esc or n withdraws the question, and anything else leaves it
-// standing (see [App.readConfirm]).
+// standing. The question lives in the panel; ending a session touches the
+// open list and the transport, which is the root's move.
 func (a App) handleSessionEndKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	answer := a.readConfirm(msg)
-	if answer == answerNone {
+	name, confirmed, asked := a.panels.sessions.answerEnd(msg)
+	if !asked {
 		return a, nil
 	}
-
-	name := a.endSession
-	a.endSession = ""
-	if answer == answerNo {
+	if !confirmed {
 		return a, nil
 	}
 	return a.endSessionNow(name)
@@ -128,120 +326,6 @@ func (a App) endSessionNow(name string) (App, tea.Cmd) {
 	return a.reapSessions()
 }
 
-// foregroundSelectedSession brings the open session under the cursor to the
-// foreground. Nothing is dialled: the panes and the broadcast scope change,
-// the connections do not.
-func (a App) foregroundSelectedSession() (App, tea.Cmd) {
-	if len(a.open) == 0 {
-		return a, nil
-	}
-	index := clamp(a.sessionCursor, 0, len(a.open)-1)
-	if index == a.active {
-		return a, nil
-	}
-	return a.foregroundSession(index), gridChanged()
-}
-
-// beginSave opens the save-as prompt, pre-filled with the foreground session's
-// name, because "save it again under the same name" is the common case.
-func (a App) beginSave() App {
-	a.saveErr = nil
-	name := a.ActiveSession()
-	if name == adHocSessionName {
-		name = ""
-	}
-	a.saveInput.SetValue(name)
-	a.saveInput.CursorEnd()
-	a.saveInput.Focus()
-	return a
-}
-
-// cancelSave closes the prompt without writing anything.
-func (a App) cancelSave() App {
-	a.saveInput.Blur()
-	a.saveInput.SetValue("")
-	a.confirmOverwrite = false
-	a.savePending = false
-	return a
-}
-
-// SaveResultMsg reports what the save-as prompt's write did. The write runs in
-// a [tea.Cmd] - disk I/O never blocks Update (issue #225) - and the prompt
-// stays pending until this message says what happened.
-type SaveResultMsg struct {
-	// Name is the name the run was saved under.
-	Name string
-	// Err is why it was not, or nil. [sessions.ErrExists] means the overwrite
-	// question must be asked.
-	Err error
-}
-
-// commitSave writes the run as a group. An existing name is not replaced until
-// the user has said so: the first attempt asks, the second overwrites.
-func (a App) commitSave(overwrite bool) (App, tea.Cmd) {
-	name := strings.TrimSpace(a.saveInput.Value())
-	if name == "" || a.cfg.Sessions == nil {
-		return a.cancelSave(), nil
-	}
-	if err := sessions.ValidateName(name); err != nil {
-		// A bad name is known without the disk; report it now rather than
-		// after the round trip through the Cmd.
-		a.saveErr = err
-		return a.cancelSave(), nil
-	}
-
-	run := sessions.Run{
-		Name:      name,
-		Patterns:  a.cfg.RunPatterns,
-		Defaults:  a.cfg.RunDefaults,
-		Broadcast: a.broadcastMode(),
-	}
-	if a.cfg.WorkingSet != nil {
-		run.WorkingSet = a.cfg.WorkingSet.Active()
-	}
-	if len(run.Patterns) == 0 {
-		// Nothing was recorded about how the run was started, so the hosts as
-		// they are now is the honest thing to write.
-		run.Patterns = a.fleetIDs()
-	}
-	if len(run.Patterns) == 0 {
-		// An empty run cannot be saved, but the typed name must survive the
-		// telling: the user may connect a host and press enter again.
-		a.saveErr = errors.New("nothing to save: no hosts in the run")
-		return a, nil
-	}
-
-	// The prompt keeps the keyboard while the write is in flight - Saving()
-	// covers savePending - so a second enter cannot start a second write and
-	// the typed name survives a failure.
-	a.savePending = true
-	a.saveInput.Blur()
-	store := a.cfg.Sessions
-	return a, func() tea.Msg {
-		_, err := store.SaveRun(run, overwrite)
-		return SaveResultMsg{Name: name, Err: err}
-	}
-}
-
-// applySaveResult lands the save-as write's outcome: success closes the prompt
-// and re-reads the group directory, a taken name opens the overwrite question,
-// and any other failure reports in the panel with the prompt closed.
-func (a App) applySaveResult(msg SaveResultMsg) (App, tea.Cmd) {
-	a.savePending = false
-	if msg.Err == nil {
-		a = a.cancelSave()
-		a.cfg.SessionName = msg.Name
-		return a, func() tea.Msg { return SessionsChangedMsg{} }
-	}
-	if errors.Is(msg.Err, sessions.ErrExists) {
-		a.confirmOverwrite = true
-		a.saveInput.Blur()
-		return a, nil
-	}
-	a.saveErr = msg.Err
-	return a.cancelSave(), nil
-}
-
 // broadcastMode is the mode the run is in, defaulting to all when there is no
 // router yet.
 func (a App) broadcastMode() broadcast.Mode {
@@ -249,63 +333,4 @@ func (a App) broadcastMode() broadcast.Mode {
 		return broadcast.ModeAll
 	}
 	return a.cfg.Targets.Mode()
-}
-
-// sessionsPanel renders the open sessions: which exist, which is in the
-// foreground, and how many of each one's hosts are up.
-// The end question this panel asks floats over the frame rather than taking
-// its first line; see modal.go. focused reports whether this panel is the one
-// that would actually receive a keystroke right now (issue #222).
-func (a App) sessionsPanel(width, height int, focused bool) string {
-	var b strings.Builder
-
-	if len(a.open) == 0 {
-		b.WriteString(a.theme.Muted.Render("no open sessions — open a group in [2]"))
-		return a.theme.Base.Width(max(0, width)).Render(b.String())
-	}
-
-	cursor := clamp(a.sessionCursor, 0, len(a.open)-1)
-	first, last := visibleRange(cursor, len(a.open), max(1, height))
-	for i := first; i < last; i++ {
-		if i > first {
-			b.WriteString("\n")
-		}
-		b.WriteString(a.openSessionLine(a.open[i], i == cursor, i == a.active, focused))
-	}
-	if hidden := len(a.open) - last; hidden > 0 {
-		b.WriteString("\n")
-		b.WriteString(a.theme.Muted.Render(fmt.Sprintf("+%d more", hidden)))
-	}
-
-	return a.theme.Base.Width(max(0, width)).Render(b.String())
-}
-
-// openSessionLine renders one open session. The foreground one is marked with
-// a character as well as a style, so it survives a terminal without colour.
-// focused decides whether the cursor row gets the strong highlight or the
-// muted one; see [Theme.ListCursor].
-func (a App) openSessionLine(s openSession, underCursor, foreground, focused bool) string {
-	up := 0
-	for _, id := range s.Hosts {
-		if a.state(id) == ssh.StateConnected {
-			up++
-		}
-	}
-
-	marker := "  "
-	if foreground {
-		marker = "▸ "
-	}
-	label := fmt.Sprintf("%s%s (%d/%d up)", marker, s.Name, up, len(s.Hosts))
-	if s.Ending {
-		label += " (ending)"
-	}
-	switch {
-	case underCursor:
-		return a.theme.ListCursor(focused).Render(label)
-	case foreground:
-		return a.theme.Selected.Render(label)
-	default:
-		return a.theme.Base.Render(label)
-	}
 }

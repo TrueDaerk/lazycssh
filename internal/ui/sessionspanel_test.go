@@ -32,7 +32,7 @@ func TestSessionsPanelListsOpenSessions(t *testing.T) {
 	fleet.connect(t, "web-01")
 	a = syncFleet(t, a)
 
-	view := plain(a.sessionsPanel(60, 20, true))
+	view := plain(a.panelBody(PanelSessions, 60, 20, true))
 	for _, want := range []string{"front (1/2 up)", "back (0/1 up)"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the Sessions panel does not show %q:\n%s", want, view)
@@ -44,8 +44,8 @@ func TestSessionsPanelListsOpenSessions(t *testing.T) {
 // survives a terminal without colour.
 func TestForegroundSessionIsMarked(t *testing.T) {
 	a := resize(t, NewApp(Config{Hosts: []string{"h1"}, SessionName: "prod", Theme: Options{NoColor: true}}), 120, 40)
-	if !strings.Contains(plain(a.sessionsPanel(60, 20, true)), "▸ prod") {
-		t.Fatalf("the foreground session is not marked:\n%s", plain(a.sessionsPanel(60, 20, true)))
+	if !strings.Contains(plain(a.panelBody(PanelSessions, 60, 20, true)), "▸ prod") {
+		t.Fatalf("the foreground session is not marked:\n%s", plain(a.panelBody(PanelSessions, 60, 20, true)))
 	}
 }
 
@@ -57,12 +57,12 @@ func TestSessionCursorHighlightOnlyWhenPanelFocused(t *testing.T) {
 	th := a.Theme()
 
 	label := "  prod-web (0/3 up)"
-	focused := a.sessionsPanel(60, 20, true)
+	focused := a.panelBody(PanelSessions, 60, 20, true)
 	if !strings.Contains(focused, th.Cursor.Render(label)) {
 		t.Fatalf("the focused panel does not use the strong cursor style:\n%s", focused)
 	}
 
-	unfocused := a.sessionsPanel(60, 20, false)
+	unfocused := a.panelBody(PanelSessions, 60, 20, false)
 	if strings.Contains(unfocused, th.Cursor.Render(label)) {
 		t.Fatalf("an unfocused panel still uses the strong cursor style:\n%s", unfocused)
 	}
@@ -227,7 +227,7 @@ func TestSessionsPanelWithNothingOpen(t *testing.T) {
 	a := resize(t, NewApp(Config{Theme: Options{Dark: true}}), 120, 40)
 	a = pressKey(t, a, "3")
 
-	if got := plain(a.sessionsPanel(60, 20, true)); !strings.Contains(got, "no open sessions") {
+	if got := plain(a.panelBody(PanelSessions, 60, 20, true)); !strings.Contains(got, "no open sessions") {
 		t.Fatalf("sessionsPanel() = %q", got)
 	}
 	if a.SelectedOpenSession() != "" {
@@ -313,8 +313,8 @@ func TestSaveWritesAGroup(t *testing.T) {
 	if a.Saving() {
 		t.Fatal("the prompt is still open after saving")
 	}
-	if !strings.Contains(plain(a.groupsPanel(60, 20, true)), "prod-web") {
-		t.Fatalf("the panel did not reload the saved group:\n%s", plain(a.groupsPanel(60, 20, true)))
+	if !strings.Contains(plain(a.panelBody(PanelGroups, 60, 20, true)), "prod-web") {
+		t.Fatalf("the panel did not reload the saved group:\n%s", plain(a.panelBody(PanelGroups, 60, 20, true)))
 	}
 
 	sess, err := store.Load("prod-web")
@@ -425,8 +425,8 @@ func TestSaveWithAnInvalidNameReportsTheError(t *testing.T) {
 	if store.Exists("not a name") {
 		t.Fatal("an invalid name was written")
 	}
-	if !strings.Contains(plain(a.groupsPanel(60, 20, true)), "not allowed") {
-		t.Fatalf("the panel does not report the error:\n%s", plain(a.groupsPanel(60, 20, true)))
+	if !strings.Contains(plain(a.panelBody(PanelGroups, 60, 20, true)), "not allowed") {
+		t.Fatalf("the panel does not report the error:\n%s", plain(a.panelBody(PanelGroups, 60, 20, true)))
 	}
 }
 
@@ -450,6 +450,7 @@ func TestSaveWithAnEmptyNameDoesNothing(t *testing.T) {
 func TestSaveRunReportsAStoreFailure(t *testing.T) {
 	a, _ := saveApp(t)
 	a.cfg.Sessions = failingStore{}
+	a.panels.groups.store = failingStore{}
 
 	a = pressKey(t, a, "S")
 	a = typeInto(t, a, "prod")
@@ -506,8 +507,8 @@ func TestSavingAnEmptyRunKeepsThePrompt(t *testing.T) {
 	if a.SaveError() == nil {
 		t.Fatal("an empty run saved without an error")
 	}
-	if !a.Saving() || a.saveInput.Value() != "prod" {
-		t.Fatalf("the prompt did not survive: saving=%v value=%q", a.Saving(), a.saveInput.Value())
+	if !a.Saving() || a.panels.groups.saveInput.Value() != "prod" {
+		t.Fatalf("the prompt did not survive: saving=%v value=%q", a.Saving(), a.panels.groups.saveInput.Value())
 	}
 	if list, _ := store.List(); len(list) != 0 {
 		t.Fatalf("an empty run wrote a session: %v", list)

@@ -154,7 +154,7 @@ func TestReadConfirm(t *testing.T) {
 	}
 	app := App{keys: DefaultKeyMap()}
 	for _, c := range cases {
-		if got := app.readConfirm(c.key); got != c.want {
+		if got := readConfirm(app.keys, c.key); got != c.want {
 			t.Fatalf("readConfirm(%q) = %v, want %v", c.key.String(), got, c.want)
 		}
 	}

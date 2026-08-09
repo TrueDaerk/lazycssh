@@ -124,13 +124,8 @@ func (a App) hostIDAt(index int) string {
 // moveCursorToVisibleRow puts a panel's cursor on the body row that was
 // clicked, mapped through the same window arithmetic the panel renders with.
 func (a App) moveCursorToVisibleRow(panel Panel, bodyRow int) App {
-	switch panel {
-	case PanelGroups:
-		a.groupCursor = clamp(bodyRow, 0, max(0, len(a.groupList)-1))
-	case PanelSessions:
-		a.sessionCursor = clamp(bodyRow, 0, max(0, len(a.open)-1))
-	case PanelCommandLog:
-		a.logCursor = clamp(bodyRow, 0, max(0, len(a.logEntries())-1))
+	if p := a.panels.byID(panel); p != nil {
+		p.SetCursorRow(bodyRow)
 	}
 	return a
 }
@@ -138,13 +133,8 @@ func (a App) moveCursorToVisibleRow(panel Panel, bodyRow int) App {
 // movePanelCursor nudges one panel's cursor without changing the selection or
 // the focus - the wheel browses, it does not commit.
 func (a App) movePanelCursor(panel Panel, delta int) App {
-	switch panel {
-	case PanelGroups:
-		a.groupCursor = clamp(a.groupCursor+delta, 0, max(0, len(a.groupList)-1))
-	case PanelSessions:
-		a.sessionCursor = clamp(a.sessionCursor+delta, 0, max(0, len(a.open)-1))
-	case PanelCommandLog:
-		a.logCursor = clamp(a.logCursor+delta, 0, max(0, len(a.logEntries())-1))
+	if p := a.panels.byID(panel); p != nil {
+		p.MoveCursor(delta)
 	}
 	return a
 }

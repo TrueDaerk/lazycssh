@@ -2,6 +2,17 @@
 
 ## 2026-08-09
 
+- The sidebar panels became child models (issue #228). Status, Groups, Sessions and the
+  Command log are now structs behind a `sidePanel` interface (`internal/ui/sidepanel.go`) —
+  `Update`/`View`/`Title`/`Number` plus cursor and preview accessors — and the root dispatches
+  to them instead of switching over the panel enum: `panelBody`, the `handle*Key` handlers,
+  `panelPreview` and the mouse cursor moves are all interface calls now. Panel view state
+  (cursors, the new-group/delete/save-as/end-session dialogs, the group rows) moved off `App`
+  into the children; the root keeps domain state and reduces the panels' domain messages, and
+  pushes a `panelContext` snapshot into every child per `Update` so a panel renders from its
+  own fields alone. Pure structural refactor — no behaviour change. `core/tui.md` gained a
+  "Panel child models" section.
+
 - The help overlay had two defects (issue #227). `q` fell through to the app-level quit binding
   while the overlay was open, so reading the help could kill the whole session; now the overlay
   swallows `q` (like any other key) to close itself, and only `ctrl+q` (`ForceQuit`) still

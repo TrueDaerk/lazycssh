@@ -67,7 +67,7 @@ func TestGroupsPanelListsSavedGroupsWithHostCounts(t *testing.T) {
 	prod.Description = "the production web tier"
 	a, _ := groupsStoreApp(t, prod, savedGroup("staging", "stage-01"))
 
-	view := plain(a.groupsPanel(60, 20, true))
+	view := plain(a.panelBody(PanelGroups, 60, 20, true))
 	for _, want := range []string{"prod (4 hosts)", "the production web tier", "staging (1 host)"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the Groups panel does not show %q:\n%s", want, view)
@@ -141,8 +141,8 @@ func TestNCreatesAGroup(t *testing.T) {
 	if a.GroupDialogOpen() {
 		t.Fatal("the dialog is still open after a successful save")
 	}
-	if !strings.Contains(plain(a.groupsPanel(60, 20, true)), "web (4 hosts)") {
-		t.Fatalf("the panel did not reload the new group:\n%s", plain(a.groupsPanel(60, 20, true)))
+	if !strings.Contains(plain(a.panelBody(PanelGroups, 60, 20, true)), "web (4 hosts)") {
+		t.Fatalf("the panel did not reload the new group:\n%s", plain(a.panelBody(PanelGroups, 60, 20, true)))
 	}
 
 	sess, err := store.Load("web")
@@ -187,14 +187,14 @@ func TestNewGroupRefusesAMalformedPattern(t *testing.T) {
 	if !a.GroupDialogOpen() {
 		t.Fatal("a malformed pattern closed the dialog")
 	}
-	if a.groupErr == nil {
+	if a.panels.groups.dialogErr == nil {
 		t.Fatal("a malformed pattern produced no error")
 	}
 	if store.Exists("web") {
 		t.Fatal("a malformed pattern was written anyway")
 	}
-	if a.groupHostsInput.Value() != "web-{01" {
-		t.Fatalf("the typed patterns did not survive: %q", a.groupHostsInput.Value())
+	if a.panels.groups.hostsInput.Value() != "web-{01" {
+		t.Fatalf("the typed patterns did not survive: %q", a.panels.groups.hostsInput.Value())
 	}
 }
 
@@ -262,8 +262,8 @@ func TestDeleteAsksFirst(t *testing.T) {
 	if store.Exists("prod") {
 		t.Fatal("answering yes did not delete the group")
 	}
-	if strings.Contains(plain(a.groupsPanel(60, 20, true)), "prod") {
-		t.Fatalf("the panel still lists the deleted group:\n%s", plain(a.groupsPanel(60, 20, true)))
+	if strings.Contains(plain(a.panelBody(PanelGroups, 60, 20, true)), "prod") {
+		t.Fatalf("the panel still lists the deleted group:\n%s", plain(a.panelBody(PanelGroups, 60, 20, true)))
 	}
 }
 
@@ -307,8 +307,8 @@ func TestOpenGroupIsMarked(t *testing.T) {
 	model, _ := a.Update(SessionOpenedMsg{Name: "prod", Hosts: []string{"web-01"}})
 	a = model.(App)
 
-	if !strings.Contains(plain(a.groupsPanel(60, 20, true)), "▸ prod") {
-		t.Fatalf("the open group is not marked:\n%s", plain(a.groupsPanel(60, 20, true)))
+	if !strings.Contains(plain(a.panelBody(PanelGroups, 60, 20, true)), "▸ prod") {
+		t.Fatalf("the open group is not marked:\n%s", plain(a.panelBody(PanelGroups, 60, 20, true)))
 	}
 }
 
@@ -320,12 +320,12 @@ func TestGroupCursorHighlightOnlyWhenPanelFocused(t *testing.T) {
 	th := a.Theme()
 
 	label := "  prod (1 host)"
-	focused := a.groupsPanel(60, 20, true)
+	focused := a.panelBody(PanelGroups, 60, 20, true)
 	if !strings.Contains(focused, th.Cursor.Render(label)) {
 		t.Fatalf("the focused panel does not use the strong cursor style:\n%s", focused)
 	}
 
-	unfocused := a.groupsPanel(60, 20, false)
+	unfocused := a.panelBody(PanelGroups, 60, 20, false)
 	if strings.Contains(unfocused, th.Cursor.Render(label)) {
 		t.Fatalf("an unfocused panel still uses the strong cursor style:\n%s", unfocused)
 	}
@@ -343,7 +343,7 @@ func TestGroupsPanelWithoutAStore(t *testing.T) {
 	a := resize(t, NewApp(Config{Hosts: []string{"h1"}, Theme: Options{Dark: true}}), 120, 40)
 	a = pressKey(t, a, "2")
 
-	if got := plain(a.groupsPanel(60, 20, true)); !strings.Contains(got, "no group directory") {
+	if got := plain(a.panelBody(PanelGroups, 60, 20, true)); !strings.Contains(got, "no group directory") {
 		t.Fatalf("groupsPanel() = %q", got)
 	}
 	if a.SelectedGroup() != "" {
@@ -378,7 +378,7 @@ func TestUnreadableGroupBecomesOneRow(t *testing.T) {
 	}
 	a = settle(t, a, cmd)
 
-	view := plain(a.groupsPanel(60, 20, true))
+	view := plain(a.panelBody(PanelGroups, 60, 20, true))
 	if !strings.Contains(view, "broken (unreadable)") {
 		t.Fatalf("the unreadable group is not listed:\n%s", view)
 	}
@@ -425,11 +425,11 @@ func TestGroupsLoadFailureIsReported(t *testing.T) {
 	a := resize(t, NewApp(Config{Sessions: brokenDirStore{}, Theme: Options{Dark: true}}), 120, 40)
 	a = settle(t, a, a.loadGroupsCmd())
 
-	if a.groupsErr == nil {
+	if a.panels.groups.loadErr == nil {
 		t.Fatal("an unlistable directory produced no error")
 	}
-	if !strings.Contains(plain(a.groupsPanel(60, 20, true)), "permission denied") {
-		t.Fatalf("the panel does not report the error:\n%s", plain(a.groupsPanel(60, 20, true)))
+	if !strings.Contains(plain(a.panelBody(PanelGroups, 60, 20, true)), "permission denied") {
+		t.Fatalf("the panel does not report the error:\n%s", plain(a.panelBody(PanelGroups, 60, 20, true)))
 	}
 }
 
@@ -476,18 +476,18 @@ func TestGroupDialogSwallowsKeysWhileSaving(t *testing.T) {
 func TestGroupRemoveFailureIsReported(t *testing.T) {
 	a := resize(t, NewApp(Config{Sessions: failingStore{}, Theme: Options{Dark: true}}), 120, 40)
 	a = pressKey(t, a, "2")
-	a = a.applyGroupsLoaded(GroupsLoadedMsg{Rows: []groupRow{{Name: "prod", Hosts: 1}}})
+	a.panels.groups.applyLoaded(GroupsLoadedMsg{Rows: []groupRow{{Name: "prod", Hosts: 1}}})
 
 	a = pressKey(t, a, "d")
 	model, cmd := a.Update(keyMsgFor(t, "y"))
 	a = model.(App)
 	a = settle(t, a, cmd)
 
-	if a.groupErr == nil {
+	if a.panels.groups.dialogErr == nil {
 		t.Fatal("a failing removal produced no error")
 	}
-	if !strings.Contains(plain(a.groupsPanel(60, 20, true)), "read-only file system") {
-		t.Fatalf("the panel does not report the error:\n%s", plain(a.groupsPanel(60, 20, true)))
+	if !strings.Contains(plain(a.panelBody(PanelGroups, 60, 20, true)), "read-only file system") {
+		t.Fatalf("the panel does not report the error:\n%s", plain(a.panelBody(PanelGroups, 60, 20, true)))
 	}
 }
 

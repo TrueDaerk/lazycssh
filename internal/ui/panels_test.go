@@ -487,13 +487,13 @@ func TestStatusPanelSaysWhereKeysGo(t *testing.T) {
 	}
 
 	a = focusGrid(t, a)
-	if got := plain(a.statusPanel(60)); !strings.Contains(got, "keys go to: web-01") {
+	if got := plain(a.panelBody(PanelStatus, 60, 20, false)); !strings.Contains(got, "keys go to: web-01") {
 		t.Fatalf("while typing:\n%s", got)
 	}
 
 	a = pressKey(t, a, "ctrl+]")
 	a = pressKey(t, a, "5")
-	if got := plain(a.statusPanel(60)); !strings.Contains(got, "keys go to: the broadcast targets") {
+	if got := plain(a.panelBody(PanelStatus, 60, 20, false)); !strings.Contains(got, "keys go to: the broadcast targets") {
 		t.Fatalf("while broadcasting:\n%s", got)
 	}
 }
