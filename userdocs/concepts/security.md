@@ -100,7 +100,10 @@ The command log (++4++) answers "what did I just do to production":
 ```
 
 One entry per command with its target count, not one per host — the log is about
-what you did, not what the wire carried. It lives in memory only; nothing is
+what you did, not what the wire carried. An entry also remembers *which* hosts
+it reached, so ++m++ can resend it to the ones that missed it without running it
+twice everywhere else — see
+[Catching up a host that missed a command](../guides/broadcasting.md#catching-up-a-host-that-missed-a-command). It lives in memory only; nothing is
 written to disk. It is bounded, and dropping is visible (`(N older entries
 dropped)`), because an audit trail that quietly forgets is worse than one that
 says it forgot.

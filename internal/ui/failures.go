@@ -54,7 +54,17 @@ const (
 	exitRunningMark = "·"
 )
 
-// exitMarksAtSend reads where every target's exit marker stands right now. It
+// broadcastHosts is who a command typed now would go to: the current broadcast
+// targets, or - with no router to ask - every host in the run, which is how the
+// views are tested without a transport.
+func (a App) broadcastHosts() []string {
+	if a.cfg.Targets != nil {
+		return a.cfg.Targets.Targets()
+	}
+	return a.fleetIDs()
+}
+
+// exitMarksFor reads where the given hosts' exit markers stand right now. It
 // runs before the command's bytes leave, because a host that answers between
 // the write and the read would have its answer counted as the state the send
 // found - and the pane would then show the new command as already finished.
@@ -64,11 +74,7 @@ const (
 // it is normally current - but a marker that arrived since the last event
 // would leave a stale, too-low mark behind, with the same consequence. This
 // runs inside Update, never in a render path.
-func (a App) exitMarksAtSend() map[string]uint64 {
-	hosts := a.fleetIDs()
-	if a.cfg.Targets != nil {
-		hosts = a.cfg.Targets.Targets()
-	}
+func (a App) exitMarksFor(hosts []string) map[string]uint64 {
 	marks := make(map[string]uint64, len(hosts))
 	for _, id := range hosts {
 		marks[id] = a.liveExitSeq(id)

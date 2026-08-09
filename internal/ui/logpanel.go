@@ -10,6 +10,7 @@ import (
 
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 	"github.com/TrueDaerk/lazycssh/internal/commandlog"
+	"github.com/TrueDaerk/lazycssh/internal/ssh"
 )
 
 // CommandResendMsg asks the program to send a command from the log again.
@@ -21,6 +22,26 @@ import (
 type CommandResendMsg struct {
 	// Command is the command to send again.
 	Command string
+}
+
+// CommandResendMissingMsg asks the program to send a logged command to the
+// hosts that did *not* receive it the first time.
+//
+// It is the deliberate opposite of [CommandResendMsg]: a host that reconnects
+// after the fleet already ran a command missed it, and re-sending to the whole
+// scope would double-execute on the machines that did not miss it (issue
+// #256). It carries the entry's original target set rather than the resolved
+// difference, so the hosts that are connected *now* are read where the message
+// lands rather than a frame earlier.
+type CommandResendMissingMsg struct {
+	// Command is the command to send again.
+	Command string
+	// Mode is the broadcast mode the original send went out in, which is what
+	// the new audit entry records: the resend repeats that decision, it does
+	// not make a new one.
+	Mode broadcast.Mode
+	// Received are the hosts the command reached the first time.
+	Received []string
 }
 
 // CommandLog is what the panel needs from the run's command history.
@@ -65,11 +86,39 @@ func (p *logPanel) entries() []commandlog.Entry {
 
 // Selected is the command under the cursor.
 func (p *logPanel) Selected() string {
-	entries := p.entries()
-	if len(entries) == 0 {
+	entry, ok := p.selectedEntry()
+	if !ok {
 		return ""
 	}
-	return entries[clamp(p.cursor, 0, len(entries)-1)].Command
+	return entry.Command
+}
+
+// selectedEntry is the whole entry under the cursor, ok false on an empty log.
+func (p *logPanel) selectedEntry() (commandlog.Entry, bool) {
+	entries := p.entries()
+	if len(entries) == 0 {
+		return commandlog.Entry{}, false
+	}
+	return entries[clamp(p.cursor, 0, len(entries)-1)], true
+}
+
+// connectedHosts are the run's hosts that can take input right now, in host
+// order, read from the fleet snapshot the panel was drawn with.
+func (p *logPanel) connectedHosts() []string {
+	var out []string
+	for _, id := range p.ctx.fleetIDs {
+		if stateOf(p.ctx.hostStates, id) == ssh.StateConnected {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// missing are the hosts that are up now and were not targets of an entry - the
+// resolved target list of "send to missing", shown before the send so the
+// count is never a surprise.
+func (p *logPanel) missing(entry commandlog.Entry) []string {
+	return entry.Missing(p.connectedHosts())
 }
 
 // MoveCursor nudges the cursor without committing - the wheel browses.
@@ -98,6 +147,18 @@ func (p *logPanel) Update(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		return func() tea.Msg { return CommandResendMsg{Command: command} }
+	case key.Matches(msg, p.keys.SendMissing):
+		// The complement of Choose: only the hosts that never got this one.
+		entry, ok := p.selectedEntry()
+		if !ok {
+			return nil
+		}
+		msg := CommandResendMissingMsg{
+			Command:  entry.Command,
+			Mode:     entry.Mode,
+			Received: entry.Hosts,
+		}
+		return func() tea.Msg { return msg }
 	}
 	return nil
 }
@@ -216,7 +277,8 @@ func (p *logPanel) Preview(width, height int) (string, string, bool) {
 	}
 	entry := entries[clamp(p.cursor, 0, len(entries)-1)]
 
-	scope := fmt.Sprintf("%s → %d host%s", entry.Mode, entry.Targets, plural(entry.Targets))
+	targets := entry.Targets()
+	scope := fmt.Sprintf("%s → %d host%s", entry.Mode, targets, plural(targets))
 	scopeLine := field(theme, "scope", scope)
 	if entry.Mode == broadcast.ModeFleet {
 		// A command that went to every host reads here the way it read in the
@@ -227,14 +289,70 @@ func (p *logPanel) Preview(width, height int) (string, string, bool) {
 	lines := []string{
 		field(theme, "sent", entry.At.Format("2006-01-02 15:04:05")),
 		scopeLine,
-		"",
-		theme.Base.Render(entry.Command),
 	}
+	lines = append(lines, p.missingLines(entry)...)
+	lines = append(lines, "", theme.Base.Render(entry.Command))
 	return "Command", fitLines(theme, width, height, lines), true
+}
+
+// missingLines are the preview's answer to "who would `m` send this to". The
+// resolved list is on screen *before* the key is pressed, which is the same
+// rule the broadcast label follows: the number of machines about to receive a
+// command is never a surprise.
+func (p *logPanel) missingLines(entry commandlog.Entry) []string {
+	theme := p.ctx.theme
+	missing := p.missing(entry)
+	if len(missing) == 0 {
+		return []string{theme.Muted.Render("all hosts already received this")}
+	}
+	return []string{
+		theme.StatusWarning.Render(fmt.Sprintf("missing → %d host%s", len(missing), plural(len(missing)))),
+		theme.Base.Render(strings.Join(missing, " ")),
+	}
 }
 
 // The root's accessors: what the rest of the model and the tests ask the
 // Command log panel about.
+
+// connectedHosts are the hosts that can take input right now, in host order,
+// read from the fleet snapshot Update took.
+func (a App) connectedHosts() []string {
+	var out []string
+	for _, id := range a.fleetIDs() {
+		if a.state(id) == ssh.StateConnected {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// resendMissing sends a logged command to the hosts that are up now and were
+// not among its original targets (issue #256) - the host that reconnected into
+// a fleet that has already run three commands, without running them a fourth
+// time everywhere else.
+//
+// The difference is resolved here, not in the panel: the panel's preview shows
+// it so the count is on screen before the key is pressed, but what is actually
+// sent is computed against the snapshot this message lands on. With nothing
+// missing the action is a true no-op that says so.
+func (a App) resendMissing(msg CommandResendMissingMsg) (tea.Model, tea.Cmd) {
+	command := strings.TrimSpace(msg.Command)
+	if command == "" {
+		return a, nil
+	}
+
+	missing := commandlog.Missing(msg.Received, a.connectedHosts())
+	if len(missing) == 0 {
+		a.lastDelivery = "all hosts already received this"
+		return a, nil
+	}
+
+	// The count is in the report before the delivery's own, so the status bar
+	// says how many machines this was aimed at even when every write fails.
+	a.lastDelivery = fmt.Sprintf("sending to %d missing host%s", len(missing), plural(len(missing)))
+	next, cmd := a.sendCommandTo(command, msg.Mode, missing)
+	return next, cmd
+}
 
 // LogCursor is the position of the cursor in the Command log panel, counted
 // from the newest entry.

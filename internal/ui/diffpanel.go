@@ -192,11 +192,7 @@ func (p *diffPanel) Preview(width, height int) (string, string, bool) {
 // reached target's scrollback length, which is where its tail will start. A
 // host the send could not reach keeps no mark - its silence is a fact about
 // delivery, not an answer to compare.
-func (a App) markDiff(command string, d broadcast.Delivery) App {
-	hosts := a.fleetIDs()
-	if a.cfg.Targets != nil {
-		hosts = a.cfg.Targets.Targets()
-	}
+func (a App) markDiff(command string, hosts []string, d broadcast.Delivery) App {
 	failed := make(map[string]bool, len(d.Failed))
 	for _, id := range d.Failed {
 		failed[id] = true

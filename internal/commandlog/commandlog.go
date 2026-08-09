@@ -35,16 +35,72 @@ type Entry struct {
 	Command string
 	// Mode is the broadcast mode it went out in.
 	Mode broadcast.Mode
-	// Targets is how many hosts received it.
-	Targets int
+	// Hosts are the session identifiers that received it, in host order. It is
+	// the entry's target set: what "send this to the hosts that missed it" is
+	// the complement of. Recorded by identifier rather than by pane, so it
+	// survives paging and a changing grid.
+	Hosts []string
 	// At is when it was sent.
 	At time.Time
 }
 
+// Targets is how many hosts received the command.
+func (e Entry) Targets() int { return len(e.Hosts) }
+
+// Received reports whether a host was one of the entry's targets.
+func (e Entry) Received(id string) bool {
+	for _, host := range e.Hosts {
+		if host == id {
+			return true
+		}
+	}
+	return false
+}
+
+// Missing returns the hosts that are connected now and were not targets of
+// this command, in the order they were given - the set a resend that must not
+// double-execute goes to.
+//
+// The rule, deliberately: **membership is by session identifier, and a host
+// that received the command is never missing again.** A session that has since
+// reconnected has a fresh shell and arguably lost what the command did, but it
+// did receive it, and guessing otherwise would re-run `rm -rf` on a machine the
+// user did not ask about. Re-running there is the explicit resend (`enter`),
+// one keypress away. A clone or a host that joined the run after the send has
+// its own identifier, never was a target, and is therefore missing - which is
+// the case this exists for.
+func (e Entry) Missing(connected []string) []string {
+	return Missing(e.Hosts, connected)
+}
+
+// Missing is the set difference behind [Entry.Missing]: connected minus
+// received, keeping the order of connected.
+func Missing(received, connected []string) []string {
+	got := make(map[string]struct{}, len(received))
+	for _, id := range received {
+		got[id] = struct{}{}
+	}
+
+	var out []string
+	seen := make(map[string]struct{}, len(connected))
+	for _, id := range connected {
+		if _, ok := got[id]; ok {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
 // String renders the entry the way the Command log panel shows it.
 func (e Entry) String() string {
+	n := e.Targets()
 	return fmt.Sprintf("%s  %s  → %d host%s [%s]",
-		e.At.Format("15:04:05"), e.Command, e.Targets, plural(e.Targets), e.Mode)
+		e.At.Format("15:04:05"), e.Command, n, plural(n), e.Mode)
 }
 
 // plural is the "s" that makes a count read as English.
@@ -83,12 +139,17 @@ func (l *Log) SetClock(now func() time.Time) {
 	}
 }
 
-// Record appends a command.
+// Record appends a command, with the hosts that received it.
+//
+// The hosts are the entry's target set, not only its count: an entry that knows
+// who received it can also answer who did not, which is what a resend to the
+// hosts that missed it needs (issue #256). The slice is copied, so a caller may
+// reuse it.
 //
 // It reports whether the command was recorded: a command sent in
 // [broadcast.ModeSingle] is deliberately not, and neither is an empty one. The
 // return value exists so a caller cannot quietly assume a record was made.
-func (l *Log) Record(command string, mode broadcast.Mode, targets int) bool {
+func (l *Log) Record(command string, mode broadcast.Mode, hosts []string) bool {
 	if mode == broadcast.ModeSingle {
 		// Single mode is how a password prompt is answered. Recording it would
 		// turn the audit trail into a credential store.
@@ -102,7 +163,7 @@ func (l *Log) Record(command string, mode broadcast.Mode, targets int) bool {
 	l.entries = append(l.entries, Entry{
 		Command: command,
 		Mode:    mode,
-		Targets: targets,
+		Hosts:   append([]string(nil), hosts...),
 		At:      l.now(),
 	})
 

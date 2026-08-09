@@ -435,6 +435,9 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// broadcast set, the same report, the same audit entry.
 		return a.sendCommand(msg.Command)
 
+	case CommandResendMissingMsg:
+		return a.resendMissing(msg)
+
 	case DiffSelectMsg:
 		// A variant's hosts become the selection, so "these three disagree"
 		// turns into a target set B can broadcast to.

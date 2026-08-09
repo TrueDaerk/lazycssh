@@ -31,6 +31,10 @@ type CommandLine interface {
 	// Send writes the same bytes to the active broadcast set — whole command
 	// lines, where the bytes are plain text.
 	Send(p []byte) (broadcast.Delivery, error)
+	// SendTo writes the same bytes to exactly the hosts named, bypassing the
+	// scope: the hosts that missed an earlier command are a list the UI
+	// computed, not a broadcast mode (issue #256).
+	SendTo(ids []string, p []byte) (broadcast.Delivery, error)
 	// SendKey delivers one key press to the active broadcast set, encoded per
 	// host by each session's own terminal emulator (issue #206).
 	SendKey(k term.KeyEvent) (broadcast.Delivery, error)
@@ -38,9 +42,10 @@ type CommandLine interface {
 
 // Recorder is the command log as the command line writes to it.
 type Recorder interface {
-	// Record appends a command and reports whether it was recorded. Input sent
-	// in single mode is deliberately not; see internal/commandlog.
-	Record(command string, mode broadcast.Mode, targets int) bool
+	// Record appends a command with the hosts that received it, and reports
+	// whether it was recorded. Input sent in single mode is deliberately not;
+	// see internal/commandlog.
+	Record(command string, mode broadcast.Mode, hosts []string) bool
 }
 
 // HistoryStore is the persistent broadcast command history: what Up/Down
@@ -218,24 +223,59 @@ func (a App) sendCommand(command string) (tea.Model, tea.Cmd) {
 	// Where each host's exit marker stands *before* the command goes out. Read
 	// after the write it would be a race against a host that answers fast, and
 	// the answer would be mistaken for the state the send found.
-	marks := a.exitMarksAtSend()
+	hosts := a.broadcastHosts()
+	marks := a.exitMarksFor(hosts)
 
 	// The newline is what makes it a command rather than a line of typing.
 	delivery, err := a.cfg.Sender.Send([]byte(command + "\n"))
+	return a.afterSend(command, delivery.Mode, hosts, marks, delivery, err)
+}
+
+// sendCommandTo delivers one command to exactly the hosts named, bypassing the
+// broadcast scope: "send this to the hosts that missed it" is a list computed
+// from the audit trail, not a mode (issue #256). mode is the mode the original
+// send went out in, so the new entry reads as what it repeats rather than as
+// whatever the run happens to be set to now.
+//
+// Everything after the write is the typed path's: the same report, the same
+// audit entry, the same diff and exit windows.
+func (a App) sendCommandTo(command string, mode broadcast.Mode, hosts []string) (App, tea.Cmd) {
+	command = strings.TrimSpace(command)
+	if command == "" || len(hosts) == 0 {
+		return a, nil
+	}
+
+	if a.cfg.Sender == nil {
+		a.lastDelivery = "no transport: nothing was sent"
+		return a, nil
+	}
+
+	marks := a.exitMarksFor(hosts)
+	delivery, err := a.cfg.Sender.SendTo(hosts, []byte(command+"\n"))
+	next, cmd := a.afterSend(command, mode, hosts, marks, delivery, err)
+	return next.(App), cmd
+}
+
+// afterSend is everything both send paths do once the bytes are out: report,
+// record, and open the windows the answers are read in. marks is where each
+// host's exit marker stood before the write.
+func (a App) afterSend(command string, mode broadcast.Mode, hosts []string, marks map[string]uint64, delivery broadcast.Delivery, err error) (tea.Model, tea.Cmd) {
 	a.lastDelivery = delivery.String()
 	if err != nil {
 		a.lastDelivery += ": " + err.Error()
 	}
 
 	if a.cfg.Recorder != nil {
-		a.cfg.Recorder.Record(command, delivery.Mode, delivery.Delivered)
+		// The hosts that took it, not the count: an entry that knows who
+		// received it can answer who did not.
+		a.cfg.Recorder.Record(command, mode, delivery.To)
 	}
 
 	// The send opens two windows on the same question: the Output diff
 	// panel's, where each reached target's scrollback length now is where its
 	// answer starts, and the pane headers' exit indicator, which greys out
 	// until this command's own exit marker comes back (issue #251).
-	a = a.markDiff(command, delivery)
+	a = a.markDiff(command, hosts, delivery)
 	a = a.markCommandExits(marks, delivery)
 
 	// The send moved the window the output filter matches in - it is "since

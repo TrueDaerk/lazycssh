@@ -101,8 +101,8 @@ func TestCommandLogPreviewShowsTheWholeEntry(t *testing.T) {
 	const long = "systemctl restart nginx && journalctl -u nginx --since -5m"
 
 	a, log := logApp(t, 0)
-	log.Record(long, broadcast.ModeFleet, 40)
-	log.Record("uptime", broadcast.ModeAll, 2)
+	log.Record(long, broadcast.ModeFleet, hostIDs(40))
+	log.Record("uptime", broadcast.ModeAll, hostIDs(2))
 
 	first := preview(t, a)
 	second := preview(t, pressKey(t, a, "j"))

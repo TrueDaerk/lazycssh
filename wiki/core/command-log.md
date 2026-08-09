@@ -4,7 +4,7 @@ title: Command log
 description: The in-memory audit trail of what this run sent, to how many hosts, in which mode — and what it deliberately never records.
 resource: internal/commandlog
 tags: [audit, broadcast, security, ui]
-timestamp: 2026-08-09T01:00:00Z
+timestamp: 2026-08-09T12:00:00Z
 ---
 
 # Command log
@@ -69,3 +69,39 @@ old target list would send a command to machines the user has since paged away f
 
 A command that went out to every host is rendered in the warning style, so the audit trail reads
 the way the decision felt.
+
+## Resending to the hosts that missed it
+
+`m` on an entry is the complement of `enter`: it sends the command to the hosts that are up
+**now** and were **not** among its targets, and to nobody else. A host that reconnects into a
+fleet that already ran three commands is the case this exists for — re-sending to the whole
+scope would run them a second time on the thirty-nine machines that did not miss anything.
+
+Every entry therefore stores its **target set**, not only a count: `Entry.Hosts` is what
+`broadcast.Delivery.To` reported the send actually reached. `Entry.Missing(connected)` is the
+set difference, and `Router.SendTo` delivers to exactly that list — bypassing the mode, the
+working set, the selection, the visibility limit and the alt-screen exclusion, because the
+target list is already an explicit decision rather than a broadcast that might stray.
+
+The resolved list and its count are shown in the panel's preview **before** the key is pressed
+(`missing → 2 hosts`, then the identifiers), which is the same rule the broadcast label follows:
+the number of machines about to receive a command is never a surprise. With nothing missing the
+action is a true no-op and the status bar says `all hosts already received this`.
+
+The new send leaves its own entry, recorded in the **original** entry's mode: the resend repeats
+that decision, it does not make a new one.
+
+### The rule for who counts as missing
+
+Membership is by **session identifier**, and **a host that received the command is never missing
+again**:
+
+- A host that was down at the send and is up now — **missing**. The case the feature is for.
+- A host that joined the run after the send, or a **clone** (`web-01#2`, its own identifier) —
+  **missing**. It never was a target.
+- A host that received it and has since **reconnected** — **not missing**, even though its fresh
+  shell has lost whatever the command did. It did receive it, and guessing otherwise would
+  re-run a destructive command on a machine the user did not ask about. Re-running there is the
+  explicit resend (`enter`), one keypress away.
+- A host that is down now — **not offered** at all: a session that cannot take input would only
+  swallow the command.

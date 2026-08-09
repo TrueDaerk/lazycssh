@@ -82,7 +82,7 @@ func (a App) handleBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// A line no live host received was an answer to prompts, not a
 		// command: it may be a password, and the audit trail must not hold it.
 		if line != "" && a.cfg.Recorder != nil && delivery.Delivered > 0 {
-			a.cfg.Recorder.Record(line, delivery.Mode, delivery.Delivered)
+			a.cfg.Recorder.Record(line, delivery.Mode, delivery.To)
 		}
 		a.broadcastLine = nil
 	}
