@@ -92,6 +92,7 @@ type KeyMap struct {
 	Split             key.Binding
 	NextSplit         key.Binding
 	PrevSplit         key.Binding
+	Filter            key.Binding
 
 	// Selection. App-level: a selection is about the run, not about a panel,
 	// and it must be editable from wherever the user is reading.
@@ -237,6 +238,10 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("ctrl+shift+→", "next screenful (page, then chunk; wraps)")),
 		PrevSplit: key.NewBinding(key.WithKeys("ctrl+shift+left"),
 			key.WithHelp("ctrl+shift+←", "previous screenful (page, then chunk; wraps)")),
+		// A view, not a selection: the help says so, because a filtered grid
+		// looks exactly like a narrowed broadcast set and is not one.
+		Filter: key.NewBinding(key.WithKeys("f"),
+			key.WithHelp("f", "filter the grid by pane output (view only)")),
 
 		SelectAll: key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "select every host")),
 		Invert:    key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "invert the selection")),
@@ -422,7 +427,7 @@ func (k KeyMap) global() []key.Binding {
 		k.Panel1, k.Panel2, k.Panel3, k.Panel4, k.Panel5, k.Panel6,
 		k.BroadcastAll, k.BroadcastSelected, k.BroadcastSingle, k.BroadcastFleet,
 		k.CommandLine, k.NextFailure, k.ReconnectAll, k.QuickSave, k.NewHost, k.HostPicker,
-		k.Retile, k.Split, k.NextSplit, k.PrevSplit,
+		k.Retile, k.Split, k.NextSplit, k.PrevSplit, k.Filter,
 		k.SelectAll, k.Invert, k.ClearSel, k.SelectUp, k.SelectDwn,
 	}
 }

@@ -135,6 +135,14 @@ func (a App) activeModal() (modal, bool) {
 		return a.prompt("Split view", "panes per view", a.splitInput,
 			promptHint(note("empty or 0 shows all"),
 				does(a.keys.PromptSubmit, "applies"), does(a.keys.PromptCancel, "keeps"))), true
+
+	case a.filterInput.Focused():
+		// The note is the whole point of the box: a filtered grid is a view,
+		// and the user has to know a hidden pane still receives a broadcast.
+		return a.prompt("Filter panes", "output contains", a.filterInput,
+			promptHint(note("case-insensitive"),
+				does(a.keys.PromptSubmit, "applies"), does(a.keys.PromptCancel, "clears")),
+			a.theme.Muted.Render("a view only — broadcast still reaches hidden panes")), true
 	}
 
 	return modal{}, false

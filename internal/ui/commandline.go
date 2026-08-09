@@ -238,6 +238,11 @@ func (a App) sendCommand(command string) (tea.Model, tea.Cmd) {
 	a = a.markDiff(command, delivery)
 	a = a.markCommandExits(marks, delivery)
 
+	// The send moved the window the output filter matches in - it is "since
+	// the last command" - so an active filter is re-evaluated against the new,
+	// empty window rather than against the previous command's answers.
+	a = a.refreshFilter()
+
 	sent := CommandSentMsg{Command: command, Delivery: delivery}
 	return a, func() tea.Msg { return sent }
 }

@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-10T14:00:00Z
+timestamp: 2026-08-10T16:00:00Z
 ---
 
 # TUI shell
@@ -235,6 +235,34 @@ narrows anything. An empty prompt or `0` clears the split, `esc` keeps it; chunk
 from the session's host list, and a chunk whose hosts left the run
 clamps to the last one instead of rendering an empty grid. The typing exception applies here
 too: in a pane, `ctrl+s` is flow control for the host.
+
+### Output filter
+
+`f` asks for a pattern in a centred [dialog](#dialogs) and the grid then draws only the panes
+whose **recent output** holds it (issue #255) — with forty panes, "which of these said error" is
+a question the eye answers badly. The filter runs before the split, so a filtered run splits into
+chunks of matches.
+
+- **Matching is a case-insensitive substring**, not a regexp: a filter is typed in a hurry, and
+  `error` should not have to be escaped while a half-typed pattern narrows the grid instead of
+  failing to compile.
+- The window matched is the output **since the last command-line send** — the same watermarks the
+  [Output diff](./output-diff.md) compares from — so "which hosts failed *that* command" is not
+  answered by an hour of older scrollback. A host no send reached has no watermark, and the last
+  200 lines are read instead.
+- **It is a view, not a selection.** A hidden pane still receives everything broadcast: the
+  router's [visibility limit](./broadcast-scope.md) is computed as if the filter were off
+  (`syncBroadcastLimit` clears it on a copy of the model). A filter that silently narrowed the
+  target set would break the one promise the status bar makes.
+- The state is unmissable: the status bar carries `filter: "error" (5/40)` in the warning style,
+  and the overflow footer adds `+35 hosts hidden by the filter — f`.
+- **New output re-evaluates the matches live.** The match set is a model field
+  (`App.filterMatch`), recomputed inside `Update` on output, fleet and host-list messages and on
+  every send — never in a render helper, for the reason [the fleet snapshot](#the-fleet-snapshot)
+  gives: a host list read twice inside one frame must not disagree.
+- The focus is kept by identity and then clamped, so it never lands on a hidden pane; clearing
+  restores the full grid with the focus on a pane that exists. An empty prompt or `esc` clears —
+  the key that means "get me out of here" must not leave panes hidden.
 
 ## Focus
 

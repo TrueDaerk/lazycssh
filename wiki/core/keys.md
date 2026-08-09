@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-08-10T14:00:00Z
+timestamp: 2026-08-10T16:00:00Z
 ---
 
 # Keymap and help
@@ -64,6 +64,7 @@ live at the same time.
 | `A` | global (app level) | add hosts from the fuzzy picker: a modal listing the concrete `~/.ssh/config` aliases, the saved groups and the recent hosts, tagged by origin and filtered as you type (issues #246, #254). Shifted, not plain `a`, because lower-case `a` has meant "select every host" since the selection existed |
 | `ctrl+r` | global (app level) | re-tile the grid for the current hosts (a departure keeps the shape) |
 | `ctrl+s` | global (app level) | split the grid into chunks of N panes (prompt; empty or 0 clears) |
+| `f` | global (app level) | filter the grid by pane output: only the panes whose output since the last send holds the pattern are drawn (case-insensitive substring; prompt, empty or `esc` clears). A **view, not a selection** — hidden panes still receive a broadcast (issue #255) |
 | `ctrl+shift+→` / `ctrl+shift+←` | global (works while typing too) | next / previous screenful: pages, then split chunks, wrapping at the ends. Plain `ctrl+arrows` are never claimed — they stay readline word movement for the hosts, and IDEs and window managers swallow them anyway (issue #208) |
 | `a` | global (app level) | select every host |
 | `i` | global (app level) | invert the selection |

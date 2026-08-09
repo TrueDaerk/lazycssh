@@ -28,6 +28,7 @@ not typing into a pane, not in the broadcast bar's edit mode, not in a prompt.
 | ++shift+a++ | add hosts from the picker: `~/.ssh/config` aliases, saved groups and recent hosts, fuzzy-filtered as you type |
 | ++ctrl+r++ | re-tile the grid for the current hosts |
 | ++ctrl+s++ | split the grid into chunks of N panes (empty or `0` clears) |
+| ++f++ | filter the grid by pane output: only the panes whose output since the last command holds what you type stay on screen (case-insensitive; empty or ++esc++ clears). A view only — hidden panes still receive a broadcast |
 | ++ctrl+shift+right++ / ++ctrl+shift+left++ | next / previous screenful: pages, then split chunks, wrapping; works while typing too. Plain ++ctrl+right++ / ++ctrl+left++ stay word movement for the hosts |
 | ++a++ | select every host |
 | ++i++ | invert the selection |
