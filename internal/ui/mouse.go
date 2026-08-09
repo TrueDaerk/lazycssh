@@ -17,6 +17,12 @@ func (a App) handleClick(x, y int) (tea.Model, tea.Cmd) {
 	a = a.clearTextSelection()
 	switch a.layout.regionAt(x, y) {
 	case RegionMain:
+		if _, showing := a.mainPreview(); showing {
+			// The main area is a sidebar preview, not the grid (issue #218):
+			// the click brings the grid back rather than closing or typing
+			// into a pane that is not on screen.
+			return a.enterPane(), nil
+		}
 		index, ok := a.paneUnder(x, y)
 		if !ok {
 			return a, nil
@@ -75,6 +81,11 @@ func (a App) handleWheel(msg tea.MouseWheelMsg) App {
 
 	switch a.layout.regionAt(msg.X, msg.Y) {
 	case RegionMain:
+		if _, showing := a.mainPreview(); showing {
+			// A preview is not a pane's scrollback; the wheel over it scrolls
+			// nothing rather than a host the user cannot see.
+			return a
+		}
 		if index, ok := a.paneUnder(msg.X, msg.Y); ok {
 			return a.scrollHostBy(index, delta*wheelStep)
 		}

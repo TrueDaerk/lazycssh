@@ -43,6 +43,9 @@ type groupRow struct {
 	Hosts int
 	// Description is the group's free-text note.
 	Description string
+	// Patterns are the group's host patterns as typed, kept so the preview
+	// can show the host list without re-reading the file inside View.
+	Patterns []string
 	// Err is why the row could not be read, if it could not.
 	Err error
 }
@@ -99,6 +102,7 @@ func (a App) loadGroups() App {
 		}
 		a.groupList = append(a.groupList, groupRow{
 			Name: name, Hosts: count, Description: sess.Description,
+			Patterns: sess.Patterns(),
 		})
 	}
 	a.groupCursor = clamp(a.groupCursor, 0, max(0, len(a.groupList)-1))
