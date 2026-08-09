@@ -131,6 +131,11 @@ type Config struct {
 	// this package free of the resolver, and the views testable without a
 	// config file.
 	ConfigAliases []string
+	// HostSource supplies the fuzzy host picker's candidates. Nil means the
+	// picker offers [Config.ConfigAliases], which is what the program passes;
+	// the field exists so later sources can be plugged in without the picker
+	// changing (issue #246).
+	HostSource HostSource
 }
 
 // App is the root bubbletea model: it owns the layout, the focus and the panel
@@ -151,6 +156,9 @@ type App struct {
 	cmdInput    textinput.Model
 	searchInput textinput.Model
 	hostInput   textinput.Model
+
+	// picker is the fuzzy host picker overlay; see internal/ui/hostpicker.go.
+	picker hostPicker
 
 	// open are the open sessions, in open order; active is the foreground
 	// one, -1 when nothing is open.
@@ -245,6 +253,12 @@ func NewApp(cfg Config) App {
 	keys := DefaultKeyMap()
 	if cfg.Keys != nil {
 		keys = *cfg.Keys
+	}
+
+	if cfg.HostSource == nil {
+		// The default source is what the run already knows: the ssh-config
+		// aliases the completion hints come from.
+		cfg.HostSource = aliasSource(cfg.ConfigAliases)
 	}
 
 	theme := NewTheme(cfg.Theme)
@@ -512,7 +526,7 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// a host it stays a keystroke for the host (XON), like every other chord
 	// the pane forwards.
 	if key.Matches(msg, a.keys.ForceQuit) &&
-		(a.cmdInput.Focused() || a.hostInput.Focused() ||
+		(a.cmdInput.Focused() || a.hostInput.Focused() || a.picker.open ||
 			a.searchInput.Focused() || a.Saving() || a.splitInput.Focused() ||
 			a.GroupDialogOpen() || a.DeleteGroupPending() != "" || a.EndSessionPending() != "") {
 		return a, tea.Quit
@@ -546,6 +560,12 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// machines is not something a stray keystroke may confirm.
 	if a.EndSessionPending() != "" {
 		return a.handleSessionEndKey(msg)
+	}
+
+	// So does the host picker, for the same reason: every key that is not one
+	// of its own is filter text.
+	if a.picker.open {
+		return a.handleHostPickerKey(msg)
 	}
 
 	// The new-host prompt has the keyboard while it is open: a pattern
@@ -687,6 +707,11 @@ func (a App) handleAppKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		a.focus = AreaSidebar
 		a.hostInput.Focus()
 		return a, nil
+
+	case key.Matches(msg, a.keys.HostPicker):
+		// Browsing what could be connected is about the run too, so it opens
+		// from anywhere; the picker floats over whatever is on screen.
+		return a.openHostPicker(), nil
 	}
 
 	// The selection keys are app-level for the same reason the broadcast-mode
@@ -953,7 +978,7 @@ func (a App) renderMain() string {
 		// The empty state says what to do next rather than showing an empty
 		// frame: this is the argumentless start.
 		hint := "no hosts\n\n" +
-			"press n and type a host — ~/.ssh/config aliases complete with tab —\n" +
+			"press A to pick hosts from ~/.ssh/config, n to type one,\n" +
 			"or pick a session in [3] Sessions.\n\n" +
 			"once connected: click or enter a pane and just type —\n" +
 			"every key goes to that host; 5 broadcasts to all of them.\n\n" +

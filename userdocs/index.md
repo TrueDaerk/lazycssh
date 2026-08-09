@@ -30,7 +30,7 @@ make install          # installs to ~/.local/bin/lazycssh
 Then start it with hosts, with a saved group, or with nothing:
 
 ```sh
-lazycssh                                # empty run; press n to connect
+lazycssh                                # empty run; press A to pick hosts, n to type one
 lazycssh web-01 web-02 db-01
 lazycssh 'srv1-{01..40}.example.com'    # brace expansion, done by lazycssh
 lazycssh @prod-web                      # a saved group
@@ -73,6 +73,7 @@ knowing about.
 
 | Keys | What it does |
 |---|---|
+| ++shift+a++ | Pick hosts from `~/.ssh/config` — fuzzy filter, mark several, connect them at once |
 | ++n++ | Connect a host — any pattern; `~/.ssh/config` aliases complete with ++tab++ |
 | ++5++ | Focus the broadcast bar: every keystroke goes to the whole target set |
 | ++enter++ on a pane, or a click | Type into that one host |

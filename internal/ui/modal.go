@@ -125,6 +125,9 @@ func (a App) activeModal() (modal, bool) {
 	}
 
 	switch {
+	case a.picker.open:
+		return a.hostPickerModal(), true
+
 	case a.hostInput.Focused():
 		return a.connectModal(), true
 
