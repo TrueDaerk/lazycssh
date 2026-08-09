@@ -144,8 +144,14 @@ type Theme struct {
 
 	// Selected marks a host in the selection.
 	Selected lipgloss.Style
-	// Cursor marks the row under the cursor in a list.
+	// Cursor marks the row under the cursor in a list panel that is both
+	// selected and has the sidebar's focus, lazygit style.
 	Cursor lipgloss.Style
+	// CursorMuted marks the cursor row in a list panel that lacks that focus -
+	// a preview box, or the selected panel while the grid holds the keyboard.
+	// The row keeps a position marker without the strong highlight, which is
+	// reserved for the one panel that would actually receive a keystroke.
+	CursorMuted lipgloss.Style
 
 	// Key renders a key binding in the help.
 	Key lipgloss.Style
@@ -244,6 +250,16 @@ func NewTheme(opts Options) Theme {
 		t.Cursor = t.Cursor.Reverse(true)
 	}
 
+	// Muted keeps the row bold and, on colour, tinted with the focus colour -
+	// enough to find the cursor at a glance without it reading as "this is
+	// where typing goes", which the background reverse reserves. Without
+	// colour the underline carries the same distinction the reverse video
+	// carries for the focused style.
+	t.CursorMuted = fg(palette.Focus).Bold(true)
+	if opts.NoColor {
+		t.CursorMuted = lipgloss.NewStyle().Bold(true).Underline(true)
+	}
+
 	t.Key = fg(palette.Accent).Bold(true)
 	t.Desc = fg(palette.Muted)
 	t.HelpOverlay = border(lipgloss.RoundedBorder(), palette.Focus).Padding(1, 2)
@@ -295,6 +311,16 @@ func (t Theme) PanelFrame(focused bool) lipgloss.Style {
 		return t.PanelFocused
 	}
 	return t.Panel
+}
+
+// ListCursor returns the style for a list panel's cursor row: the strong
+// background highlight when the panel is both selected and holds the
+// sidebar's focus, the muted style otherwise.
+func (t Theme) ListCursor(focused bool) lipgloss.Style {
+	if focused {
+		return t.Cursor
+	}
+	return t.CursorMuted
 }
 
 // PaneFrame returns the frame for a host pane. A failing host's border turns

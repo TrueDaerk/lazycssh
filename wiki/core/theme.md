@@ -4,7 +4,7 @@ title: Theme and styles
 description: The one place styles live, the palette they are built from, and why colour is never the only carrier of meaning.
 resource: internal/ui/theme.go
 tags: [ui, lipgloss, styles, accessibility]
-timestamp: 2026-07-29T12:00:00Z
+timestamp: 2026-08-09T00:00:00Z
 ---
 
 # Theme and styles
@@ -41,7 +41,8 @@ For a terminal with no colour at all, `Options.NoColor` drops colour entirely. T
 - the focused frame, normally a colour change at the same border weight (lazygit style, in the
   green `Focus` colour), becomes a **thicker** border when colour is off,
 - the insecure-host-key marker is **reverse video**, not just red,
-- the list cursor is reverse video when colour is off,
+- the list cursor is reverse video when colour is off; the muted cursor row (below) is
+  **underlined** instead, so the two never collapse into the same look,
 - a failed host is **bold** as well as red.
 
 Tests assert each of these, because the failure mode — a monochrome terminal where the user
@@ -60,7 +61,16 @@ th.PanelBodyFrame(focused)    // titled box: the frame minus its top edge
 th.PanelBorderChars(focused)  // titled box: the border character set for the hand-drawn top line
 th.PanelBorderText(focused)   // titled box: the style those characters are drawn in
 th.ExitStatus(code)           // zero is quiet, non-zero never is
+th.ListCursor(focused)        // list cursor row: strong highlight or the muted marker
 ```
+
+`ListCursor` is what `groupLine`, `openSessionLine` and `logLine` call for the row under the
+cursor. The strong `Cursor` style — background highlight — is reserved for a list panel that is
+both selected *and* holds the sidebar's focus, lazygit style; every other case (a collapsed
+preview box, or the selected panel while the grid or broadcast bar has the keyboard) gets
+`CursorMuted` instead, which keeps the row findable without claiming a keystroke would land there.
+`panelBody` and the panel renderers thread that focus flag down from `renderSidebar`, which already
+computes it for the panel's own border (issue #222).
 
 The three `PanelBody*`/`PanelBorder*` helpers exist for `titledBox`, which draws the lazygit-style
 top border line with the title inside it by hand — lipgloss has no border-title support. The

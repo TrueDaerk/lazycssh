@@ -68,8 +68,10 @@ func (a App) resendSelectedCommand() (App, tea.Cmd) {
 }
 
 // logPanel renders the command history, newest last, each with the number of
-// hosts it went to and the mode it went out in.
-func (a App) logPanel(width, height int) string {
+// hosts it went to and the mode it went out in. focused reports whether this
+// panel is the one that would actually receive a keystroke right now (issue
+// #222).
+func (a App) logPanel(width, height int, focused bool) string {
 	if a.cfg.CommandLog == nil {
 		return a.theme.Muted.Render("no command log")
 	}
@@ -91,7 +93,7 @@ func (a App) logPanel(width, height int) string {
 		if s, ok := rendered[i]; ok {
 			return s
 		}
-		s := a.theme.Base.Width(max(0, width)).Render(a.logLine(entries[i], i == cursor))
+		s := a.theme.Base.Width(max(0, width)).Render(a.logLine(entries[i], i == cursor, focused))
 		rendered[i] = s
 		return s
 	}
@@ -147,11 +149,13 @@ func (a App) logPanel(width, height int) string {
 
 // logLine renders one entry. A command that went to every host is drawn in the
 // warning style: the audit trail should read the way the decision felt.
-func (a App) logLine(entry commandlog.Entry, underCursor bool) string {
+// focused decides whether the cursor row gets the strong highlight or the
+// muted one; see [Theme.ListCursor].
+func (a App) logLine(entry commandlog.Entry, underCursor, focused bool) string {
 	label := entry.String()
 	switch {
 	case underCursor:
-		return a.theme.Cursor.Render(label)
+		return a.theme.ListCursor(focused).Render(label)
 	case entry.Mode == broadcast.ModeFleet:
 		return a.theme.StatusWarning.Render(label)
 	default:

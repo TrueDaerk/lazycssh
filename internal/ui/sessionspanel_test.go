@@ -32,7 +32,7 @@ func TestSessionsPanelListsOpenSessions(t *testing.T) {
 	fleet.connect(t, "web-01")
 	a = syncFleet(t, a)
 
-	view := plain(a.sessionsPanel(60, 20))
+	view := plain(a.sessionsPanel(60, 20, true))
 	for _, want := range []string{"front (1/2 up)", "back (0/1 up)"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the Sessions panel does not show %q:\n%s", want, view)
@@ -44,8 +44,34 @@ func TestSessionsPanelListsOpenSessions(t *testing.T) {
 // survives a terminal without colour.
 func TestForegroundSessionIsMarked(t *testing.T) {
 	a := resize(t, NewApp(Config{Hosts: []string{"h1"}, SessionName: "prod", Theme: Options{NoColor: true}}), 120, 40)
-	if !strings.Contains(plain(a.sessionsPanel(60, 20)), "▸ prod") {
-		t.Fatalf("the foreground session is not marked:\n%s", plain(a.sessionsPanel(60, 20)))
+	if !strings.Contains(plain(a.sessionsPanel(60, 20, true)), "▸ prod") {
+		t.Fatalf("the foreground session is not marked:\n%s", plain(a.sessionsPanel(60, 20, true)))
+	}
+}
+
+// The cursor row gets the strong background highlight only while the panel is
+// both selected and the sidebar holds the keyboard, lazygit style; otherwise it
+// keeps a muted marker so the position is never lost (issue #222).
+func TestSessionCursorHighlightOnlyWhenPanelFocused(t *testing.T) {
+	a, _ := openTwo(t)
+	th := a.Theme()
+
+	label := "  prod-web (0/3 up)"
+	focused := a.sessionsPanel(60, 20, true)
+	if !strings.Contains(focused, th.Cursor.Render(label)) {
+		t.Fatalf("the focused panel does not use the strong cursor style:\n%s", focused)
+	}
+
+	unfocused := a.sessionsPanel(60, 20, false)
+	if strings.Contains(unfocused, th.Cursor.Render(label)) {
+		t.Fatalf("an unfocused panel still uses the strong cursor style:\n%s", unfocused)
+	}
+	if !strings.Contains(unfocused, th.CursorMuted.Render(label)) {
+		t.Fatalf("an unfocused panel's cursor row is not muted:\n%s", unfocused)
+	}
+
+	if plain(focused) != plain(unfocused) {
+		t.Fatalf("focus changed the panel's text:\nfocused: %s\nunfocused: %s", plain(focused), plain(unfocused))
 	}
 }
 
@@ -201,7 +227,7 @@ func TestSessionsPanelWithNothingOpen(t *testing.T) {
 	a := resize(t, NewApp(Config{Theme: Options{Dark: true}}), 120, 40)
 	a = pressKey(t, a, "3")
 
-	if got := plain(a.sessionsPanel(60, 20)); !strings.Contains(got, "no open sessions") {
+	if got := plain(a.sessionsPanel(60, 20, true)); !strings.Contains(got, "no open sessions") {
 		t.Fatalf("sessionsPanel() = %q", got)
 	}
 	if a.SelectedOpenSession() != "" {
@@ -389,8 +415,8 @@ func TestSaveWithAnInvalidNameReportsTheError(t *testing.T) {
 	if store.Exists("not a name") {
 		t.Fatal("an invalid name was written")
 	}
-	if !strings.Contains(plain(a.groupsPanel(60, 20)), "not allowed") {
-		t.Fatalf("the panel does not report the error:\n%s", plain(a.groupsPanel(60, 20)))
+	if !strings.Contains(plain(a.groupsPanel(60, 20, true)), "not allowed") {
+		t.Fatalf("the panel does not report the error:\n%s", plain(a.groupsPanel(60, 20, true)))
 	}
 }
 

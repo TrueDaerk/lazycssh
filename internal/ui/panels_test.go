@@ -283,9 +283,41 @@ func TestTightSidebarDropsThePreviews(t *testing.T) {
 func TestPanelBodyForEveryPanel(t *testing.T) {
 	a, _, _, _ := statusApp(t, "web-01")
 	for _, panel := range Panels() {
-		if body := a.panelBody(panel, 30, 10); body == "" {
+		if body := a.panelBody(panel, 30, 10, true); body == "" {
 			t.Fatalf("panel %v renders nothing", panel)
 		}
+	}
+}
+
+// End to end: the selected sidebar panel's cursor row carries the strong
+// highlight only while the sidebar itself has the keyboard. The moment focus
+// moves to the grid, the same box is a preview, and the cursor row falls back
+// to the muted marker (issue #222).
+func TestSidebarCursorHighlightFollowsGridFocus(t *testing.T) {
+	a, _ := groupsStoreApp(t, savedGroup("prod", "h1"), savedGroup("staging", "h2"))
+	th := a.Theme()
+	label := "  prod (1 host)"
+
+	if a.focus != AreaSidebar {
+		t.Fatalf("Groups panel did not start with the sidebar's focus: focus = %v", a.focus)
+	}
+	sidebarFocused := plain(a.View().Content)
+	if !strings.Contains(a.View().Content, th.Cursor.Render(label)) {
+		t.Fatalf("the sidebar-focused panel does not use the strong cursor style:\n%s", sidebarFocused)
+	}
+
+	a.focus = AreaGrid
+	gridFocused := a.View().Content
+	if strings.Contains(gridFocused, th.Cursor.Render(label)) {
+		t.Fatalf("the panel still uses the strong cursor style once the grid has focus:\n%s", plain(gridFocused))
+	}
+	if !strings.Contains(gridFocused, th.CursorMuted.Render(label)) {
+		t.Fatalf("the cursor row lost its position marker once the grid has focus:\n%s", plain(gridFocused))
+	}
+
+	// The grid taking focus never drops the row from the screen.
+	if !strings.Contains(plain(gridFocused), "prod (1 host)") {
+		t.Fatalf("the group is no longer listed once the grid has focus:\n%s", plain(gridFocused))
 	}
 }
 

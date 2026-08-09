@@ -36,7 +36,7 @@ func TestLogPanelShowsOneLinePerCommand(t *testing.T) {
 	a, log := logApp(t, 0)
 	log.Record("systemctl restart nginx", broadcast.ModeAll, 40)
 
-	view := plain(a.logPanel(70, 20))
+	view := plain(a.logPanel(70, 20, true))
 	if got := strings.Count(view, "systemctl restart nginx"); got != 1 {
 		t.Fatalf("the command appears %d times:\n%s", got, view)
 	}
@@ -53,7 +53,7 @@ func TestLogPanelNeverShowsSingleModeInput(t *testing.T) {
 	log.Record(password, broadcast.ModeSingle, 1)
 	log.Record("uptime", broadcast.ModeAll, 2)
 
-	view := plain(a.logPanel(70, 20))
+	view := plain(a.logPanel(70, 20, true))
 	if strings.Contains(view, password) {
 		t.Fatalf("the panel rendered single mode input:\n%s", view)
 	}
@@ -67,7 +67,7 @@ func TestLogPanelIsOldestFirst(t *testing.T) {
 	log.Record("first", broadcast.ModeAll, 1)
 	log.Record("second", broadcast.ModeAll, 2)
 
-	view := plain(a.logPanel(70, 20))
+	view := plain(a.logPanel(70, 20, true))
 	if strings.Index(view, "first") > strings.Index(view, "second") {
 		t.Fatalf("the newest entry is not last:\n%s", view)
 	}
@@ -129,7 +129,7 @@ func TestDroppedEntriesAreReported(t *testing.T) {
 		log.Record(command, broadcast.ModeAll, 1)
 	}
 
-	view := plain(a.logPanel(70, 20))
+	view := plain(a.logPanel(70, 20, true))
 	if !strings.Contains(view, "1 older entries dropped") {
 		t.Fatalf("the panel does not report dropped entries:\n%s", view)
 	}
@@ -146,9 +146,36 @@ func TestFleetCommandsAreMarked(t *testing.T) {
 	log.Record("reboot", broadcast.ModeFleet, 40)
 
 	entry, _ := log.Last()
-	styled := a.logPanel(70, 20)
+	styled := a.logPanel(70, 20, true)
 	if !strings.Contains(styled, a.Theme().StatusWarning.Render(entry.String())) {
 		t.Fatalf("a fleet-wide command is not marked:\n%s", styled)
+	}
+}
+
+// The cursor row gets the strong background highlight only while the panel is
+// both selected and the sidebar holds the keyboard, lazygit style; otherwise it
+// keeps a muted marker so the position is never lost (issue #222).
+func TestLogCursorHighlightOnlyWhenPanelFocused(t *testing.T) {
+	a, log := logApp(t, 0)
+	log.Record("uptime", broadcast.ModeAll, 2)
+	entry, _ := log.Last()
+	th := a.Theme()
+
+	focused := a.logPanel(70, 20, true)
+	if !strings.Contains(focused, th.Cursor.Render(entry.String())) {
+		t.Fatalf("the focused panel does not use the strong cursor style:\n%s", focused)
+	}
+
+	unfocused := a.logPanel(70, 20, false)
+	if strings.Contains(unfocused, th.Cursor.Render(entry.String())) {
+		t.Fatalf("an unfocused panel still uses the strong cursor style:\n%s", unfocused)
+	}
+	if !strings.Contains(unfocused, th.CursorMuted.Render(entry.String())) {
+		t.Fatalf("an unfocused panel's cursor row is not muted:\n%s", unfocused)
+	}
+
+	if plain(focused) != plain(unfocused) {
+		t.Fatalf("focus changed the panel's text:\nfocused: %s\nunfocused: %s", plain(focused), plain(unfocused))
 	}
 }
 
@@ -156,7 +183,7 @@ func TestLogPanelWithoutALog(t *testing.T) {
 	a := resize(t, NewApp(Config{Hosts: []string{"h1"}, Theme: Options{Dark: true}}), 120, 40)
 	a = pressKey(t, a, "4")
 
-	if got := plain(a.logPanel(70, 20)); !strings.Contains(got, "no command log") {
+	if got := plain(a.logPanel(70, 20, true)); !strings.Contains(got, "no command log") {
 		t.Fatalf("logPanel() = %q", got)
 	}
 	if a.SelectedCommand() != "" {
@@ -174,7 +201,7 @@ func TestLogPanelWithoutALog(t *testing.T) {
 
 func TestLogPanelWithNothingSent(t *testing.T) {
 	a, _ := logApp(t, 0)
-	if got := plain(a.logPanel(70, 20)); !strings.Contains(got, "nothing sent yet") {
+	if got := plain(a.logPanel(70, 20, true)); !strings.Contains(got, "nothing sent yet") {
 		t.Fatalf("logPanel() = %q", got)
 	}
 }
@@ -185,7 +212,7 @@ func TestLogPanelHasNoPathToDisk(t *testing.T) {
 	a, log := logApp(t, 0)
 	log.Record("uptime", broadcast.ModeAll, 2)
 
-	view := plain(a.logPanel(70, 20))
+	view := plain(a.logPanel(70, 20, true))
 	for _, unwanted := range []string{"/", ".log", "written"} {
 		if strings.Contains(view, unwanted) {
 			t.Fatalf("the panel mentions a file (%q):\n%s", unwanted, view)
@@ -208,7 +235,7 @@ func TestLogPanelBudgetsWrappedEntriesByVisualLines(t *testing.T) {
 	const width, height = 40, 5
 	for cursor := 0; cursor < 6; cursor++ {
 		a.logCursor = cursor
-		panel := a.logPanel(width, height)
+		panel := a.logPanel(width, height, true)
 		if got := lipgloss.Height(panel); got > height {
 			t.Fatalf("cursor %d: panel is %d lines high, want at most %d:\n%s",
 				cursor, got, height, plain(panel))

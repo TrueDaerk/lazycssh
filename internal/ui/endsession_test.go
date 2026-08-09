@@ -93,8 +93,8 @@ func TestYSendsInterruptAndEOF(t *testing.T) {
 	if got := strings.Join(a.OpenSessionNames(), ","); got != "solo" {
 		t.Fatalf("open sessions = %q; the session must wait for its shells", got)
 	}
-	if !strings.Contains(plain(a.sessionsPanel(60, 20)), "(ending)") {
-		t.Fatalf("the ending state is not visible:\n%s", plain(a.sessionsPanel(60, 20)))
+	if !strings.Contains(plain(a.sessionsPanel(60, 20, true)), "(ending)") {
+		t.Fatalf("the ending state is not visible:\n%s", plain(a.sessionsPanel(60, 20, true)))
 	}
 }
 

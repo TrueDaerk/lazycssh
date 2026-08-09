@@ -2,6 +2,15 @@
 
 ## 2026-08-09
 
+- The sidebar's list cursor row shows the strong background highlight only when its panel is both
+  selected and the sidebar holds the keyboard, lazygit style (issue #222). Every other case — a
+  collapsed preview box, or the selected panel while the grid or broadcast bar has focus — keeps a
+  new `Theme.CursorMuted` style instead: a coloured, bold row with no background, underlined
+  rather than reverse video when colour is off, so the position never disappears. `panelBody` and
+  `groupsPanel`/`sessionsPanel`/`logPanel` now take the focus flag `renderSidebar` already computed
+  for the panel's own border, and thread it down to `groupLine`/`openSessionLine`/`logLine` through
+  the new `Theme.ListCursor(focused)` helper. Documented in `core/theme.md`. Version 0.10.12.
+
 - Confirms and prompts render as **centred modals** composited over the layout instead of being
   drawn into the panel that asks them (issue #221), the way lazygit renders its popups: the
   new-group dialog, the delete-group and overwrite confirms, the save-as prompt, the end-session
