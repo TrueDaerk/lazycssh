@@ -308,6 +308,29 @@ func TestHelpOverlayTogglesAndSwallowsTheNextKey(t *testing.T) {
 	}
 }
 
+// Each column in the overlay is headed by the area it lists bindings for,
+// from contextHelp.Titles() - otherwise only the box title names the focused
+// area and the rest of the columns are unlabeled.
+func TestHelpOverlayLabelsItsColumns(t *testing.T) {
+	// Wide enough that every area's column fits without the width-based
+	// column drop the help bubble does when the overlay is narrower than
+	// its content (TestHelpOverlayTogglesAndSwallowsTheNextKey covers that
+	// narrower case).
+	a := resize(t, testApp(), 600, 60)
+	a = pressKey(t, a, "?")
+
+	view := plain(a.View().Content)
+	ctx, ok := a.keys.For(a.focus).(contextHelp)
+	if !ok {
+		t.Fatalf("keys.For(%v) did not return a contextHelp", a.focus)
+	}
+	for _, title := range ctx.Titles() {
+		if !strings.Contains(view, title) {
+			t.Fatalf("the overlay does not label the %q column:\n%s", title, view)
+		}
+	}
+}
+
 // The help is a popup over the frame, not a replacement for it: the fleet
 // stays visible underneath.
 func TestHelpOverlayCompositesOverTheFrame(t *testing.T) {
@@ -375,12 +398,31 @@ func TestPlainQQuits(t *testing.T) {
 	if msg := cmd(); msg != tea.Quit() {
 		t.Fatalf("q produced %v, want tea.Quit", msg)
 	}
+}
 
-	// From the help overlay too.
+// q closes the help overlay rather than quitting the app - lazygit convention
+// for the topmost overlay. ctrl+q still force-quits from there (TestQuitBinding).
+func TestQClosesHelpOverlayWithoutQuitting(t *testing.T) {
+	a := resize(t, testApp(), 120, 40)
 	a = pressKey(t, a, "?")
-	_, cmd = a.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
-	if cmd == nil {
-		t.Fatal("q inside the help overlay returned no command")
+	if !a.HelpVisible() {
+		t.Fatal("? did not open the help")
+	}
+
+	model, cmd := a.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	if cmd != nil && cmd() == tea.Quit() {
+		t.Fatal("q inside the help overlay quit the program")
+	}
+	a = model.(App)
+	if a.HelpVisible() {
+		t.Fatal("q did not close the help overlay")
+	}
+
+	// esc closes it too - the other half of the lazygit convention.
+	a = pressKey(t, a, "?")
+	a = pressKey(t, a, "esc")
+	if a.HelpVisible() {
+		t.Fatal("esc did not close the help overlay")
 	}
 }
 

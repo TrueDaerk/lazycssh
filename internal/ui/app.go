@@ -528,9 +528,10 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// While the overlay is open it is the only thing listening: a user reading
-	// the help is not also driving the panes.
+	// the help is not also driving the panes. q/esc close the overlay, lazygit
+	// convention for a topmost overlay; ctrl+q still force-quits the app.
 	if a.showHelp {
-		if key.Matches(msg, a.keys.Quit) {
+		if key.Matches(msg, a.keys.ForceQuit) {
 			return a, tea.Quit
 		}
 		a.showHelp = false
@@ -1237,12 +1238,52 @@ func (a App) renderHelpOverlay() string {
 	h := a.help
 	h.SetWidth(max(0, a.layout.Width-6))
 
-	content := h.FullHelpView(ctx.FullHelp())
+	content := renderHelpColumns(h, ctx.FullHelp(), ctx.Titles(), a.theme)
 	content += "\n\n" + a.theme.Muted.Render("any key closes this")
 
 	w := min(a.layout.Width-2, lipgloss.Width(content)+4)
 	hgt := min(a.layout.Height-1, lipgloss.Height(content)+2)
 	return titledBox(a.theme, true, w, hgt, "Keybindings — "+a.focus.String(), content)
+}
+
+// renderHelpColumns lays out FullHelp's groups the way help.Model.FullHelpView
+// does - one column per group, narrowest-first drop when they overflow h's
+// width - but heads each column with the area name from Titles(), so the
+// overlay says what a column is for rather than leaving it to the box title
+// to name the one area that happens to be focused.
+func renderHelpColumns(h help.Model, groups [][]key.Binding, titles []string, t Theme) string {
+	sep := h.Styles.FullSeparator.Inline(true).Render(h.FullSeparator)
+	heading := t.Muted.Bold(true)
+
+	var cols []string
+	var totalWidth int
+	for i, group := range groups {
+		col := h.FullHelpView([][]key.Binding{group})
+		if col == "" {
+			continue
+		}
+		title := ""
+		if i < len(titles) {
+			title = titles[i]
+		}
+		block := lipgloss.JoinVertical(lipgloss.Left, heading.Render(title), col)
+
+		width := lipgloss.Width(block)
+		if totalWidth > 0 {
+			width += lipgloss.Width(sep)
+		}
+		if h.Width() > 0 && totalWidth+width > h.Width() && totalWidth > 0 {
+			break
+		}
+
+		if totalWidth > 0 {
+			cols = append(cols, sep)
+		}
+		cols = append(cols, block)
+		totalWidth += width
+	}
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, cols...)
 }
 
 // frame draws content inside a bordered box sized to a rect. lipgloss v2

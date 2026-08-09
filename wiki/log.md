@@ -2,6 +2,15 @@
 
 ## 2026-08-09
 
+- The help overlay had two defects (issue #227). `q` fell through to the app-level quit binding
+  while the overlay was open, so reading the help could kill the whole session; now the overlay
+  swallows `q` (like any other key) to close itself, and only `ctrl+q` (`ForceQuit`) still
+  quits from there. Separately, `contextHelp.Titles()` existed to label the overlay's columns
+  per area but was never called; `renderHelpColumns` (`internal/ui/app.go`) now heads each
+  column with its area name, matching `Titles()`'s order to `FullHelp()`'s groups, and drops
+  trailing columns — title included — the same way the help bubble's own width clamp does.
+  `core/keys.md` and `userdocs/reference/keybindings.md` updated.
+
 - The prompt and confirm keys moved into `KeyMap` (issue #226). `esc`, `enter`, `tab`, the
   command-history arrows, `y`/`n`, `backspace`, `ctrl+c` and `ctrl+q` were matched by comparing
   `msg.String()` to literals at every prompt site, which kept them out of the `?` overlay and
