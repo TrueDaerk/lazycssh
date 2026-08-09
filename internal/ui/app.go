@@ -668,6 +668,11 @@ func (a App) handleAppKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// whatever has focus.
 		return a.jumpToNextFailure().syncFocusTarget(), nil
 
+	case key.Matches(msg, a.keys.ReconnectAll):
+		// Global, next to the per-pane alt+r: forty dropped hosts is not
+		// forty keystrokes.
+		return a.reconnectAllFailed()
+
 	case key.Matches(msg, a.keys.NewHost):
 		// Connecting is about the run, so it works from anywhere; the prompt
 		// renders in the Status panel, which the keypress selects.

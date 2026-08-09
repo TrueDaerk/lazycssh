@@ -1,6 +1,10 @@
 package ui
 
 import (
+	"fmt"
+
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 	"github.com/TrueDaerk/lazycssh/internal/ssh"
 )
@@ -73,6 +77,14 @@ type ReconnectHostMsg struct {
 	// ID is the session to replace.
 	ID string
 }
+
+// ReconnectAllMsg asks the program to redial every session currently failed
+// or closed (issue #244) - a fan-out over the same path [ReconnectHostMsg]
+// takes, for a network blip or jump-host restart that drops several hosts at
+// once. It carries no identifiers: the layer that owns the transport reads
+// which sessions qualify at the moment it acts, rather than trusting a list
+// the UI computed a frame earlier.
+type ReconnectAllMsg struct{}
 
 // CloseHostMsg asks the program to close one host's session. Emitted for the
 // same reason as [ReconnectHostMsg].
@@ -227,4 +239,18 @@ func (a App) stateErr(id string) string {
 		return ""
 	}
 	return st.errText
+}
+
+// reconnectAllFailed asks the program to redial every session that is
+// currently failed or closed (issue #244). The count comes straight from the
+// snapshot Update just took, so the status line can say how many before the
+// first byte of any redial goes out. When nothing is failed or closed it is a
+// true no-op: no message emitted, no status line change, no flicker.
+func (a App) reconnectAllFailed() (App, tea.Cmd) {
+	n := a.fleetCounts.Failed + a.fleetCounts.Closed
+	if n == 0 {
+		return a, nil
+	}
+	a.lastDelivery = fmt.Sprintf("reconnecting %d host%s", n, plural(n))
+	return a, func() tea.Msg { return ReconnectAllMsg{} }
 }

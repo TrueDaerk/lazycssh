@@ -54,6 +54,55 @@ func TestCloseKeyEmitsCloseHostMsg(t *testing.T) {
 	}
 }
 
+func TestReconnectAllKeyEmitsReconnectAllMsg(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01", "web-02", "web-03")
+	fleet.fail(t, "web-01")                  // failed
+	fleet.connect(t, "web-02")               // connected
+	fleet.sessions["web-03"].Disconnect(nil) // closed, never connected
+	a = syncFleet(t, a)
+
+	got := keyMsgResult(t, a, "R")
+	if _, ok := got.(ReconnectAllMsg); !ok {
+		t.Fatalf("pressing R produced %T, want ReconnectAllMsg", got)
+	}
+}
+
+func TestReconnectAllKeyReportsHowManyWillRetry(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01", "web-02", "web-03")
+	fleet.fail(t, "web-01")
+	fleet.sessions["web-02"].Disconnect(nil) // closed
+	fleet.connect(t, "web-03")
+	a = syncFleet(t, a)
+
+	model, cmd := a.Update(keyMsgFor(t, "R"))
+	next := model.(App)
+	if cmd == nil {
+		t.Fatal("pressing R produced no command")
+	}
+	if got := next.LastDelivery(); got != "reconnecting 2 hosts" {
+		t.Errorf("LastDelivery() = %q, want a count of the 2 down hosts", got)
+	}
+}
+
+func TestReconnectAllKeyIsANoOpWithNothingDown(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01", "web-02")
+	fleet.connect(t, "web-01")
+	fleet.connect(t, "web-02")
+	a = syncFleet(t, a)
+	before := a.LastDelivery()
+
+	got := keyMsgResult(t, a, "R")
+	if got != nil {
+		t.Fatalf("pressing R with nothing down produced %T, want nothing", got)
+	}
+
+	model, _ := a.Update(keyMsgFor(t, "R"))
+	next := model.(App)
+	if got := next.LastDelivery(); got != before {
+		t.Errorf("LastDelivery() changed to %q with nothing to reconnect, want no flicker", got)
+	}
+}
+
 func TestReconnectKeyWithoutHostsEmitsNothing(t *testing.T) {
 	a := resize(t, NewApp(Config{Theme: Options{Dark: true}}), 120, 40)
 	a = pressKey(t, a, "tab")

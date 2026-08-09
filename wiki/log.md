@@ -2,6 +2,15 @@
 
 ## 2026-08-09
 
+- Reconnect-all binding (issue #244). `R` is the global, bulk form of the per-pane `alt+r`: it
+  re-dials every session currently `StateFailed` or `StateClosed`, leaving connected and
+  still-dialling sessions untouched, so a network blip across forty hosts is one keystroke
+  instead of forty. `ssh.Manager.ReconnectAll` fans out over the existing `Reconnect` path, so
+  it keeps the dial concurrency semaphore and the scrollback-preserving handoff, and one host's
+  redial failing cannot affect the others. The status line reports the retried count up front,
+  from the fleet snapshot; with nothing down it is a true no-op. `core/keys.md` and
+  `core/manager.md` updated.
+
 - Cross-host output diff (issue #46). A new `[6] Output diff` sidebar panel groups the hosts
   by the output they produced since the last command line send and lists the distinct
   answers, largest group first — the machines that disagree stand out instead of hiding

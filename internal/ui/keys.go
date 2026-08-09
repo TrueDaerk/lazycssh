@@ -77,6 +77,7 @@ type KeyMap struct {
 	BroadcastFleet    key.Binding
 	CommandLine       key.Binding
 	NextFailure       key.Binding
+	ReconnectAll      key.Binding
 	QuickSave         key.Binding
 	NewHost           key.Binding
 	Retile            key.Binding
@@ -188,6 +189,10 @@ func DefaultKeyMap() KeyMap {
 		CommandLine:       key.NewBinding(key.WithKeys(":"), key.WithHelp(":", "send a command")),
 		NextFailure: key.NewBinding(key.WithKeys("!"),
 			key.WithHelp("!", "jump to the next failed host")),
+		// Global, next to the per-pane alt+r: forty dropped hosts should not
+		// mean forty keystrokes (issue #244).
+		ReconnectAll: key.NewBinding(key.WithKeys("R"),
+			key.WithHelp("R", "reconnect every failed/closed host")),
 		QuickSave: key.NewBinding(key.WithKeys("S"),
 			key.WithHelp("S", "save the run as a session")),
 		NewHost: key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "connect a new host")),
@@ -355,7 +360,7 @@ func (k KeyMap) global() []key.Binding {
 		k.Help, k.Quit, k.NextTab, k.PrevTab,
 		k.Panel1, k.Panel2, k.Panel3, k.Panel4, k.Panel5, k.Panel6,
 		k.BroadcastAll, k.BroadcastSelected, k.BroadcastSingle, k.BroadcastFleet,
-		k.CommandLine, k.NextFailure, k.QuickSave, k.NewHost,
+		k.CommandLine, k.NextFailure, k.ReconnectAll, k.QuickSave, k.NewHost,
 		k.Retile, k.Split, k.NextSplit, k.PrevSplit,
 		k.SelectAll, k.Invert, k.ClearSel, k.SelectUp, k.SelectDwn,
 	}

@@ -22,6 +22,7 @@ not typing into a pane, not in the broadcast bar's edit mode, not in a prompt.
 | ++ctrl+alt+b++ | broadcast to **every** host in the run |
 | ++colon++ | send one command |
 | ++exclam++ | jump to the next host whose last command failed |
+| ++shift+r++ | reconnect every failed/closed host — the bulk form of ++alt+r++, so a network blip across many hosts is one keystroke. Says how many up front; a no-op when nothing is down |
 | ++shift+s++ | save the run as a session, prompt prefilled |
 | ++n++ | connect a new host (pattern prompt; `~/.ssh/config` aliases complete with ++tab++) |
 | ++ctrl+r++ | re-tile the grid for the current hosts |

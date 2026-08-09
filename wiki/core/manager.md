@@ -4,7 +4,7 @@ title: Session manager
 description: Owning a fleet of sessions — bounded fan-out dialling, a single event channel, per-host reconnect and close.
 resource: internal/ssh/manager.go
 tags: [ssh, transport, concurrency, fleet]
-timestamp: 2026-07-29T13:00:00Z
+timestamp: 2026-08-09T23:55:00Z
 ---
 
 # Session manager
@@ -64,6 +64,14 @@ session that is still connected. It touches no other session.
 factory closure, not in the session, so redialling reuses a password already in memory instead
 of asking again. Three reconnects, one prompt — asserted against the real transport, since a
 fake never touches the credential cache.
+
+**Reconnecting the whole fleet at once.** `ReconnectAll` re-dials every session currently
+`StateFailed` or `StateClosed` and leaves everything else — connected, still dialling — untouched
+(issue #244). It is the bulk form of `Reconnect`: a network blip or a jump-host restart can drop
+dozens of hosts together, and reconnecting them one pane at a time does not scale. Each host goes
+through the same `Reconnect` call a single redial uses, so it keeps the dial semaphore and the
+scrollback handoff, and one host's redial failing is recorded on that host alone. It returns the
+identifiers it redialed; with nothing down, it redials nothing.
 
 `Close(id)` ends one session and leaves the rest running: one dead host is one dead pane.
 

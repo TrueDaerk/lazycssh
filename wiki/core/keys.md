@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-08-09T23:45:00Z
+timestamp: 2026-08-09T23:55:00Z
 ---
 
 # Keymap and help
@@ -52,6 +52,7 @@ live at the same time.
 | `ctrl+alt+b` | global | broadcast to **every** host |
 | `:` | global | send a command |
 | `!` | global | jump to the next host whose last command failed |
+| `R` | global (app level) | reconnect every failed/closed host — the bulk form of `alt+r`, so forty dropped hosts is not forty keystrokes (issue #244). Says how many up front, on the status line; a true no-op when nothing is down |
 | `S` | global (app level) | save the run as a session, prompt prefilled |
 | `n` | global (app level) | connect a new host: opens the pattern prompt in the Status panel, ssh-config aliases complete with `tab` |
 | `ctrl+r` | global (app level) | re-tile the grid for the current hosts (a departure keeps the shape) |
