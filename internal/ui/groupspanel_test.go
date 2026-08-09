@@ -158,8 +158,8 @@ func TestNewGroupRefusesATakenName(t *testing.T) {
 	if !a.GroupDialogOpen() {
 		t.Fatal("a taken name closed the dialog")
 	}
-	if !strings.Contains(plain(a.groupsPanel(60, 20)), "already exists") {
-		t.Fatalf("the panel does not report the taken name:\n%s", plain(a.groupsPanel(60, 20)))
+	if view := plain(a.View().Content); !strings.Contains(view, "already exists") {
+		t.Fatalf("the modal does not report the taken name:\n%s", view)
 	}
 	sess, err := store.Load("prod")
 	if err != nil || len(sess.Hosts) != 1 {
@@ -217,8 +217,8 @@ func TestGroupDialogOwnsTheKeyboard(t *testing.T) {
 	if a.Panel() != PanelGroups {
 		t.Fatalf("a keystroke meant for the name changed the panel to %v", a.Panel())
 	}
-	if !strings.Contains(plain(a.groupsPanel(60, 20)), "new group name: 1b") {
-		t.Fatalf("the name did not take the keystrokes:\n%s", plain(a.groupsPanel(60, 20)))
+	if view := plain(a.View().Content); !strings.Contains(view, "name: 1b") {
+		t.Fatalf("the name did not take the keystrokes:\n%s", view)
 	}
 }
 
@@ -230,8 +230,8 @@ func TestDeleteAsksFirst(t *testing.T) {
 	if a.DeleteGroupPending() != "prod" {
 		t.Fatalf("DeleteGroupPending() = %q", a.DeleteGroupPending())
 	}
-	if !strings.Contains(plain(a.groupsPanel(60, 20)), `delete "prod"? y/n`) {
-		t.Fatalf("the panel does not ask:\n%s", plain(a.groupsPanel(60, 20)))
+	if view := plain(a.View().Content); !strings.Contains(view, `delete "prod"?`) {
+		t.Fatalf("the modal does not ask:\n%s", view)
 	}
 
 	a = pressKey(t, a, "n") // anything but y withdraws the question

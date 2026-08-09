@@ -4,7 +4,7 @@ title: Session files
 description: The on-disk format for a saved run — schema, location, strictness, and why no credential ever appears in one.
 resource: internal/sessions
 tags: [config, yaml, xdg, sessions, security]
-timestamp: 2026-07-29T21:00:00Z
+timestamp: 2026-08-09T22:00:00Z
 ---
 
 # Session files
@@ -123,7 +123,7 @@ cannot leave half a session behind.
 ## Quick save
 
 `S` at the app level opens the save prompt from anywhere — prefilled with the run's session
-name, enter confirms, an existing name still asks `overwrite? y/n`. While typing or in the
+name, enter confirms, an existing name still asks `overwrite?` in a confirm dialog. While typing or in the
 broadcast bar, `S` is a keystroke for the hosts like any other letter.
 
 The saved patterns track the run: the CLI arguments, then everything connected or launched at

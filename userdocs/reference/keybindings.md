@@ -42,8 +42,8 @@ not typing into a pane, not in the broadcast bar's edit mode, not in a prompt.
 | ++w++ | save the run as a group |
 | ++bracket-left++ / ++bracket-right++ | previous / next chunk of hosts |
 | ++n++ | *(Groups panel)* new group |
-| ++d++ | *(Groups panel)* delete the group under the cursor, after `y/n` |
-| ++x++ | *(Sessions panel)* end the session under the cursor, after `y/n` |
+| ++d++ | *(Groups panel)* delete the group under the cursor, after a confirm |
+| ++x++ | *(Sessions panel)* end the session under the cursor, after a confirm |
 
 The Groups panel's ++n++ and ++d++ deliberately shadow their global meanings
 while it has focus — lazygit-style panel keys.
@@ -107,6 +107,16 @@ switch the broadcast mode.
 | ++esc++ | abandon |
 | ++up++ / ++down++ | walk this run's command history |
 | ++ctrl+q++ | quit |
+
+Most prompts — new group, save as, connect a host, split size — open as a
+**centred box** over the layout, with the keys that answer them printed in the
+box. The command line and the scrollback search stay on the bottom line
+instead, so they do not cover the output you are aiming at.
+
+A **confirm** — delete a group, overwrite a group, end a session — takes
+++enter++ or ++y++ to go ahead and ++esc++ or ++n++ to back out. Any other key
+is ignored: these guard a file delete and a fleet-wide ++ctrl+c++, and a stray
+keystroke must not be able to answer one.
 
 Meta commands, which never reach a host:
 

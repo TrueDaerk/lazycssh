@@ -63,8 +63,8 @@ func TestXAsksBeforeEndingASession(t *testing.T) {
 	if a.EndSessionPending() != "solo" {
 		t.Fatalf("EndSessionPending() = %q after x", a.EndSessionPending())
 	}
-	if !strings.Contains(plain(a.sessionsPanel(60, 20)), `end "solo"? y/n`) {
-		t.Fatalf("the panel does not ask:\n%s", plain(a.sessionsPanel(60, 20)))
+	if view := plain(a.View().Content); !strings.Contains(view, `end "solo"?`) {
+		t.Fatalf("the modal does not ask:\n%s", view)
 	}
 
 	a = pressKey(t, a, "n")

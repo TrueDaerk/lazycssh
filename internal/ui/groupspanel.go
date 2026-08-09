@@ -237,59 +237,42 @@ func (a App) beginDeleteGroup() App {
 	return a
 }
 
-// handleGroupDeleteKey answers the delete question: y removes the file,
-// anything else withdraws the question. An open session of that group is
-// untouched - deleting a definition must not tear down live connections.
+// handleGroupDeleteKey answers the delete question: enter or y removes the
+// file, esc or n withdraws the question, and anything else leaves it standing
+// (see [readConfirm]). An open session of that group is untouched - deleting a
+// definition must not tear down live connections.
 func (a App) handleGroupDeleteKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	name := a.deleteGroup
-	a.deleteGroup = ""
-	switch msg.String() {
-	case "y", "Y":
-		if a.cfg.Sessions == nil {
-			return a, nil
-		}
-		if err := a.cfg.Sessions.Remove(name); err != nil {
-			a.groupErr = err
-			return a, nil
-		}
-		return a, func() tea.Msg { return SessionsChangedMsg{} }
-	default:
+	answer := readConfirm(msg)
+	if answer == answerNone {
 		return a, nil
 	}
+
+	name := a.deleteGroup
+	a.deleteGroup = ""
+	if answer == answerNo || a.cfg.Sessions == nil {
+		return a, nil
+	}
+	if err := a.cfg.Sessions.Remove(name); err != nil {
+		a.groupErr = err
+		return a, nil
+	}
+	return a, func() tea.Msg { return SessionsChangedMsg{} }
 }
 
-// groupsPanel renders the saved groups, the create dialog, the delete
-// question, and the save prompt.
+// groupsPanel renders the saved groups. The dialogs this panel drives - new
+// group, delete, save-as - float over the frame instead of being drawn into
+// it; see modal.go.
 func (a App) groupsPanel(width, height int) string {
 	var b strings.Builder
 
-	switch {
-	case a.groupStage == groupStageName:
-		b.WriteString(a.theme.Base.Render("new group name: " + a.groupNameInput.Value()))
-		b.WriteString("\n")
-	case a.groupStage == groupStageHosts:
-		b.WriteString(a.theme.Base.Render(
-			"hosts for " + strings.TrimSpace(a.groupNameInput.Value()) + ": " + a.groupHostsInput.Value()))
-		b.WriteString("\n")
-	case a.deleteGroup != "":
-		b.WriteString(a.theme.StatusWarning.Render(
-			fmt.Sprintf("delete %q? y/n", a.deleteGroup)))
-		b.WriteString("\n")
-	case a.confirmOverwrite:
-		b.WriteString(a.theme.StatusWarning.Render(
-			fmt.Sprintf("overwrite %q? y/n", strings.TrimSpace(a.saveInput.Value()))))
-		b.WriteString("\n")
-	case a.saveInput.Focused():
-		b.WriteString(a.theme.Base.Render("save as: " + a.saveInput.Value()))
-		b.WriteString("\n")
-	}
-	if a.groupErr != nil {
+	// Their errors travel with the dialogs, so the panel reports one only
+	// once the box that would have shown it has closed - a save that failed
+	// on an empty run keeps its prompt open, and the reason belongs there.
+	if a.groupErr != nil && !a.GroupDialogOpen() {
 		b.WriteString(a.theme.Failure.Render(a.groupErr.Error()))
 		b.WriteString("\n")
 	}
-	if a.saveErr != nil {
-		// The error must be visible while the prompt is still open: an empty
-		// run keeps the prompt so the name survives.
+	if a.saveErr != nil && !a.Saving() {
 		b.WriteString(a.theme.Failure.Render(a.saveErr.Error()))
 		b.WriteString("\n")
 	}

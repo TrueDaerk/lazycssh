@@ -33,7 +33,7 @@ func TestNewHostKeyOpensThePromptInTheStatusPanel(t *testing.T) {
 	}
 
 	view := plain(a.View().Content)
-	if !strings.Contains(view, newHostPrompt) {
+	if !strings.Contains(view, "Connect host") {
 		t.Fatalf("the open prompt is not rendered:\n%s", view)
 	}
 }

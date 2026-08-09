@@ -2,6 +2,19 @@
 
 ## 2026-08-09
 
+- Confirms and prompts render as **centred modals** composited over the layout instead of being
+  drawn into the panel that asks them (issue #221), the way lazygit renders its popups: the
+  new-group dialog, the delete-group and overwrite confirms, the save-as prompt, the end-session
+  confirm, the new-host prompt with its alias completions, and the split-size prompt. The
+  rendering lives in `internal/ui/modal.go`, and `activeModal` walks the same order as the guard
+  chain in `handleKey`, so what floats is what listens. Confirms now resolve on `enter` as well
+  as `y` and withdraw on `esc`/`n`, with every other key ignored rather than treated as no — a
+  stray keystroke must not answer a file delete or a fleet-wide `ctrl+c`. The focused input's
+  caret is lifted into `View.Cursor`. The command line and the scrollback search keep the
+  status-bar position (they are aimed at the panes a box would cover), and the per-pane auth and
+  host-key prompts stay inline. Documented in `core/tui.md`, `core/keys.md`,
+  `core/session-files.md` and `core/groups-and-sessions.md`. Version 0.10.11.
+
 - `h`/`l` alias `←`/`→` in the sidebar, lazygit style, matching the existing `j`/`k` alias on
   `↑`/`↓` (issue #220). The alias lives on the existing `Left`/`Right` bindings in
   `internal/ui/keys.go`, so help and the options bar pick it up automatically; a pane and the

@@ -311,8 +311,8 @@ func TestOverwriteAsksFirst(t *testing.T) {
 	if !a.Saving() {
 		t.Fatal("the overwrite question closed without being answered")
 	}
-	if !strings.Contains(plain(a.groupsPanel(60, 20)), "overwrite") {
-		t.Fatalf("the panel does not ask:\n%s", plain(a.groupsPanel(60, 20)))
+	if view := plain(a.View().Content); !strings.Contains(view, "overwrite") {
+		t.Fatalf("the modal does not ask:\n%s", view)
 	}
 
 	// Nothing has been written yet; answering no leaves it alone.
@@ -368,8 +368,8 @@ func TestSavePromptOwnsTheKeyboard(t *testing.T) {
 	if a.Panel() != PanelGroups {
 		t.Fatalf("a keystroke meant for the name changed the panel to %v", a.Panel())
 	}
-	if !strings.Contains(plain(a.groupsPanel(60, 20)), "save as: 1") {
-		t.Fatalf("the name did not take the keystroke:\n%s", plain(a.groupsPanel(60, 20)))
+	if view := plain(a.View().Content); !strings.Contains(view, "name: 1") {
+		t.Fatalf("the name did not take the keystroke:\n%s", view)
 	}
 }
 

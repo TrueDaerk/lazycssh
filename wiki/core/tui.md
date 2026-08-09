@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-09T20:00:00Z
+timestamp: 2026-08-09T22:00:00Z
 ---
 
 # TUI shell
@@ -12,8 +12,8 @@ timestamp: 2026-08-09T20:00:00Z
 `App` is the root bubbletea model. It owns the layout, the focus and the panel selection, and it
 draws the frame every other view renders into: a lazygit-style stack of titled panel boxes on the
 left, the pane grid on the right, the always-visible broadcast bar under the grid — beside the
-sidebar, which keeps its full height — a status bar along the bottom, and the `?` popup
-composited over the frame.
+sidebar, which keeps its full height — a status bar along the bottom, and the [dialogs](#dialogs)
+and the `?` popup composited over the frame.
 
 Model mutation happens only in `Update`. Nothing in `internal/ui` dials a host; the transport
 reports through messages — see [Session manager](./manager.md) — and the only bytes the UI
@@ -220,7 +220,8 @@ and a spy-fleet test plus a `-race` state-flip hammer pin it down.
 
 ### Split
 
-`ctrl+s` asks for a number and splits the visible hosts into consecutive chunks of that size:
+`ctrl+s` asks for a number in a centred [dialog](#dialogs) and splits the visible hosts into
+consecutive chunks of that size:
 ten hosts split by five shows the first five terminals. `ctrl+shift+→`/`ctrl+shift+←` page through the
 chunk and then show the next or previous chunk, wrapping at the ends (see The window above). Broadcast follows the visible chunk
 through the router's [visibility limit](./broadcast-scope.md), and
@@ -376,10 +377,45 @@ keeps focus at its new index, and only when it is gone does the focus clamp to t
 that exists. A list that shifts under the cursor must never silently move the user onto a
 different machine.
 
-The `?` popup is **composited over** the frame with lipgloss layers rather than replacing it, so
-the fleet stays visible underneath — the way lazygit's menus behave. While it is open it is the
-only thing listening: the key that closes it does not also act. A user reading the help is not
-also driving the panes.
+## Dialogs
+
+Every confirm and every single-line prompt is a **centred modal**: a titled box composited over
+the frame with `lipgloss.NewCompositor`/`NewLayer` rather than drawn into the panel it belongs
+to — the way lazygit renders its popups. The layout stays visible around it, so "delete this
+group" is answered with the group list still on screen, and the question always appears in the
+same place instead of moving with the panel that asked it. `internal/ui/modal.go` owns the
+rendering; `activeModal` walks the **same order** as the guard chain in `handleKey`, so what
+floats is what listens.
+
+- **confirms** — `enter` and `y` resolve, `esc` and `n` withdraw, and every other key is
+  *ignored* rather than treated as no. These dialogs guard a file delete and a fleet-wide
+  `ctrl+c`; a stray keystroke must not be able to answer either one. The box names its own keys
+  in a footer (`enter/y confirms · esc cancels`),
+- **prompts** — the existing bindings are unchanged (`enter` commits, `esc` abandons, `tab`
+  completes where it completed before). The focused input's caret is lifted into `View.Cursor`,
+  so the terminal draws a real cursor at the column the next character lands in,
+- **clamping** — the box grows to its content and stops at the frame: never wider than
+  `width-2`, never taller than `height-1`, body lines clipped rather than wrapped so the footer
+  cannot be pushed off the bottom. Below `MinWidth`/`MinHeight` the too-small guard wins and no
+  dialog is composited at all.
+
+Modal today: the new-group dialog (both questions), the delete-group confirm, the save-as prompt
+and its overwrite confirm, the end-session confirm, the new-host prompt with its alias
+completions, and the split-size prompt.
+
+Deliberately **not** modal:
+
+- the **command line** and the **scrollback search** keep the status-bar position. Both are
+  aimed at the panes — the command line carries the broadcast scope it is about to hit, the
+  search highlights matches in the output — and a box in the middle of the screen would cover
+  the very thing being aimed at,
+- the per-pane **auth** and **host-key** prompts stay in their panes: they are per host, several
+  can be open at once, and each one belongs to the machine it is blocking — see
+  [Authentication](./authentication.md).
+
+The `?` popup uses the same compositing, so the fleet stays visible underneath it too. While it
+is open it is the only thing listening: the key that closes it does not also act. A user reading
+the help is not also driving the panes.
 
 ## Panels
 
@@ -415,10 +451,10 @@ The pane grid is the host list: names, states and `exit N` markers live in the p
 and `!` jumps to the next failure. What a dedicated Hosts panel used to add lives elsewhere:
 
 - **connect** — `n` works from anywhere: it selects the Status panel and opens a free-text
-  prompt accepting any host pattern — `host`, `user@host:port`, brace expansion like
-  `web-{01..04}`. While it is open, the concrete aliases of `~/.ssh/config` that are not in the
-  run yet are listed beneath it, filtered by what has been typed; `tab` completes the first
-  match, `enter` connects, `esc` abandons. The prompt owns the keyboard while open: a pattern
+  [dialog](#dialogs) accepting any host pattern — `host`, `user@host:port`, brace expansion
+  like `web-{01..04}`. Inside the box, the concrete aliases of `~/.ssh/config` that are not in
+  the run yet are listed beneath the input, filtered by what has been typed; `tab` completes the
+  first match, `enter` connects, `esc` abandons. The prompt owns the keyboard while open: a pattern
   containing `b` must not switch the broadcast mode (`ctrl+q` still quits). A connect that
   fails to resolve shows its error in the Status panel until the fleet next changes. The UI
   cannot dial: it emits `HostConnectMsg`; the program resolves, skips hosts already in the run
@@ -443,14 +479,14 @@ and description. This panel is a group's whole lifecycle; the full model is in
 - `enter`/`space` open the group as a session: the program resolves its patterns through
   `~/.ssh/config` and connects; a group whose session is already open is foregrounded instead
   of dialled twice. The open group's row is marked with `▸` as well as a style,
-- `n` creates a group: a two-question dialog (name, then host patterns, brace expansion
-  allowed) that owns the keyboard; a taken name or a malformed pattern keeps the dialog open
-  with what was typed,
-- `d` asks `delete "x"? y/n` and removes the file on `y` — an open session of that group is
-  untouched,
+- `n` creates a group: a two-question [dialog](#dialogs) (name, then host patterns, brace
+  expansion allowed) that owns the keyboard; a taken name or a malformed pattern keeps the
+  dialog open with what was typed, and reports why inside the box,
+- `d` asks `delete "x"?` in a confirm dialog and removes the file on `enter`/`y` — an open
+  session of that group is untouched,
 - `w` saves the current run as a group: a name prompt that owns the keyboard. An existing name
-  is **never** replaced silently: the first `enter` turns into `overwrite "x"? y/n`. The run's
-  **patterns** are written, not the hostnames they expanded to,
+  is **never** replaced silently: the first `enter` turns into an `overwrite "x"?` confirm. The
+  run's **patterns** are written, not the hostnames they expanded to,
 - `[` and `]` page the **working set** by its own chunk size — see
   [Working sets](./working-sets.md),
 - one unreadable file becomes one `(unreadable)` row rather than an empty panel — hiding the
@@ -469,8 +505,8 @@ an unnamed run — each with its up count, the foreground one marked with `▸`.
 - `enter`/`space` bring the session under the cursor to the foreground: its panes replace the
   grid, the broadcast scope follows, and nothing is dialled or torn down — a background
   session keeps every connection,
-- `x` ends the session under the cursor after `y/n`, and a session whose hosts all closed ends
-  by itself — see [Groups and open sessions](./groups-and-sessions.md).
+- `x` ends the session under the cursor after an `end "name"?` [confirm](#dialogs), and a
+  session whose hosts all closed ends by itself — see [Groups and open sessions](./groups-and-sessions.md).
 
 ### [4] Command log
 
