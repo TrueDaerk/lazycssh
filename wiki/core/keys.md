@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-08-09T23:55:00Z
+timestamp: 2026-08-10T01:00:00Z
 ---
 
 # Keymap and help
@@ -55,6 +55,7 @@ live at the same time.
 | `R` | global (app level) | reconnect every failed/closed host — the bulk form of `alt+r`, so forty dropped hosts is not forty keystrokes (issue #244). Says how many up front, on the status line; a true no-op when nothing is down |
 | `S` | global (app level) | save the run as a session, prompt prefilled |
 | `n` | global (app level) | connect a new host: opens the pattern prompt in the Status panel, ssh-config aliases complete with `tab` |
+| `A` | global (app level) | add hosts from the fuzzy picker: a modal listing every concrete `~/.ssh/config` alias, filtered as you type (issue #246). Shifted, not plain `a`, because lower-case `a` has meant "select every host" since the selection existed |
 | `ctrl+r` | global (app level) | re-tile the grid for the current hosts (a departure keeps the shape) |
 | `ctrl+s` | global (app level) | split the grid into chunks of N panes (prompt; empty or 0 clears) |
 | `ctrl+shift+→` / `ctrl+shift+←` | global (works while typing too) | next / previous screenful: pages, then split chunks, wrapping at the ends. Plain `ctrl+arrows` are never claimed — they stay readline word movement for the hosts, and IDEs and window managers swallow them anyway (issue #208) |
@@ -99,6 +100,8 @@ live at the same time.
 | `tab` | the connect prompt | complete the first matching ssh-config alias |
 | `backspace` | a pane's auth prompt | erase the last character — that prompt echoes into the scrollback rather than living in a text input, so it edits itself |
 | `↑` / `↓` | the command line | previous / next command in this run's history |
+| `↑` / `↓` | the host picker | previous / next host in the filtered list. Arrows only: `j`/`k` are filter text there |
+| `space` / `tab` | the host picker | mark this host for a multi-host connect, and step down one — `space` is not filter text, because no ssh-config alias holds one |
 | `enter` / `y` | confirm dialogs | answer yes |
 | `esc` / `n` | confirm dialogs | answer no; every other key leaves the question standing, because these dialogs guard a file delete and a fleet-wide `ctrl+c` |
 | `ctrl+c` | a pane's auth prompt | cancel that host's question (`esc` does the same) |

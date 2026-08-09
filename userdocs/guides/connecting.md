@@ -10,7 +10,26 @@ lazycssh @prod-web
 
 See [Command line](../getting-started/command-line.md).
 
-## Mid-run
+## Mid-run: picking from `~/.ssh/config`
+
+++shift+a++ opens the **host picker**: a box listing every concrete alias in
+your `~/.ssh/config`, whatever has focus.
+
+Type to filter. The match is fuzzy and case-insensitive — `wb1` finds `web-01` —
+so a long config is narrowed in two or three keystrokes. ++up++ and ++down++
+move through what is left.
+
+| Key | Action |
+|---|---|
+| ++enter++ | connect the highlighted host and close the picker |
+| ++space++ / ++tab++ | mark a host and step down; ++enter++ then connects everything marked |
+| ++esc++ | close, having done nothing |
+
+If what you typed matches no alias, ++enter++ connects it as a host pattern
+instead — brace expansion and `user@host:port` included — so a machine that is
+not in your config is still one ++enter++ away.
+
+## Mid-run: typing a pattern
 
 ++n++ works from anywhere: it selects the Status panel and opens a free-text
 prompt that accepts any host pattern — `host`, `user@host:port`, brace

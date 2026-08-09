@@ -2,7 +2,7 @@
 
 The pane grid *is* the host list. There is no separate hosts panel: names,
 states and `exit N` markers live in the pane headers, ++exclam++ jumps to the
-next failure, and ++n++ connects from anywhere.
+next failure, and ++n++ (a pattern) or ++shift+a++ (the picker) connects from anywhere.
 
 ## Tiling
 

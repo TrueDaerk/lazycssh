@@ -578,7 +578,10 @@ func TestArgumentlessStartFocusesNoInput(t *testing.T) {
 func TestEmptyRunRendersAHint(t *testing.T) {
 	a := resize(t, NewApp(Config{Theme: Options{Dark: true}}), 120, 40)
 	view := plain(a.View().Content)
-	for _, want := range []string{"no hosts", "press n and type a host", "[3] Sessions", "lazycssh <host...>"} {
+	for _, want := range []string{
+		"no hosts", "press A to pick hosts", "n to type one",
+		"[3] Sessions", "lazycssh <host...>",
+	} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the empty grid does not say %q:\n%s", want, view)
 		}

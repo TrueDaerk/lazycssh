@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-10T00:00:00Z
+timestamp: 2026-08-10T01:00:00Z
 ---
 
 # TUI shell
@@ -406,7 +406,7 @@ floats is what listens.
 
 Modal today: the new-group dialog (both questions), the delete-group confirm, the save-as prompt
 and its overwrite confirm, the end-session confirm, the new-host prompt with its alias
-completions, and the split-size prompt.
+completions, the [host picker](#the-host-picker), and the split-size prompt.
 
 Deliberately **not** modal:
 
@@ -506,6 +506,8 @@ and `!` jumps to the next failure. What a dedicated Hosts panel used to add live
   fails to resolve shows its error in the Status panel until the fleet next changes. The UI
   cannot dial: it emits `HostConnectMsg`; the program resolves, skips hosts already in the run
   (double-enter must not mint `host-2`), and adds the rest via `Manager.Add`,
+- **browse and connect** — `A` opens the [host picker](#the-host-picker), which lists what the
+  run *could* connect to rather than asking for a pattern,
 - **selection** — `alt+space` toggles the focused pane's host, from the grid and the app level,
   like the other pane chords; `a`/`i`/`c`/`u`/`d` (select all / invert / clear / up hosts /
   down hosts) work at the app level, and `/select` / `/deselect` cover the pattern cases.
@@ -514,8 +516,39 @@ and `!` jumps to the next failure. What a dedicated Hosts panel used to add live
   name.
 
 An argumentless start opens on the Status panel with **no** input focused: the empty grid names
-the options — `n` to connect, the Groups panel, the CLI — and which of them comes first is the
-user's call, not the program's.
+the options — `A` to pick hosts, `n` to type one, the Groups panel, the CLI — and which of them
+comes first is the user's call, not the program's.
+
+### The host picker
+
+`A` opens a centred [dialog](#dialogs) listing every concrete alias of `~/.ssh/config`, in file
+order (`internal/ui/hostpicker.go`, issue #246). The new-host prompt answers "connect this
+pattern"; the picker answers "which hosts are there", which needs a list rather than five
+completion hints. Both stay: the prompt is three keystrokes for a name already known, the picker
+is for browsing and for connecting several machines at once.
+
+- **filter** — everything typed that is not one of the picker's own keys narrows the list by a
+  case-insensitive **subsequence** match: `wb1` matches `web-01`. Subsequence is enough for
+  short, structured host names, and it costs no dependency. Typing puts the cursor back on the
+  first match, because the row it was on is not the row it would land on once the list moved,
+- **marks** — `space` and `tab` mark the highlighted host and step down one, so a run of hosts
+  is marked with a run of spaces. Marks are kept in mark order, in a slice rather than a map,
+  because the picker is a value inside `App` and is copied with it — a shared map would let one
+  copy write through another,
+- **enter** — connects the marked hosts if there are any, otherwise the highlighted one,
+  otherwise the typed text as a **literal host pattern**, brace expansion included. That last
+  case is how a machine `~/.ssh/config` has never heard of is reached from here; the footer says
+  which of the three `enter` would do,
+- **esc** — closes with nothing done, and nothing typed or marked survives into the next opening.
+
+The picker never dials. Like every other connect path it emits `HostConnectMsg` and lets
+[the program](./program.md) resolve and open the sessions, which is also why free text works
+here without the UI knowing anything about [expansion](./host-expansion.md).
+
+Its candidates come from a `HostSource` — a one-method interface returning the names to offer —
+read once when the picker opens, so an implementation may do real work. The default source is
+the `Config.ConfigAliases` slice the completion hints already use; the interface exists so later
+item sources can be added without the picker changing.
 
 ### [2] Groups
 

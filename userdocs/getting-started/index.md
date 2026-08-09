@@ -15,5 +15,6 @@ lazycssh
 ```
 
 An argumentless run opens on an empty grid with nothing focused for input. It
-does not pick a first action for you: press ++n++ to connect a host, or open a
-saved group from the Groups panel (++2++).
+does not pick a first action for you: press ++shift+a++ to pick hosts from
+`~/.ssh/config`, ++n++ to type one, or open a saved group from the Groups panel
+(++2++).

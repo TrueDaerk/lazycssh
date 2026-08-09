@@ -80,6 +80,7 @@ type KeyMap struct {
 	ReconnectAll      key.Binding
 	QuickSave         key.Binding
 	NewHost           key.Binding
+	HostPicker        key.Binding
 	Retile            key.Binding
 	Split             key.Binding
 	NextSplit         key.Binding
@@ -150,6 +151,9 @@ type KeyMap struct {
 	PromptCancel   key.Binding
 	PromptComplete key.Binding
 	PromptErase    key.Binding
+	PickerUp       key.Binding
+	PickerDown     key.Binding
+	PickerMark     key.Binding
 	HistoryPrev    key.Binding
 	HistoryNext    key.Binding
 	ConfirmYes     key.Binding
@@ -196,6 +200,11 @@ func DefaultKeyMap() KeyMap {
 		QuickSave: key.NewBinding(key.WithKeys("S"),
 			key.WithHelp("S", "save the run as a session")),
 		NewHost: key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "connect a new host")),
+		// Shifted, not plain a: lower-case a has meant "select every host"
+		// since the selection existed, and a picker is not worth taking it
+		// (issue #246).
+		HostPicker: key.NewBinding(key.WithKeys("A"),
+			key.WithHelp("A", "add hosts from the ~/.ssh/config picker")),
 		// While a pane or the broadcast bar has the keyboard, these chords
 		// belong to the hosts (ctrl+r is readline reverse-search there).
 		Retile: key.NewBinding(key.WithKeys("ctrl+r"),
@@ -301,6 +310,16 @@ func DefaultKeyMap() KeyMap {
 		// scrollback - so it does its own editing and needs the key named.
 		PromptErase: key.NewBinding(key.WithKeys("backspace"),
 			key.WithHelp("backspace", "erase the last character of an answer")),
+		// The host picker is a list inside a text input, so it navigates with
+		// the arrows alone: j/k would be filter text (issue #246).
+		PickerUp: key.NewBinding(key.WithKeys("up"),
+			key.WithHelp("↑", "previous host (in the host picker)")),
+		PickerDown: key.NewBinding(key.WithKeys("down"),
+			key.WithHelp("↓", "next host (in the host picker)")),
+		// Space is not filter text: no ssh-config alias holds one, and marking
+		// a run of hosts is what the picker is for.
+		PickerMark: key.NewBinding(key.WithKeys("space", " ", "tab"),
+			key.WithHelp("space/tab", "mark this host for a multi-host connect")),
 		HistoryPrev: key.NewBinding(key.WithKeys("up"),
 			key.WithHelp("↑", "previous command (in the command line)")),
 		HistoryNext: key.NewBinding(key.WithKeys("down"),
@@ -360,7 +379,7 @@ func (k KeyMap) global() []key.Binding {
 		k.Help, k.Quit, k.NextTab, k.PrevTab,
 		k.Panel1, k.Panel2, k.Panel3, k.Panel4, k.Panel5, k.Panel6,
 		k.BroadcastAll, k.BroadcastSelected, k.BroadcastSingle, k.BroadcastFleet,
-		k.CommandLine, k.NextFailure, k.ReconnectAll, k.QuickSave, k.NewHost,
+		k.CommandLine, k.NextFailure, k.ReconnectAll, k.QuickSave, k.NewHost, k.HostPicker,
 		k.Retile, k.Split, k.NextSplit, k.PrevSplit,
 		k.SelectAll, k.Invert, k.ClearSel, k.SelectUp, k.SelectDwn,
 	}
@@ -405,6 +424,7 @@ func (k KeyMap) broadcastBar() []key.Binding {
 func (k KeyMap) prompts() []key.Binding {
 	return []key.Binding{
 		k.PromptSubmit, k.PromptCancel, k.PromptComplete, k.PromptErase,
+		k.PickerUp, k.PickerDown, k.PickerMark,
 		k.HistoryPrev, k.HistoryNext,
 		k.ConfirmYes, k.ConfirmNo,
 		k.CopySelection, k.AuthCancel, k.ForceQuit,

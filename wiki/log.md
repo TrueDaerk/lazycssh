@@ -2,6 +2,19 @@
 
 ## 2026-08-09
 
+- Fuzzy host picker (issue #246). `A` opens a centred modal listing every concrete
+  `~/.ssh/config` alias, narrowed as you type by a case-insensitive subsequence match (`wb1`
+  matches `web-01`) - no fuzzy-matching dependency, because short structured host names do not
+  need one. `space`/`tab` mark hosts and step down, so several machines are connected with one
+  `enter`; without marks `enter` takes the highlighted row, and with nothing matching it takes
+  the typed text as a literal host pattern, brace expansion included, which is how a host the
+  config has never heard of is reached from the picker. Like every other connect path it emits
+  `HostConnectMsg` rather than dialling. The candidates come from a one-method `HostSource`
+  interface, defaulting to the alias slice the completion hints already use, so later item
+  sources plug in without the picker changing. The binding is `A`, not the `a` the issue
+  suggested: lower-case `a` has meant "select every host" since the selection existed. New
+  `internal/ui/hostpicker.go`; `core/tui.md`, `core/keys.md` and the user docs updated.
+
 - Persistent command history (issue #245). The broadcast command line's Up/Down recall now
   survives a restart: `internal/history.Store` is the same shape as `internal/sessions.Store` -
   atomic write, `0600` file, `0700` directory - reading and writing `history` under

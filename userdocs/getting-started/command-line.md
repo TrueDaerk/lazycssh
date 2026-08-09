@@ -89,6 +89,6 @@ A name that is not saved is an error that lists the ones that are.
 lazycssh
 ```
 
-opens the TUI on an empty run with nothing focused for input. ++n++ opens the
-host prompt, the Groups panel (++2++) launches a saved group. Which of those
-comes first is your call, not the program's.
+opens the TUI on an empty run with nothing focused for input. ++shift+a++ opens
+the host picker, ++n++ the host prompt, the Groups panel (++2++) launches a
+saved group. Which of those comes first is your call, not the program's.

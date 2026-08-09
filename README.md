@@ -33,7 +33,7 @@ removes an installed binary.)
 Start it with hosts, with a saved group, or with nothing at all:
 
 ```sh
-lazycssh                                # empty run; press n to connect
+lazycssh                                # empty run; press A to pick hosts, n to type one
 lazycssh web-01 web-02 db-01            # three hosts
 lazycssh 'srv1-{01..40}.example.com'    # brace expansion, done by lazycssh
 lazycssh @prod-web                      # a saved group

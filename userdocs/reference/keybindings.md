@@ -25,6 +25,7 @@ not typing into a pane, not in the broadcast bar's edit mode, not in a prompt.
 | ++shift+r++ | reconnect every failed/closed host — the bulk form of ++alt+r++, so a network blip across many hosts is one keystroke. Says how many up front; a no-op when nothing is down |
 | ++shift+s++ | save the run as a session, prompt prefilled |
 | ++n++ | connect a new host (pattern prompt; `~/.ssh/config` aliases complete with ++tab++) |
+| ++shift+a++ | add hosts from the picker: every `~/.ssh/config` alias, fuzzy-filtered as you type |
 | ++ctrl+r++ | re-tile the grid for the current hosts |
 | ++ctrl+s++ | split the grid into chunks of N panes (empty or `0` clears) |
 | ++ctrl+shift+right++ / ++ctrl+shift+left++ | next / previous screenful: pages, then split chunks, wrapping; works while typing too. Plain ++ctrl+right++ / ++ctrl+left++ stay word movement for the hosts |
@@ -108,14 +109,15 @@ switch the broadcast mode.
 | ++enter++ | send / confirm |
 | ++esc++ | abandon |
 | ++tab++ | in the connect prompt: complete the first matching `~/.ssh/config` alias |
-| ++up++ / ++down++ | walk the command history (persists across restarts) |
+| ++up++ / ++down++ | walk the command history (persists across restarts); in the host picker: move through the filtered hosts |
+| ++space++ / ++tab++ | in the host picker: mark this host for a multi-host connect |
 | ++ctrl+q++ | quit — no prompt can trap you |
 
 These keys are bindings like every other, in their own **prompts** group. The
 ++question++ overlay carries that group whatever has focus, since you cannot
 open the overlay while a box already has the keyboard.
 
-Most prompts — new group, save as, connect a host, split size — open as a
+Most prompts — new group, save as, connect a host, the host picker, split size — open as a
 **centred box** over the layout, with the keys that answer them printed in the
 box. The command line and the scrollback search stay on the bottom line
 instead, so they do not cover the output you are aiming at.
