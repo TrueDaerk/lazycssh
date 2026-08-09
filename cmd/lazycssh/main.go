@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/TrueDaerk/lazycssh/internal/program"
+	"github.com/TrueDaerk/lazycssh/internal/sessionlog"
 	"github.com/TrueDaerk/lazycssh/internal/sessions"
 	"github.com/TrueDaerk/lazycssh/internal/version"
 )
@@ -84,6 +86,8 @@ func run(args []string, stdout, stderr io.Writer, launch func(program.Config) er
 	listSessions := fs.Bool("list-sessions", false, "list the saved sessions and exit")
 	sessionDir := fs.String("sessions-dir", "",
 		"directory holding saved sessions (default $XDG_CONFIG_HOME/lazycssh/sessions)")
+	logDir := fs.String("log-dir", "",
+		"write every host's session output to files in a new run directory under DIR (off by default)")
 
 	if err := fs.Parse(args); err != nil {
 		// flag already reported the error and printed the usage.
@@ -128,6 +132,19 @@ func run(args []string, stdout, stderr io.Writer, launch func(program.Config) er
 		sessionName = names[len(names)-1]
 	}
 
+	// Session logging is opt-in per run: no flag, no file. Opening the run
+	// directory before the TUI starts means an unwritable path fails here,
+	// readably, instead of losing output behind a running interface.
+	var logs *sessionlog.Run
+	if *logDir != "" {
+		var err error
+		logs, err = sessionlog.Open(*logDir, time.Now())
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return exitError
+		}
+	}
+
 	if err := launch(program.Config{
 		Patterns:    resolved.Patterns,
 		SessionName: sessionName,
@@ -135,9 +152,20 @@ func run(args []string, stdout, stderr io.Writer, launch func(program.Config) er
 		WorkingSet:  resolved.WorkingSet,
 		Store:       store,
 		Insecure:    *insecure,
+		Logs:        logs,
 	}); err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitError
+	}
+
+	if logs != nil {
+		if err := logs.Close(); err != nil {
+			// Logging was explicitly asked for; ending with an incomplete log
+			// and saying nothing would be worse than a non-zero exit.
+			fmt.Fprintln(stderr, err)
+			return exitError
+		}
+		fmt.Fprintf(stdout, "session logs: %s\n", logs.Dir())
 	}
 	return exitOK
 }

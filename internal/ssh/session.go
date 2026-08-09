@@ -166,6 +166,11 @@ type Config struct {
 	// Reconnecting passes the previous session's emulator here so the pane
 	// keeps what the host said before it died.
 	Terminal *term.Emulator
+	// Log, when set, receives a copy of everything the host outputs - the
+	// opt-in session log. It sees the same bytes the emulator does. The writer
+	// must never block and never fail; the session ignores its results, because
+	// a broken log must not stall or kill the host it belongs to.
+	Log io.Writer
 }
 
 func (c Config) withDefaults() Config {
@@ -432,20 +437,31 @@ func (s *sshSession) pump(r io.Reader, scan *exitScanner, filter *echoFilter) {
 				out = filter.Filter(out)
 			}
 			if len(out) > 0 {
-				s.emu.Write(out)
-				s.notifyOutput()
+				s.writeOutput(out)
 			}
 		}
 		if err != nil {
 			if filter != nil {
 				if held := filter.Flush(); len(held) > 0 {
-					s.emu.Write(held)
-					s.notifyOutput()
+					s.writeOutput(held)
 				}
 			}
 			return
 		}
 	}
+}
+
+// writeOutput hands host output to the emulator and, when session logging is
+// on, to the log. Only output ever reaches the log: keystrokes take the stdin
+// path and are never recorded anywhere - see wiki/core/command-log.md.
+func (s *sshSession) writeOutput(out []byte) {
+	if s.cfg.Log != nil {
+		// The log's result is deliberately ignored: it promises not to block,
+		// and a log that cannot write reports the loss itself.
+		_, _ = s.cfg.Log.Write(out)
+	}
+	s.emu.Write(out)
+	s.notifyOutput()
 }
 
 // waitForExit reports the end of the remote shell.

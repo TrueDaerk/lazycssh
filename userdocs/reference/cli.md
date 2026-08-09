@@ -30,6 +30,7 @@ No arguments is not an error: it opens the TUI on an empty run.
 | `--insecure-ignore-host-key` | Accept any host key without checking `known_hosts`. Dangerous: prints a warning naming machine-in-the-middle attacks on every run, and the status bar carries `HOST KEYS UNVERIFIED` for the whole session. |
 | `--list-sessions` | List the saved sessions with their host counts and exit. |
 | `--sessions-dir <dir>` | Read sessions from this directory instead of `$XDG_CONFIG_HOME/lazycssh/sessions`. |
+| `--log-dir <dir>` | Write every host's session output to files in a new run directory under `<dir>` — one file per host, rotated at 8 MiB. Off by default; while it is on, the status bar carries `SESSION LOGGING ON` for the whole run, and a clean exit prints where the logs went. |
 
 ## Exit codes
 

@@ -114,6 +114,11 @@ What is deliberately **never** recorded:
 Both are where a sudo password gets typed, and a log that captured it would be a
 plaintext password file nobody asked for.
 
+Session output only reaches disk when a run is started with `--log-dir` — see
+[Reading output](../guides/output.md#logging-a-run-to-disk). The same boundary
+holds there: keystrokes are never written, and output logging pauses, with a
+visible marker, while `single` mode is active.
+
 ## The target count instead of a confirmation
 
 Broadcasting a destructive command to N hosts is the entire point of the tool
