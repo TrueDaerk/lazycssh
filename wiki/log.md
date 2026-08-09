@@ -2,6 +2,19 @@
 
 ## 2026-08-09
 
+- Blocking I/O left `Update` (issue #225). The transport grew a per-session **stdin queue**
+  (`internal/ssh/stdinqueue.go`): `Session.Write` now enqueues for a single drain goroutine and
+  never blocks on the network, so every inline send path — per-keystroke `SendKey`, the
+  broadcast bar, `Router.Send`, the end-session `ctrl+c`/`ctrl+d` — is non-blocking at the
+  transport layer; a stalled host's full backlog refuses the write loudly. Disk I/O moved into
+  `tea.Cmd`s with result messages: the group directory read (`GroupsLoadedMsg`, started by
+  `Init` and `SessionsChangedMsg`), the new-group write (`GroupSavedMsg`), the delete
+  (`GroupRemovedMsg`) and the save-as write (`SaveResultMsg`); dialogs stay open, swallowing
+  keys, until the result lands. In `internal/program`, the store load and ssh-config resolution
+  behind `GroupOpenMsg`/`HostConnectMsg` and the goroutine wait inside `RemoveHostMsg` run in
+  Cmds too, with the manager mutations landing on the `Update` goroutine. Documented in
+  `core/session.md`, `core/program.md`, `core/tui.md`. Version 0.10.15.
+
 - The status bar's app-name segment now carries the version (`lazycssh v0.10.13`), read from
   `internal/version.Version` and passed in through the new `ui.Config.Version` field so
   `internal/ui` keeps not importing `internal/version` directly (issue #224). `program.Build`

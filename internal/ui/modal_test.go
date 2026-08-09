@@ -132,6 +132,8 @@ func TestConfirmResolvesOnEnterAndCancelsOnEsc(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("enter produced no command")
 	}
+	// The removal runs in the Cmd (issue #225); settle drains it.
+	a = settle(t, a, cmd)
 	if store.Exists("prod") {
 		t.Fatal("enter did not delete the group")
 	}

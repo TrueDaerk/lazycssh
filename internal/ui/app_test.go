@@ -89,6 +89,39 @@ func focusGrid(t *testing.T, a App) App {
 	return a
 }
 
+// settle executes a command and feeds every message it produces back into
+// Update, following the chain until it ends - the synchronous stand-in for the
+// bubbletea runtime draining the async work the model started (issue #225).
+func settle(t *testing.T, a App, cmd tea.Cmd) App {
+	t.Helper()
+	if cmd == nil {
+		return a
+	}
+	msg := cmd()
+	if msg == nil {
+		return a
+	}
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			a = settle(t, a, c)
+		}
+		return a
+	}
+	model, next := a.Update(msg)
+	app, ok := model.(App)
+	if !ok {
+		t.Fatalf("Update returned a %T, want App", model)
+	}
+	return settle(t, app, next)
+}
+
+// loadedApp drives the group directory read the way Init does, so a fixture
+// starts with its rows the way a running program would.
+func loadedApp(t *testing.T, a App) App {
+	t.Helper()
+	return settle(t, a, a.loadGroupsCmd())
+}
+
 // resize drives a window size message through the model.
 func resize(t *testing.T, a App, width, height int) App {
 	t.Helper()

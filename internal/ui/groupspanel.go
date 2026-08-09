@@ -72,39 +72,59 @@ const (
 	groupStageHosts
 )
 
-// loadGroups re-reads the group directory. One unreadable file becomes one
-// unreadable row rather than an empty panel: the other groups are still
-// usable, and hiding them would make a typo look like data loss.
-func (a App) loadGroups() App {
-	a.groupList = nil
-	a.groupsErr = nil
+// GroupsLoadedMsg carries a re-read of the group directory back into Update.
+// The reading happens in a [tea.Cmd] - it is disk I/O, and Update never blocks
+// (issue #225); this message is how the result lands in the model.
+type GroupsLoadedMsg struct {
+	// Rows are the readable and unreadable groups, in lexical order.
+	Rows []groupRow
+	// Err is why the directory itself could not be listed, or nil.
+	Err error
+}
 
-	if a.cfg.Sessions == nil {
-		return a
+// loadGroupsCmd re-reads the group directory off the Update loop. The result
+// arrives as a [GroupsLoadedMsg].
+func (a App) loadGroupsCmd() tea.Cmd {
+	store := a.cfg.Sessions
+	if store == nil {
+		return nil
 	}
+	return func() tea.Msg { return readGroups(store) }
+}
 
-	names, err := a.cfg.Sessions.List()
+// readGroups builds the panel's rows from the store. One unreadable file
+// becomes one unreadable row rather than an empty panel: the other groups are
+// still usable, and hiding them would make a typo look like data loss.
+func readGroups(store SessionStore) GroupsLoadedMsg {
+	names, err := store.List()
 	if err != nil {
-		a.groupsErr = err
-		return a
+		return GroupsLoadedMsg{Err: err}
 	}
 
+	var rows []groupRow
 	for _, name := range names {
-		sess, err := a.cfg.Sessions.Load(name)
+		sess, err := store.Load(name)
 		if err != nil {
-			a.groupList = append(a.groupList, groupRow{Name: name, Hosts: -1, Err: err})
+			rows = append(rows, groupRow{Name: name, Hosts: -1, Err: err})
 			continue
 		}
 		count, err := sess.HostCount()
 		if err != nil {
-			a.groupList = append(a.groupList, groupRow{Name: name, Hosts: -1, Err: err})
+			rows = append(rows, groupRow{Name: name, Hosts: -1, Err: err})
 			continue
 		}
-		a.groupList = append(a.groupList, groupRow{
+		rows = append(rows, groupRow{
 			Name: name, Hosts: count, Description: sess.Description,
 			Patterns: sess.Patterns(),
 		})
 	}
+	return GroupsLoadedMsg{Rows: rows}
+}
+
+// applyGroupsLoaded lands a directory re-read in the model.
+func (a App) applyGroupsLoaded(msg GroupsLoadedMsg) App {
+	a.groupList = msg.Rows
+	a.groupsErr = msg.Err
 	a.groupCursor = clamp(a.groupCursor, 0, max(0, len(a.groupList)-1))
 	return a
 }
@@ -157,6 +177,7 @@ func (a App) beginNewGroup() App {
 // cancelNewGroup closes the dialog without writing anything.
 func (a App) cancelNewGroup() App {
 	a.groupStage = groupStageNone
+	a.groupSaving = false
 	a.groupNameInput.SetValue("")
 	a.groupNameInput.Blur()
 	a.groupHostsInput.SetValue("")
@@ -169,6 +190,11 @@ func (a App) cancelNewGroup() App {
 // - a taken name, a malformed pattern - keeps the dialog open with what was
 // typed, because the user's input must survive the telling.
 func (a App) handleGroupDialogKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if a.groupSaving {
+		// The write is in flight; a second enter must not start a second one,
+		// and the typed input must survive until the result says what happened.
+		return a, nil
+	}
 	switch msg.String() {
 	case "esc":
 		return a.cancelNewGroup(), nil
@@ -204,9 +230,18 @@ func (a App) handleGroupDialogKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return a, cmd
 }
 
+// GroupSavedMsg reports what the new-group dialog's write did. The write runs
+// in a [tea.Cmd] - disk I/O never blocks Update (issue #225) - and this is how
+// its outcome reaches the dialog, which stays open until it arrives.
+type GroupSavedMsg struct {
+	// Err is why the group was not written, or nil.
+	Err error
+}
+
 // commitNewGroup writes the group. The patterns are stored as typed - brace
-// expansion stays readable - and are validated by the store before anything
-// lands on disk.
+// expansion stays readable - and are validated right here, synchronously, so a
+// typo keeps the dialog open with what was typed; only the disk write itself
+// leaves the Update loop.
 func (a App) commitNewGroup() (App, tea.Cmd) {
 	patterns := strings.Fields(a.groupHostsInput.Value())
 	if len(patterns) == 0 {
@@ -220,11 +255,30 @@ func (a App) commitNewGroup() (App, tea.Cmd) {
 
 	name := strings.TrimSpace(a.groupNameInput.Value())
 	run := sessions.Run{Name: name, Patterns: patterns}
-	if _, err := a.cfg.Sessions.SaveRun(run, false); err != nil {
+	if _, err := sessions.FromRun(run); err != nil {
+		// The same validation the store would apply, without its disk.
 		a.groupErr = err
 		return a, nil
 	}
 
+	a.groupErr = nil
+	a.groupSaving = true
+	store := a.cfg.Sessions
+	return a, func() tea.Msg {
+		_, err := store.SaveRun(run, false)
+		return GroupSavedMsg{Err: err}
+	}
+}
+
+// applyGroupSaved lands the new-group write's outcome. Success closes the
+// dialog and re-reads the directory; failure keeps the dialog open with what
+// was typed, because the user's input must survive the telling.
+func (a App) applyGroupSaved(msg GroupSavedMsg) (App, tea.Cmd) {
+	a.groupSaving = false
+	if msg.Err != nil {
+		a.groupErr = msg.Err
+		return a, nil
+	}
 	next := a.cancelNewGroup()
 	return next, func() tea.Msg { return SessionsChangedMsg{} }
 }
@@ -252,9 +306,28 @@ func (a App) handleGroupDeleteKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if answer == answerNo || a.cfg.Sessions == nil {
 		return a, nil
 	}
-	if err := a.cfg.Sessions.Remove(name); err != nil {
-		a.groupErr = err
-		return a, nil
+	// The removal is disk I/O, so it runs in a Cmd (issue #225); the outcome
+	// arrives as a [GroupRemovedMsg].
+	store := a.cfg.Sessions
+	return a, func() tea.Msg {
+		return GroupRemovedMsg{Name: name, Err: store.Remove(name)}
+	}
+}
+
+// GroupRemovedMsg reports what deleting a group file did.
+type GroupRemovedMsg struct {
+	// Name is the group the removal was about.
+	Name string
+	// Err is why the file is still there, or nil.
+	Err error
+}
+
+// applyGroupRemoved lands a removal's outcome: an error shows in the panel,
+// and either way the directory is re-read - a failed removal may still mean a
+// changed directory, and the rows must say what is actually on disk.
+func (a App) applyGroupRemoved(msg GroupRemovedMsg) (App, tea.Cmd) {
+	if msg.Err != nil {
+		a.groupErr = msg.Err
 	}
 	return a, func() tea.Msg { return SessionsChangedMsg{} }
 }

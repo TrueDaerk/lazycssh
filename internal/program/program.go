@@ -271,6 +271,12 @@ type fleetEventMsg struct {
 // pumpClosedMsg says the event channel is gone; the pump is not re-armed.
 type pumpClosedMsg struct{}
 
+// hostRemovedMsg says a session has been removed and fully closed; the
+// bookkeeping that must follow runs where this message lands.
+type hostRemovedMsg struct {
+	id string
+}
+
 // pump drains one transport event and converts it to the message the UI
 // documents. It blocks until an event arrives, which is fine inside a tea.Cmd:
 // commands run on their own goroutines.
@@ -329,11 +335,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case ui.RemoveHostMsg:
-		// The error is not actionable here: an unknown id means the host is
+		// Remove waits for the session's goroutines to end, and a hung
+		// connection can drag that out - so it runs in a Cmd, and the
+		// bookkeeping follows in hostRemovedMsg once the session is gone.
+		// The error is not actionable: an unknown id means the host is
 		// already gone, which is what removing asked for.
-		_ = m.mgr.Remove(msg.ID)
-		m.router.Forget(msg.ID)
-		m.dropPattern(msg.ID)
+		id := msg.ID
+		return m, func() tea.Msg {
+			_ = m.mgr.Remove(id)
+			return hostRemovedMsg{id: id}
+		}
+
+	case hostRemovedMsg:
+		m.router.Forget(msg.id)
+		m.dropPattern(msg.id)
 		m.ws.SetHosts(m.mgr.IDs())
 		m.resizePTYs()
 		return m, m.forward(ui.HostsChangedMsg{Hosts: m.mgr.IDs(), Patterns: m.patterns})
@@ -352,6 +367,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ui.GroupOpenMsg:
 		return m.openGroup(msg)
+
+	case groupResolvedMsg:
+		return m.applyGroup(msg)
+
+	case hostsResolvedMsg:
+		return m.applyConnect(msg)
 
 	case ui.GridChangedMsg:
 		// The visible panes changed shape - a session switch, a filter - so
@@ -379,28 +400,60 @@ func (m *Model) forward(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
-// openGroup opens a saved group as a session: its hosts are resolved through
-// ~/.ssh/config - HostName, Port and IdentityFile apply, the way every connect
-// does - and added to the fleet. Hosts already in the run are reused, never
-// dialled twice: opening a group a second time foregrounds its session.
-//
-// The group's broadcast mode and working set are applied, because opening is
-// an explicit action about what the next keystroke should mean.
+// groupResolvedMsg is a saved group read from disk and resolved through
+// ~/.ssh/config, ready to join the fleet - or the error that stopped it.
+// Reading and resolving are file I/O, so they run in openGroup's Cmd; this
+// message is where the result meets the managers, on the Update goroutine.
+type groupResolvedMsg struct {
+	name  string
+	sess  *sessions.Session
+	fleet []hosts.Host
+	err   error
+}
+
+// hostsResolvedMsg is a connect request's patterns resolved into hosts, or
+// the error that stopped them. Same split as groupResolvedMsg: resolution
+// runs in a Cmd, the fleet mutation happens where this message lands.
+type hostsResolvedMsg struct {
+	patterns []string
+	fleet    []hosts.Host
+	err      error
+}
+
+// openGroup starts opening a saved group as a session. The store read and the
+// ~/.ssh/config resolution touch the filesystem, so they run in the returned
+// Cmd (issue #225); applyGroup takes over when the result arrives.
 func (m *Model) openGroup(msg ui.GroupOpenMsg) (tea.Model, tea.Cmd) {
 	if m.store == nil {
 		return m, nil
 	}
-	sess, err := m.store.Load(msg.Name)
-	if err != nil {
+	store, resolver, name := m.store, m.resolver, msg.Name
+	return m, func() tea.Msg {
+		sess, err := store.Load(name)
+		if err != nil {
+			return groupResolvedMsg{name: name, err: err}
+		}
+		fleet, err := resolver.ResolveAll(sess.Patterns())
+		if err != nil {
+			return groupResolvedMsg{name: name, err: err}
+		}
+		return groupResolvedMsg{name: name, sess: sess, fleet: fleet}
+	}
+}
+
+// applyGroup lands a resolved group in the fleet: its hosts are added - the
+// way every connect is; hosts already in the run are reused, never dialled
+// twice, so opening a group a second time foregrounds its session.
+//
+// The group's broadcast mode and working set are applied, because opening is
+// an explicit action about what the next keystroke should mean.
+func (m *Model) applyGroup(msg groupResolvedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
 		// The Groups panel shows unreadable files on its rows; re-reading
 		// the directory is how the error becomes visible.
 		return m, m.forward(ui.SessionsChangedMsg{})
 	}
-
-	fleet, err := m.resolver.ResolveAll(sess.Patterns())
-	if err != nil {
-		return m, m.forward(ui.SessionsChangedMsg{})
-	}
+	sess, fleet := msg.sess, msg.fleet
 
 	running := make(map[string]bool)
 	for _, id := range m.mgr.IDs() {
@@ -424,22 +477,34 @@ func (m *Model) openGroup(msg ui.GroupOpenMsg) (tea.Model, tea.Cmd) {
 		_ = m.ws.Apply(sel)
 	}
 
-	cmd := m.forward(ui.SessionOpenedMsg{Name: msg.Name, Hosts: ids, Patterns: m.patterns})
+	cmd := m.forward(ui.SessionOpenedMsg{Name: msg.name, Hosts: ids, Patterns: m.patterns})
 	m.resizePTYs()
 	return m, cmd
 }
 
-// connectHosts adds the hosts the UI asked to connect - an ssh-config alias
-// picked in the Hosts panel, or a typed pattern with brace expansion.
-//
-// Hosts already in the run are skipped by identifier, so pressing enter twice
-// on the same candidate cannot mint a duplicate "host-2" session; a resolve
-// error goes back to the UI instead of being dropped, because the user just
-// typed the thing that failed.
+// connectHosts starts connecting the hosts the UI asked for - an ssh-config
+// alias picked in the Hosts panel, or a typed pattern with brace expansion.
+// Resolution reads ~/.ssh/config, so it runs in the returned Cmd (issue
+// #225); applyConnect takes over when the result arrives. A resolve error
+// goes back to the UI instead of being dropped, because the user just typed
+// the thing that failed.
 func (m *Model) connectHosts(msg ui.HostConnectMsg) (tea.Model, tea.Cmd) {
-	fleet, err := m.resolver.ResolveAll(msg.Patterns)
-	if err != nil {
-		return m, m.forward(ui.ConnectErrorMsg{Err: err.Error()})
+	resolver, patterns := m.resolver, msg.Patterns
+	return m, func() tea.Msg {
+		fleet, err := resolver.ResolveAll(patterns)
+		if err != nil {
+			return hostsResolvedMsg{patterns: patterns, err: err}
+		}
+		return hostsResolvedMsg{patterns: patterns, fleet: fleet}
+	}
+}
+
+// applyConnect lands resolved connect candidates in the fleet. Hosts already
+// in the run are skipped by identifier, so pressing enter twice on the same
+// candidate cannot mint a duplicate "host-2" session.
+func (m *Model) applyConnect(msg hostsResolvedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		return m, m.forward(ui.ConnectErrorMsg{Err: msg.err.Error()})
 	}
 
 	running := make(map[string]bool)
@@ -447,7 +512,7 @@ func (m *Model) connectHosts(msg ui.HostConnectMsg) (tea.Model, tea.Cmd) {
 		running[id] = true
 	}
 	added := false
-	for _, host := range fleet {
+	for _, host := range msg.fleet {
 		if running[host.Alias] {
 			continue
 		}
@@ -459,7 +524,7 @@ func (m *Model) connectHosts(msg ui.HostConnectMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	m.addPatterns(msg.Patterns)
+	m.addPatterns(msg.patterns)
 	m.ws.SetHosts(m.mgr.IDs())
 	m.resizePTYs()
 	return m, m.forward(ui.HostsChangedMsg{Hosts: m.mgr.IDs(), Patterns: m.patterns})

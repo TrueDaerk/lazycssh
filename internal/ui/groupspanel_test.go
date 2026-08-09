@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,12 +27,12 @@ func groupsStoreApp(t *testing.T, saved ...*sessions.Session) (App, *sessions.St
 		}
 	}
 
-	a := resize(t, NewApp(Config{
+	a := resize(t, loadedApp(t, NewApp(Config{
 		Hosts:       []string{"web-01", "web-02"},
 		RunPatterns: []string{"web-{01..02}.example.com"},
 		Sessions:    store,
 		Theme:       Options{Dark: true},
-	}), 120, 40)
+	})), 120, 40)
 
 	return pressKey(t, a, "2"), store
 }
@@ -129,14 +130,19 @@ func TestNCreatesAGroup(t *testing.T) {
 	if !ok {
 		t.Fatalf("Update returned a %T", model)
 	}
+	if cmd == nil {
+		t.Fatal("enter did not start the write")
+	}
+	if !a.GroupDialogOpen() {
+		t.Fatal("the dialog closed before the write reported back")
+	}
+	// The write and the reload run in Cmds (issue #225); settle drains them.
+	a = settle(t, a, cmd)
 	if a.GroupDialogOpen() {
 		t.Fatal("the dialog is still open after a successful save")
 	}
-	if cmd == nil {
-		t.Fatal("saving did not ask the panel to reload")
-	}
-	if _, ok := cmd().(SessionsChangedMsg); !ok {
-		t.Fatalf("saving produced a %T", cmd())
+	if !strings.Contains(plain(a.groupsPanel(60, 20, true)), "web (4 hosts)") {
+		t.Fatalf("the panel did not reload the new group:\n%s", plain(a.groupsPanel(60, 20, true)))
 	}
 
 	sess, err := store.Load("web")
@@ -248,14 +254,16 @@ func TestDeleteAsksFirst(t *testing.T) {
 	if !ok {
 		t.Fatalf("Update returned a %T", model)
 	}
+	if cmd == nil {
+		t.Fatal("answering yes did not start the removal")
+	}
+	// The removal and the reload run in Cmds (issue #225); settle drains them.
+	a = settle(t, a, cmd)
 	if store.Exists("prod") {
 		t.Fatal("answering yes did not delete the group")
 	}
-	if cmd == nil {
-		t.Fatal("deleting did not ask the panel to reload")
-	}
-	if _, ok := cmd().(SessionsChangedMsg); !ok {
-		t.Fatalf("deleting produced a %T", cmd())
+	if strings.Contains(plain(a.groupsPanel(60, 20, true)), "prod") {
+		t.Fatalf("the panel still lists the deleted group:\n%s", plain(a.groupsPanel(60, 20, true)))
 	}
 }
 
@@ -272,7 +280,9 @@ func TestDeleteLeavesTheOpenSessionAlone(t *testing.T) {
 
 	a = pressKey(t, a, "2") // back onto the Groups panel
 	a = pressKey(t, a, "d")
-	a = pressKey(t, a, "y")
+	model, cmd := a.Update(keyMsgFor(t, "y"))
+	a = model.(App)
+	a = settle(t, a, cmd)
 
 	if store.Exists("prod") {
 		t.Fatal("the group file survived")
@@ -293,7 +303,7 @@ func TestOpenGroupIsMarked(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	a := resize(t, NewApp(Config{Sessions: store, Theme: Options{NoColor: true}}), 120, 40)
+	a := resize(t, loadedApp(t, NewApp(Config{Sessions: store, Theme: Options{NoColor: true}})), 120, 40)
 	model, _ := a.Update(SessionOpenedMsg{Name: "prod", Hosts: []string{"web-01"}})
 	a = model.(App)
 
@@ -361,11 +371,12 @@ func TestUnreadableGroupBecomesOneRow(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	model, _ := a.Update(SessionsChangedMsg{})
+	model, cmd := a.Update(SessionsChangedMsg{})
 	a, ok := model.(App)
 	if !ok {
 		t.Fatalf("Update returned a %T", model)
 	}
+	a = settle(t, a, cmd)
 
 	view := plain(a.groupsPanel(60, 20, true))
 	if !strings.Contains(view, "broken (unreadable)") {
@@ -405,5 +416,104 @@ func TestNOutsideTheGroupsPanelConnects(t *testing.T) {
 	}
 	if !a.ConnectPromptOpen() {
 		t.Fatal("n on the Status panel did not open the connect prompt")
+	}
+}
+
+// The group directory is read in a Cmd (issue #225); a directory that cannot
+// be listed reports in the panel rather than dying in Update.
+func TestGroupsLoadFailureIsReported(t *testing.T) {
+	a := resize(t, NewApp(Config{Sessions: brokenDirStore{}, Theme: Options{Dark: true}}), 120, 40)
+	a = settle(t, a, a.loadGroupsCmd())
+
+	if a.groupsErr == nil {
+		t.Fatal("an unlistable directory produced no error")
+	}
+	if !strings.Contains(plain(a.groupsPanel(60, 20, true)), "permission denied") {
+		t.Fatalf("the panel does not report the error:\n%s", plain(a.groupsPanel(60, 20, true)))
+	}
+}
+
+// brokenDirStore cannot even list its directory.
+type brokenDirStore struct{ failingStore }
+
+func (brokenDirStore) List() ([]string, error) {
+	return nil, errors.New("permission denied")
+}
+
+// While the new-group write is in flight the dialog swallows keys: a second
+// enter must not start a second write, and the typed input must survive until
+// the result says what happened (issue #225).
+func TestGroupDialogSwallowsKeysWhileSaving(t *testing.T) {
+	a, _ := groupsStoreApp(t)
+
+	a = pressKey(t, a, "n")
+	a = typeInto(t, a, "web")
+	a = pressKey(t, a, "enter")
+	a = typeInto(t, a, "h1")
+
+	model, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	a = model.(App)
+	if cmd == nil {
+		t.Fatal("enter did not start the write")
+	}
+
+	model, second := a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	a = model.(App)
+	if second != nil {
+		t.Fatal("a second enter started a second write")
+	}
+	if !a.GroupDialogOpen() {
+		t.Fatal("a keystroke closed the dialog while the write was in flight")
+	}
+	a = settle(t, a, cmd)
+	if a.GroupDialogOpen() {
+		t.Fatal("the dialog is still open after the write landed")
+	}
+}
+
+// A removal that fails on disk surfaces in the panel; the directory is
+// re-read either way so the rows say what is actually there (issue #225).
+func TestGroupRemoveFailureIsReported(t *testing.T) {
+	a := resize(t, NewApp(Config{Sessions: failingStore{}, Theme: Options{Dark: true}}), 120, 40)
+	a = pressKey(t, a, "2")
+	a = a.applyGroupsLoaded(GroupsLoadedMsg{Rows: []groupRow{{Name: "prod", Hosts: 1}}})
+
+	a = pressKey(t, a, "d")
+	model, cmd := a.Update(keyMsgFor(t, "y"))
+	a = model.(App)
+	a = settle(t, a, cmd)
+
+	if a.groupErr == nil {
+		t.Fatal("a failing removal produced no error")
+	}
+	if !strings.Contains(plain(a.groupsPanel(60, 20, true)), "read-only file system") {
+		t.Fatalf("the panel does not report the error:\n%s", plain(a.groupsPanel(60, 20, true)))
+	}
+}
+
+// While the save-as write is in flight the prompt swallows keys, so a second
+// enter cannot double-save (issue #225).
+func TestSavePromptSwallowsKeysWhileSaving(t *testing.T) {
+	a, _ := groupsStoreApp(t)
+
+	a = pressKey(t, a, "S")
+	a = typeInto(t, a, "prod")
+	model, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	a = model.(App)
+	if cmd == nil {
+		t.Fatal("enter did not start the write")
+	}
+
+	model, second := a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	a = model.(App)
+	if second != nil {
+		t.Fatal("a second enter started a second write")
+	}
+	if !a.Saving() {
+		t.Fatal("a keystroke closed the prompt while the write was in flight")
+	}
+	a = settle(t, a, cmd)
+	if a.Saving() {
+		t.Fatal("the prompt is still open after the write landed")
 	}
 }

@@ -209,6 +209,11 @@ type App struct {
 	groupsErr        error
 	saveErr          error
 	confirmOverwrite bool
+	// savePending and groupSaving mark a disk write in flight: the prompt that
+	// asked for it keeps the keyboard, swallowing keys, until the result
+	// message lands (issue #225).
+	savePending bool
+	groupSaving bool
 
 	focus         Area
 	panel         Panel
@@ -276,8 +281,10 @@ func NewApp(cfg Config) App {
 	a = a.snapshotFleet().adoptNewHosts().keepGridSlots()
 	// An argumentless start opens with nothing focused: the empty grid says
 	// what the options are, and which of them comes first - connect, launch a
-	// session, read the help - is the user's call, not the program's.
-	return a.loadGroups()
+	// session, read the help - is the user's call, not the program's. The
+	// group directory is read by Init's command, not here: construction must
+	// not touch the disk (issue #225).
+	return a
 }
 
 // resetToStart returns the model to the neutral argumentless start after the
@@ -299,8 +306,12 @@ func (a App) resetToStart() App {
 	return a.resetGridSlots().syncBroadcastLimit()
 }
 
-// Init asks the terminal for its background colour so the palette can match it.
-func (a App) Init() tea.Cmd { return tea.RequestBackgroundColor }
+// Init asks the terminal for its background colour so the palette can match
+// it, and starts the first read of the group directory - disk I/O belongs in a
+// Cmd, so not even startup reads it inline.
+func (a App) Init() tea.Cmd {
+	return tea.Batch(tea.RequestBackgroundColor, a.loadGroupsCmd())
+}
 
 // Focus is the area that receives key presses.
 func (a App) Focus() Area { return a.focus }
@@ -354,7 +365,21 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.sendCommand(msg.Command)
 
 	case SessionsChangedMsg:
-		return a.loadGroups(), nil
+		// The re-read is disk I/O, so it happens in a Cmd; the rows arrive as
+		// a GroupsLoadedMsg (issue #225).
+		return a, a.loadGroupsCmd()
+
+	case GroupsLoadedMsg:
+		return a.applyGroupsLoaded(msg), nil
+
+	case GroupSavedMsg:
+		return a.applyGroupSaved(msg)
+
+	case GroupRemovedMsg:
+		return a.applyGroupRemoved(msg)
+
+	case SaveResultMsg:
+		return a.applySaveResult(msg)
 
 	case HostKeyQuestionMsg:
 		return a.showHostKeyQuestion(msg), nil
@@ -720,6 +745,11 @@ func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // handleSaveKey drives the save-as prompt and the overwrite question. An
 // existing session is never replaced without the user answering for it.
 func (a App) handleSaveKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if a.savePending {
+		// The write is in flight; a second enter must not start a second one.
+		// The result message reopens the keyboard.
+		return a, nil
+	}
 	if a.confirmOverwrite {
 		switch readConfirm(msg) {
 		case answerYes:

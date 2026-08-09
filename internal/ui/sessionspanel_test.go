@@ -302,14 +302,19 @@ func TestSaveWritesAGroup(t *testing.T) {
 	if !ok {
 		t.Fatalf("Update returned a %T", model)
 	}
+	if cmd == nil {
+		t.Fatal("enter did not start the write")
+	}
+	if !a.Saving() {
+		t.Fatal("the prompt closed before the write reported back")
+	}
+	// The write and the reload run in Cmds (issue #225); settle drains them.
+	a = settle(t, a, cmd)
 	if a.Saving() {
 		t.Fatal("the prompt is still open after saving")
 	}
-	if cmd == nil {
-		t.Fatal("saving did not ask the panel to reload")
-	}
-	if _, ok := cmd().(SessionsChangedMsg); !ok {
-		t.Fatalf("saving produced a %T", cmd())
+	if !strings.Contains(plain(a.groupsPanel(60, 20, true)), "prod-web") {
+		t.Fatalf("the panel did not reload the saved group:\n%s", plain(a.groupsPanel(60, 20, true)))
 	}
 
 	sess, err := store.Load("prod-web")
@@ -329,11 +334,13 @@ func TestOverwriteAsksFirst(t *testing.T) {
 
 	a = pressKey(t, a, "S")
 	a = typeInto(t, a, "prod")
-	model, _ := a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	model, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	a, ok := model.(App)
 	if !ok {
 		t.Fatalf("Update returned a %T", model)
 	}
+	// The write runs in a Cmd; ErrExists comes back as its result (issue #225).
+	a = settle(t, a, cmd)
 	if !a.Saving() {
 		t.Fatal("the overwrite question closed without being answered")
 	}
@@ -354,9 +361,12 @@ func TestOverwriteAsksFirst(t *testing.T) {
 	// Answering yes writes it.
 	a = pressKey(t, a, "S")
 	a = typeInto(t, a, "prod")
-	model, _ = a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	model, cmd = a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	a, _ = model.(App)
-	a = pressKey(t, a, "y")
+	a = settle(t, a, cmd)
+	model, cmd = a.Update(keyMsgFor(t, "y"))
+	a, _ = model.(App)
+	a = settle(t, a, cmd)
 
 	sess, err := store.Load("prod")
 	if err != nil {
@@ -443,11 +453,13 @@ func TestSaveRunReportsAStoreFailure(t *testing.T) {
 
 	a = pressKey(t, a, "S")
 	a = typeInto(t, a, "prod")
-	model, _ := a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	model, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	a, ok := model.(App)
 	if !ok {
 		t.Fatalf("Update returned a %T", model)
 	}
+	// The failure travels back through the write Cmd's result (issue #225).
+	a = settle(t, a, cmd)
 	if a.SaveError() == nil {
 		t.Fatal("a failing store was reported as a successful save")
 	}

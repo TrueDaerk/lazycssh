@@ -4,7 +4,7 @@ title: SSH session lifecycle
 description: One host, end to end — dial, handshake, PTY, streams, resize and close — and the event contract the UI depends on.
 resource: internal/ssh/session.go
 tags: [ssh, transport, concurrency, lifecycle]
-timestamp: 2026-08-01T00:00:00Z
+timestamp: 2026-08-09T00:00:00Z
 ---
 
 # SSH session lifecycle
@@ -69,6 +69,17 @@ everything.
 
 stdout and stderr land in the same terminal, interleaved in arrival order, because that
 is how they appear on a terminal.
+
+`Write` never blocks on the network. An SSH channel write stalls when the remote window is
+exhausted — a host frozen by `ctrl+s`, a hung sshd, a dead TCP peer — and the callers of
+`Write` are the UI's `Update` loop: the command line, the broadcast bar, every keystroke of a
+focused pane. So each session runs a **stdin queue** (`stdinqueue.go`): `Write` copies the
+bytes and enqueues, a single drain goroutine writes them to the channel in order, and a full
+backlog (a stalled host) refuses the write with an error naming the host — loudly, never
+blocking and never dropping in silence. A write error from the channel is terminal: the drain
+stops and every later `Write` reports it. The drain goroutine owns stdin, closing included,
+because x/crypto's `CloseWrite` races a `Write` in flight; `Close` unblocks a stuck drain by
+tearing down the session and client underneath it.
 
 `Close` is idempotent, safe on a session that never started, and waits for the reader goroutines
 before returning — which is what makes "no goroutine leaks" testable rather than aspirational.

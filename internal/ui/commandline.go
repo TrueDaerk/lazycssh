@@ -22,6 +22,10 @@ type CommandSentMsg struct {
 // CommandLine is what the command line and the broadcast bar need to send.
 // [broadcast.Router] satisfies it; it is an interface so the UI can be tested
 // without a transport.
+//
+// Both methods are called inline from Update: they must never block on the
+// network. The transport honours that with a per-session stdin queue - a
+// stalled host refuses the write rather than stalling the loop (issue #225).
 type CommandLine interface {
 	// Send writes the same bytes to the active broadcast set — whole command
 	// lines, where the bytes are plain text.
