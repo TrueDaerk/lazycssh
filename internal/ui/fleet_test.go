@@ -187,12 +187,11 @@ func TestViewReadsNoLiveSessionState(t *testing.T) {
 
 // The other acceptance criterion: sessions flipping state and writing output
 // at full speed while frames render must not race the model. Run under
-// -race, which CI does; the filter is on so the visible list follows the
-// flips through the snapshot.
+// -race, which CI does; the visible list follows the flips through the
+// snapshot.
 func TestRenderSurvivesConcurrentStateFlips(t *testing.T) {
 	a, fleet, router, _ := statusApp(t, "web-01", "web-02", "web-03")
 	router.Attach(fleetSessions{fleet})
-	a = pressKey(t, a, "ctrl+a")
 
 	ctx := t.Context()
 	stop := make(chan struct{})

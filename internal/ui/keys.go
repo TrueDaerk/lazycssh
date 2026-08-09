@@ -69,7 +69,6 @@ type KeyMap struct {
 	NextFailure       key.Binding
 	QuickSave         key.Binding
 	NewHost           key.Binding
-	ConnectedOnly     key.Binding
 	Retile            key.Binding
 	Split             key.Binding
 	NextSplit         key.Binding
@@ -161,14 +160,8 @@ func DefaultKeyMap() KeyMap {
 		QuickSave: key.NewBinding(key.WithKeys("S"),
 			key.WithHelp("S", "save the run as a session")),
 		NewHost: key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "connect a new host")),
-		// While typing into a pane or the broadcast bar, ctrl+a stays a
-		// keystroke for the hosts (readline start-of-line); the toggle works
-		// everywhere else.
-		ConnectedOnly: key.NewBinding(key.WithKeys("ctrl+a"),
-			key.WithHelp("ctrl+a", "show only the connected hosts")),
-		// Same typing exception as ctrl+a: while a pane or the broadcast bar
-		// has the keyboard, these chords belong to the hosts (ctrl+r is
-		// readline reverse-search there).
+		// While a pane or the broadcast bar has the keyboard, these chords
+		// belong to the hosts (ctrl+r is readline reverse-search there).
 		Retile: key.NewBinding(key.WithKeys("ctrl+r"),
 			key.WithHelp("ctrl+r", "re-tile the grid for the current hosts")),
 		Split: key.NewBinding(key.WithKeys("ctrl+s"),
@@ -210,9 +203,8 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("x", "end this session (in the Sessions panel)")),
 
 		// Inside the broadcast bar ctrl+a is the csshx escape prefix, which
-		// shadows both the global connected-only toggle and the readline
-		// start-of-line the bar used to forward; ctrl+a a sends the literal.
-		// From view mode the plain ctrl+a reaches the global toggle again.
+		// shadows the readline start-of-line the bar used to forward;
+		// ctrl+a a sends the literal.
 		BroadcastEscape: key.NewBinding(key.WithKeys("ctrl+a"),
 			key.WithHelp("ctrl+a", "prefix: next key is a lazycssh command; a = literal ctrl+a, esc = view mode")),
 		BroadcastEdit: key.NewBinding(key.WithKeys("enter"),
@@ -259,7 +251,7 @@ func (k KeyMap) global() []key.Binding {
 		k.Panel1, k.Panel2, k.Panel3, k.Panel4, k.Panel5,
 		k.BroadcastAll, k.BroadcastSelected, k.BroadcastSingle, k.BroadcastFleet,
 		k.CommandLine, k.NextFailure, k.QuickSave, k.NewHost,
-		k.ConnectedOnly, k.Retile, k.Split, k.NextSplit, k.PrevSplit,
+		k.Retile, k.Split, k.NextSplit, k.PrevSplit,
 		k.SelectAll, k.Invert, k.ClearSel, k.SelectUp, k.SelectDwn,
 	}
 }

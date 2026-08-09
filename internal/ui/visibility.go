@@ -6,38 +6,22 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-
-	"github.com/TrueDaerk/lazycssh/internal/ssh"
 )
 
-// The visibility filters: ctrl+a narrows the grid to the hosts that can take
-// input right now, ctrl+s splits it into chunks of a chosen size, and the
-// broadcast limit follows both, so a keystroke never reaches a pane the user
-// cannot see. The filters are views, not removals - a host that reconnects
+// The visibility filter: ctrl+s splits the grid into chunks of a chosen size,
+// and the broadcast limit follows it, so a keystroke never reaches a pane the
+// user cannot see. The split is a view, not a removal - a host that reconnects
 // reappears without a keypress: its state change is a fleet event, the event
 // refreshes the model's snapshot inside Update, and the redraw recomputes the
 // visible list from it.
 
-// ConnectedOnly reports whether the connected-only filter is on.
-func (a App) ConnectedOnly() bool { return a.connectedOnly }
-
 // SplitSize is the chosen chunk size, 0 while the split is off.
 func (a App) SplitSize() int { return a.splitSize }
 
-// filteredHosts is the session's hosts after the connected-only filter,
-// before the split: the list the split chunks.
+// filteredHosts is the session's hosts before the split: the list the split
+// chunks.
 func (a App) filteredHosts() []string {
-	ids := a.sessionHosts()
-	if !a.connectedOnly {
-		return ids
-	}
-	var out []string
-	for _, id := range ids {
-		if a.state(id) == ssh.StateConnected {
-			out = append(out, id)
-		}
-	}
-	return out
+	return a.sessionHosts()
 }
 
 // visibleHosts is the session's hosts after every visibility filter: what the
@@ -66,17 +50,6 @@ func (a App) splitChunks() int {
 		return 1
 	}
 	return (n + a.splitSize - 1) / a.splitSize
-}
-
-// toggleConnectedOnly flips the filter. The pane focus is kept by host
-// identity where possible - the pane may move, the host does not change its
-// name - and the PTYs are asked to match the new grid shape.
-func (a App) toggleConnectedOnly() (App, tea.Cmd) {
-	focused := a.FocusedHost()
-	a.connectedOnly = !a.connectedOnly
-	a.page = 0
-	a = a.compactHoles().resetGridSlots().refocus(focused).followFocus().syncBroadcastLimit()
-	return a, gridChanged()
 }
 
 // beginSplit opens the chunk-size prompt. It opens empty - enter on an empty

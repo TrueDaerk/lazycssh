@@ -39,7 +39,7 @@ Retiling is an explicit act:
 
 - ++ctrl+r++ closes the holes and re-tiles for the current hosts (and resizes
   the remote PTYs),
-- switching session, toggling ++ctrl+a++ or setting a split compacts and tiles
+- switching session or setting a split compacts and tiles
   for the new view,
 - resizing the terminal reflows the cells but keeps the slots — you changed the
   window, not the run.
@@ -87,26 +87,22 @@ to swallow them before lazycssh sees them anyway.
 
 ## Narrowing what is on screen
 
-**Connected only** — ++ctrl+a++ narrows the grid to the hosts that can take
-input right now, and unlike paging it narrows the broadcast with it. The status
-bar carries `CONNECTED HOSTS ONLY`. It is a view, not a removal: a host that
-reconnects reappears without a keypress. A filter that hides every pane renders
-`no connected hosts` rather than an empty run.
-
 **Split** — ++ctrl+s++ asks for a number and cuts the visible hosts into
 consecutive chunks of that size. Ten hosts split by five shows the first five
 terminals; ++ctrl+shift+right++ pages through the chunk and then moves on to the next.
 The status bar carries `SPLIT 1/2 (5 hosts)` for as long as the split narrows
-anything. An empty prompt or `0` clears it; ++esc++ keeps it. Splits compose
-with the connected-only filter — chunks are cut from the filtered list.
+anything. An empty prompt or `0` clears it; ++esc++ keeps it. It is a view, not
+a removal: chunks are cut from the session's host list, and a host that
+reconnects reappears in its chunk without a keypress.
 
 **Full screen** — ++alt+z++ zooms the focused pane to the whole main area,
 ++alt+z++ again returns. Full screen skips the overflow footer: an explicit zoom
 has its own way back.
 
 Inside a pane, ++ctrl+a++ is start-of-line and ++ctrl+s++ is flow control for
-the remote shell. Both are app-level commands only when no pane has the
-keyboard — in the broadcast bar, ++ctrl+a++ is the escape prefix (see
+the remote shell. ++ctrl+s++ is an app-level command only when no pane has the
+keyboard; ++ctrl+a++ has no app-level meaning at all — in the broadcast bar it
+is the escape prefix (see
 [Typing and broadcasting](../guides/broadcasting.md#the-ctrla-prefix)).
 
 ## Focus is always visible

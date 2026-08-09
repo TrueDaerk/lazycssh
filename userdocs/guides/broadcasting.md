@@ -70,7 +70,7 @@ Inside the bar, ++ctrl+a++ is a csshx-style escape prefix:
 |---|---|
 | ++ctrl+a++ ++escape++ | switch to view mode |
 | ++ctrl+a++ ++a++ | send one literal ++ctrl+a++ to the targets — how a remote `screen` or `tmux` stays reachable |
-| ++ctrl+a++ *anything else* | run that key as a one-shot lazycssh command — ++ctrl+a++ ++ctrl+a++ toggles connected-only, ++ctrl+a++ ++question++ opens the help, ++ctrl+a++ ++right++ pages, ++ctrl+a++ ++q++ quits |
+| ++ctrl+a++ *anything else* | run that key as a one-shot lazycssh command — ++ctrl+a++ ++question++ opens the help, ++ctrl+a++ ++right++ pages, ++ctrl+a++ ++q++ quits |
 
 The prefix is cleared before the second key is handled, so it cannot chain, and a
 key with no app binding is a no-op the status bar names rather than a silently

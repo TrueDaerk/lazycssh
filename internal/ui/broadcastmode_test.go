@@ -78,17 +78,16 @@ func TestBroadcastBarUnknownSequenceCancelsAndSaysSo(t *testing.T) {
 	}
 }
 
-// View mode routes keys to app-level commands and never to the hosts: ctrl+a
-// is the connected-only toggle again, exactly the #118 binding the edit-mode
-// prefix shadows.
+// View mode routes keys to app-level commands and never to the hosts: ? opens
+// the help instead of reaching a host.
 func TestBroadcastBarViewModeRoutesCommands(t *testing.T) {
 	a, sender := barApp(t, "web-01", "web-02")
 
 	a = pressKey(t, a, "ctrl+a")
 	a = pressKey(t, a, "esc")
-	a = pressKey(t, a, "ctrl+a")
-	if !a.ConnectedOnly() {
-		t.Fatal("ctrl+a in view mode did not reach the connected-only toggle")
+	a = pressKey(t, a, "?")
+	if !a.HelpVisible() {
+		t.Fatal("? in view mode did not reach the help command")
 	}
 	if len(sender.sent) != 0 {
 		t.Fatalf("view mode forwarded keys: %q", sender.sent)
@@ -156,15 +155,15 @@ func TestBroadcastBarPanelKeyResetsViewMode(t *testing.T) {
 }
 
 // Issue #148: ctrl+a is a general "the next key is for lazycssh" prefix. An
-// app chord after it runs the app command - ctrl+a ctrl+a toggles
-// connected-only - and sends nothing to the hosts.
+// app chord after it runs the app command - ctrl+a ? opens the help - and
+// sends nothing to the hosts.
 func TestBroadcastBarPrefixDispatchesAppCommands(t *testing.T) {
 	a, sender := barApp(t, "web-01", "web-02")
 
 	a = pressKey(t, a, "ctrl+a")
-	a = pressKey(t, a, "ctrl+a")
-	if !a.ConnectedOnly() {
-		t.Fatal("ctrl+a ctrl+a did not reach the connected-only toggle")
+	a = pressKey(t, a, "?")
+	if !a.HelpVisible() {
+		t.Fatal("ctrl+a ? did not reach the help command")
 	}
 	if len(sender.sent) != 0 {
 		t.Fatalf("the prefixed command was forwarded: %q", sender.sent)

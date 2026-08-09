@@ -145,10 +145,6 @@ type App struct {
 	open   []openSession
 	active int
 
-	// connectedOnly narrows the grid - and with it the broadcast limit - to
-	// the hosts that can take input right now.
-	connectedOnly bool
-
 	// keptSlots is the cell count the grid shape is kept from, so a host
 	// leaving does not reflow every pane; see internal/ui/retile.go.
 	keptSlots int
@@ -289,7 +285,6 @@ func (a App) resetToStart() App {
 	a.page = 0
 	a.splitSize = 0
 	a.splitChunk = 0
-	a.connectedOnly = false
 	a.scroll = make(map[string]int)
 	if a.focus == AreaGrid {
 		a.focus = AreaSidebar
@@ -370,11 +365,11 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case FleetUpdatedMsg:
 		// Re-read the fleet into the model; the panels render from that
-		// snapshot. Under the connected-only filter the visible set follows
-		// liveness, so the broadcast limit must follow too, and a session
-		// whose last host closed is over.
+		// snapshot. With a split on, the visible set follows the host list,
+		// so the broadcast limit must follow too, and a session whose last
+		// host closed is over.
 		a = a.snapshotFleet()
-		if a.connectedOnly || a.splitSize > 0 {
+		if a.splitSize > 0 {
 			a = a.syncBroadcastLimit()
 		}
 		next, cmd := a.reapSessions()
@@ -591,9 +586,6 @@ func (a App) handleAppKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return next.syncFocusTarget(), nil
 	case key.Matches(msg, a.keys.BroadcastFleet):
 		return a.setBroadcastMode(broadcast.ModeFleet), nil
-
-	case key.Matches(msg, a.keys.ConnectedOnly):
-		return a.toggleConnectedOnly()
 
 	case key.Matches(msg, a.keys.Retile):
 		return a.retile()
@@ -974,11 +966,6 @@ func (a App) renderMain() string {
 	focused := a.focus == AreaGrid
 
 	if len(a.hostIDs()) == 0 {
-		if a.connectedOnly && len(a.sessionHosts()) > 0 {
-			// The filter hid every pane; that must not read as an empty run.
-			hint := "no connected hosts\n\nctrl+a shows all of them again."
-			return a.frame(a.theme.PaneFrame(focused, false), r, a.theme.Muted.Render(hint))
-		}
 		// The empty state says what to do next rather than showing an empty
 		// frame: this is the argumentless start.
 		hint := "no hosts\n\n" +

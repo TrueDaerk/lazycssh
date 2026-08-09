@@ -127,7 +127,7 @@ type hostState struct {
 //
 // Called on every message that says the fleet changed ([FleetUpdatedMsg],
 // [HostsChangedMsg], [SessionOpenedMsg]) and once at construction. The
-// snapshot is what preserves the connected-only filter's "live view": a host
+// snapshot is what preserves the grid's "live view": a host
 // flipping state emits a fleet event, the event refreshes the snapshot, and
 // the redraw shows the new list - no keypress involved.
 func (a App) snapshotFleet() App {
