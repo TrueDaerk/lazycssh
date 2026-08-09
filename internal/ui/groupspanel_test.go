@@ -349,7 +349,9 @@ func TestUnreadableGroupBecomesOneRow(t *testing.T) {
 	}
 }
 
-func TestGroupCursorMovesAndLeavesThePanelAtTheEnds(t *testing.T) {
+// At the bottom of the list, down is a no-op: it never switches away from the
+// Groups panel (issue #212).
+func TestGroupCursorMovesAndStaysInThePanelAtTheEnds(t *testing.T) {
 	a, _ := groupsStoreApp(t, savedGroup("a", "h1"), savedGroup("b", "h2"))
 
 	a = pressKey(t, a, "j")
@@ -357,7 +359,10 @@ func TestGroupCursorMovesAndLeavesThePanelAtTheEnds(t *testing.T) {
 		t.Fatalf("SelectedGroup() = %q", a.SelectedGroup())
 	}
 	a = pressKey(t, a, "j")
-	if a.Panel() != PanelSessions {
+	if a.SelectedGroup() != "b" {
+		t.Fatalf("SelectedGroup() = %q after running off the bottom", a.SelectedGroup())
+	}
+	if a.Panel() != PanelGroups {
 		t.Fatalf("Panel() = %v after moving off the bottom", a.Panel())
 	}
 }

@@ -37,7 +37,8 @@ not typing into a pane, not in the broadcast bar's edit mode, not in a prompt.
 
 | Key | Action |
 |---|---|
-| ++up++ / ++k++, ++down++ / ++j++ | move |
+| ++up++ / ++k++, ++down++ / ++j++ | move the cursor inside the focused panel; a no-op at the top/bottom of the list, and on the Status panel, which has none |
+| ++left++ / ++right++ | previous / next panel, stopping at Status / Command log |
 | ++enter++ / ++space++ | choose the row: open a group, foreground a session, resend a log entry |
 | ++w++ | save the run as a group |
 | ++bracket-left++ / ++bracket-right++ | previous / next chunk of hosts |
@@ -47,6 +48,9 @@ not typing into a pane, not in the broadcast bar's edit mode, not in a prompt.
 
 The Groups panel's ++n++ and ++d++ deliberately shadow their global meanings
 while it has focus — lazygit-style panel keys.
+
+++up++/++down++ never change which panel is focused — that is always explicit,
+via ++left++/++right++, ++tab++/++shift+tab++, or the number keys.
 
 ## A focused pane
 

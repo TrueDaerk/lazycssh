@@ -114,7 +114,8 @@ func (a App) movePane(delta int) App {
 	return a
 }
 
-// movePanel moves the sidebar selection by delta, stopping at the ends.
+// movePanel moves the sidebar panel selection by delta, stopping at the ends
+// rather than wrapping into the broadcast bar - that stays tab/shift+tab's job.
 func (a App) movePanel(delta int) App {
 	panels := Panels()
 	next := clamp(int(a.panel)+delta, 0, len(panels)-1)

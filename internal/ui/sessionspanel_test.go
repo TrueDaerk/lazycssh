@@ -214,7 +214,9 @@ func TestSessionsPanelWithNothingOpen(t *testing.T) {
 	}
 }
 
-func TestSessionCursorMovesAndLeavesThePanelAtTheEnds(t *testing.T) {
+// At the bottom of the list, down is a no-op: it never switches away from the
+// Sessions panel (issue #212).
+func TestSessionCursorMovesAndStaysInThePanelAtTheEnds(t *testing.T) {
 	a, _ := openTwo(t)
 
 	a = pressKey(t, a, "j")
@@ -223,7 +225,10 @@ func TestSessionCursorMovesAndLeavesThePanelAtTheEnds(t *testing.T) {
 		t.Fatalf("SelectedOpenSession() = %q", a.SelectedOpenSession())
 	}
 	a = pressKey(t, a, "j")
-	if a.Panel() != PanelCommandLog {
+	if a.SelectedOpenSession() != "back" {
+		t.Fatalf("SelectedOpenSession() = %q after running off the bottom", a.SelectedOpenSession())
+	}
+	if a.Panel() != PanelSessions {
 		t.Fatalf("Panel() = %v after moving off the bottom", a.Panel())
 	}
 }
