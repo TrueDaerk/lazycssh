@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
@@ -252,6 +253,10 @@ type App struct {
 
 	// screen is how much of the terminal the focused area gets; see screen.go.
 	screen ScreenMode
+
+	// now is the clock the scrollback file export stamps its filename with;
+	// time.Now outside tests, a fixed instant inside them (issue #252).
+	now func() time.Time
 }
 
 // newLineInput builds a text input the way every prompt here uses it: no
@@ -300,6 +305,7 @@ func NewApp(cfg Config) App {
 		scroll:      make(map[string]int),
 		focus:       AreaSidebar,
 		panel:       PanelStatus,
+		now:         time.Now,
 		active:      -1,
 	}
 	a.panels = panelSet{
@@ -505,6 +511,10 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ConnectErrorMsg:
 		a.connectErr = msg.Err
+		return a, nil
+
+	case PaneExportedMsg:
+		a.lastDelivery = msg.report()
 		return a, nil
 
 	case tea.KeyPressMsg:

@@ -139,6 +139,7 @@ type KeyMap struct {
 
 	CopyPane   key.Binding
 	CopyBuffer key.Binding
+	ExportPane key.Binding
 
 	ScrollUp     key.Binding
 	ScrollDown   key.Binding
@@ -303,6 +304,13 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("alt+y", "copy this pane's visible text")),
 		CopyBuffer: key.NewBinding(key.WithKeys("alt+d"),
 			key.WithHelp("alt+d", "copy this pane's whole scrollback")),
+		// Export writes to disk rather than the clipboard, so it earns its own
+		// chord rather than a shift of alt+d: issue #252 asked for plain y/Y/w,
+		// but a pane is a terminal - every grid binding is alt or shift so a
+		// plain key always reaches the host (TestGridBindingsAreAllModified) -
+		// so this follows the alt+y/alt+d pattern instead. w for write.
+		ExportPane: key.NewBinding(key.WithKeys("alt+w"),
+			key.WithHelp("alt+w", "export this pane's scrollback to a file")),
 
 		ScrollUp:     key.NewBinding(key.WithKeys("shift+pgup"), key.WithHelp("shift+pgup", "scroll back")),
 		ScrollDown:   key.NewBinding(key.WithKeys("shift+pgdown"), key.WithHelp("shift+pgdn", "scroll forward")),
@@ -429,7 +437,7 @@ func (k KeyMap) grid() []key.Binding {
 		k.LeaveTyping, k.ToggleSelect,
 		k.PaneLeft, k.PaneRight, k.PaneUp, k.PaneDown,
 		k.FullScreen, k.ScreenMode, k.Reconnect, k.ClosePane,
-		k.CopyPane, k.CopyBuffer,
+		k.CopyPane, k.CopyBuffer, k.ExportPane,
 		k.ScrollUp, k.ScrollDown, k.ScrollTop, k.ScrollBottom,
 		k.SearchPane, k.NextMatch, k.PrevMatch, k.ClearSearch,
 	}

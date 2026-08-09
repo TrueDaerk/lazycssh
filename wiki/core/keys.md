@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-08-10T02:00:00Z
+timestamp: 2026-08-10T03:00:00Z
 ---
 
 # Keymap and help
@@ -96,6 +96,7 @@ live at the same time.
 | `alt+y` | panes (and app level) | copy this pane's visible text to the clipboard (OSC 52) |
 | `ctrl+c` | with a live mouse selection | copy the selection (OSC 52) and clear it — no interrupt is sent; without a selection it stays a keystroke for the hosts |
 | `alt+d` | panes (and app level) | copy this pane's whole scrollback to the clipboard (OSC 52) |
+| `alt+w` | panes (and app level) | export this pane's whole scrollback to `lazycssh-<alias>-<timestamp>.log` in the working directory, ANSI stripped — a one-shot postmortem export, not [session logging](./session-logging.md#one-shot-export-vs-session-logging) (issue #252) |
 | `shift+pgup` / `shift+pgdn` | panes (and app level) | scroll the focused pane back / forward |
 | `shift+home` / `shift+end` | panes (and app level) | oldest retained output / back to the tail |
 | `alt+/` | panes (and app level) | search the scrollback |

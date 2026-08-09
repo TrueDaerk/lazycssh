@@ -86,7 +86,8 @@ receive them — `BROADCAST all (7/8 up)`, `TYPING web-01 — ctrl+] leaves`.
 - **Scrollback per host** — bounded ring buffer (10,000 lines), search with `/`
   (`alt+/` while typing to a host), `n`/`N` between matches with a `3/17`
   counter, `esc` back to where you were, or `/find <text>` for "which of my
-  hosts printed this"; keyboard and mouse copy over OSC 52.
+  hosts printed this"; keyboard and mouse copy over OSC 52, `alt+w` exports a
+  pane's whole scrollback to a file for a postmortem.
 - **Host key verification on by default** — an unknown key asks in the pane,
   ssh-style; a *changed* key is a hard failure with no click-through. The
   opt-out is an explicit flag that stays on the status bar.

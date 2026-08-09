@@ -4,7 +4,7 @@ title: Session logging
 description: Opt-in per-host output logging to disk — file layout, rotation, and why single mode pauses the pen.
 resource: internal/sessionlog
 tags: [logging, audit, security, cli]
-timestamp: 2026-08-09T00:00:00Z
+timestamp: 2026-08-10T03:00:00Z
 ---
 
 # Session logging
@@ -74,3 +74,22 @@ the run returns it, so a run that lost output ends with a message and a non-zero
 
 An unwritable `--log-dir` fails at startup, before the TUI takes the screen, because "you
 asked for logs and there will be none" must be readable.
+
+## One-shot export vs session logging
+
+`alt+w` (`internal/ui/export.go`, issue #252) looks similar — it writes a pane's content to
+disk — but it is a different feature with a different trust model, not a shortcut into this
+one:
+
+| | Session logging | `alt+w` export |
+|---|---|---|
+| Enabled by | `--log-dir` at the run's start | a keypress, any time |
+| Scope | every host, continuous, for the run's whole life | the one focused pane, once |
+| Content | raw output bytes as the transport saw them, including ANSI | the retained scrollback, ANSI **stripped** |
+| Off by default? | yes — nothing is written without `--log-dir` | not applicable — there is no ambient logging to opt into; the export itself is the one-shot action, and it writes only when pressed |
+| File | `DIR/<run>/<host>.log`, rotated | `lazycssh-<alias>-<timestamp>.log` in the working directory, one file, unbounded |
+
+The security posture the project was founded on — session bytes are never written to disk
+unless the user asked — still holds for `alt+w`: it writes nothing until the
+key is pressed, and then only the one pane on screen, which is the same "explicit ask" shape
+as `--log-dir`, just scoped to an instant instead of a run.

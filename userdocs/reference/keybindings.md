@@ -76,6 +76,7 @@ from the app level too.
 | ++alt+x++ | close this host; on a dead host, remove its pane |
 | ++alt+y++ | copy this pane's visible text (OSC 52) |
 | ++alt+d++ | copy this pane's whole scrollback (OSC 52) |
+| ++alt+w++ | export this pane's whole scrollback to a file, ANSI stripped |
 | ++ctrl+c++ | with a live mouse selection: copy it and clear it, sending nothing. Without one: the interrupt keystroke |
 | ++shift+page-up++ / ++shift+page-down++ | scroll this pane back / forward |
 | ++shift+home++ / ++shift+end++ | oldest retained output / back to the tail |
