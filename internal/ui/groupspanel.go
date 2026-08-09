@@ -261,8 +261,10 @@ func (a App) handleGroupDeleteKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 // groupsPanel renders the saved groups. The dialogs this panel drives - new
 // group, delete, save-as - float over the frame instead of being drawn into
-// it; see modal.go.
-func (a App) groupsPanel(width, height int) string {
+// it; see modal.go. focused reports whether this panel is the one that would
+// actually receive a keystroke right now; it decides how the cursor row is
+// drawn (issue #222).
+func (a App) groupsPanel(width, height int, focused bool) string {
 	var b strings.Builder
 
 	// Their errors travel with the dialogs, so the panel reports one only
@@ -295,7 +297,7 @@ func (a App) groupsPanel(width, height int) string {
 			if i > first {
 				b.WriteString("\n")
 			}
-			b.WriteString(a.groupLine(a.groupList[i], i == cursor, openNames[a.groupList[i].Name]))
+			b.WriteString(a.groupLine(a.groupList[i], i == cursor, openNames[a.groupList[i].Name], focused))
 		}
 		if hidden := len(a.groupList) - last; hidden > 0 {
 			b.WriteString("\n")
@@ -308,8 +310,9 @@ func (a App) groupsPanel(width, height int) string {
 
 // groupLine renders one saved group. A group with an open session is marked
 // with a character as well as a style, so it survives a terminal without
-// colour.
-func (a App) groupLine(row groupRow, underCursor, open bool) string {
+// colour. focused decides whether the cursor row gets the strong highlight or
+// the muted one; see [Theme.ListCursor].
+func (a App) groupLine(row groupRow, underCursor, open, focused bool) string {
 	marker := "  "
 	if open {
 		marker = "▸ "
@@ -317,7 +320,7 @@ func (a App) groupLine(row groupRow, underCursor, open bool) string {
 	label := marker + row.Label()
 	switch {
 	case underCursor:
-		return a.theme.Cursor.Render(label)
+		return a.theme.ListCursor(focused).Render(label)
 	case row.Err != nil:
 		return a.theme.Failure.Render(label)
 	case open:

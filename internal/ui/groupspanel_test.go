@@ -66,7 +66,7 @@ func TestGroupsPanelListsSavedGroupsWithHostCounts(t *testing.T) {
 	prod.Description = "the production web tier"
 	a, _ := groupsStoreApp(t, prod, savedGroup("staging", "stage-01"))
 
-	view := plain(a.groupsPanel(60, 20))
+	view := plain(a.groupsPanel(60, 20, true))
 	for _, want := range []string{"prod (4 hosts)", "the production web tier", "staging (1 host)"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("the Groups panel does not show %q:\n%s", want, view)
@@ -297,8 +297,35 @@ func TestOpenGroupIsMarked(t *testing.T) {
 	model, _ := a.Update(SessionOpenedMsg{Name: "prod", Hosts: []string{"web-01"}})
 	a = model.(App)
 
-	if !strings.Contains(plain(a.groupsPanel(60, 20)), "▸ prod") {
-		t.Fatalf("the open group is not marked:\n%s", plain(a.groupsPanel(60, 20)))
+	if !strings.Contains(plain(a.groupsPanel(60, 20, true)), "▸ prod") {
+		t.Fatalf("the open group is not marked:\n%s", plain(a.groupsPanel(60, 20, true)))
+	}
+}
+
+// The cursor row gets the strong background highlight only while the panel is
+// both selected and the sidebar holds the keyboard, lazygit style; otherwise it
+// keeps a muted marker so the position is never lost (issue #222).
+func TestGroupCursorHighlightOnlyWhenPanelFocused(t *testing.T) {
+	a, _ := groupsStoreApp(t, savedGroup("prod", "h1"), savedGroup("staging", "h2"))
+	th := a.Theme()
+
+	label := "  prod (1 host)"
+	focused := a.groupsPanel(60, 20, true)
+	if !strings.Contains(focused, th.Cursor.Render(label)) {
+		t.Fatalf("the focused panel does not use the strong cursor style:\n%s", focused)
+	}
+
+	unfocused := a.groupsPanel(60, 20, false)
+	if strings.Contains(unfocused, th.Cursor.Render(label)) {
+		t.Fatalf("an unfocused panel still uses the strong cursor style:\n%s", unfocused)
+	}
+	if !strings.Contains(unfocused, th.CursorMuted.Render(label)) {
+		t.Fatalf("an unfocused panel's cursor row is not muted:\n%s", unfocused)
+	}
+
+	// The plain text - and so the cursor's position - survives either way.
+	if plain(focused) != plain(unfocused) {
+		t.Fatalf("focus changed the panel's text:\nfocused: %s\nunfocused: %s", plain(focused), plain(unfocused))
 	}
 }
 
@@ -306,7 +333,7 @@ func TestGroupsPanelWithoutAStore(t *testing.T) {
 	a := resize(t, NewApp(Config{Hosts: []string{"h1"}, Theme: Options{Dark: true}}), 120, 40)
 	a = pressKey(t, a, "2")
 
-	if got := plain(a.groupsPanel(60, 20)); !strings.Contains(got, "no group directory") {
+	if got := plain(a.groupsPanel(60, 20, true)); !strings.Contains(got, "no group directory") {
 		t.Fatalf("groupsPanel() = %q", got)
 	}
 	if a.SelectedGroup() != "" {
@@ -340,7 +367,7 @@ func TestUnreadableGroupBecomesOneRow(t *testing.T) {
 		t.Fatalf("Update returned a %T", model)
 	}
 
-	view := plain(a.groupsPanel(60, 20))
+	view := plain(a.groupsPanel(60, 20, true))
 	if !strings.Contains(view, "broken (unreadable)") {
 		t.Fatalf("the unreadable group is not listed:\n%s", view)
 	}

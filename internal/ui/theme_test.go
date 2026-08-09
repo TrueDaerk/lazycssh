@@ -44,8 +44,31 @@ func TestNoColorStillDistinguishesFocusAndDanger(t *testing.T) {
 	if !th.Cursor.GetReverse() {
 		t.Fatal("the list cursor is invisible without colour")
 	}
+	if th.CursorMuted.GetReverse() {
+		t.Fatal("the muted cursor reverses video, which is reserved for the focused style")
+	}
+	if !th.CursorMuted.GetUnderline() {
+		t.Fatal("the muted cursor row is not distinguishable without colour")
+	}
 	if !th.StateFailed.GetBold() {
 		t.Fatal("a failed host is not marked without colour")
+	}
+}
+
+// ListCursor is the only place a view picks between the two cursor styles
+// (issue #222): the strong one when a list panel is both selected and holds
+// the sidebar's focus, the muted one otherwise.
+func TestListCursorPicksTheStyleForFocus(t *testing.T) {
+	th := NewTheme(Options{Dark: true})
+
+	if th.ListCursor(true).Render("x") != th.Cursor.Render("x") {
+		t.Fatal("ListCursor(true) did not return the strong cursor style")
+	}
+	if th.ListCursor(false).Render("x") != th.CursorMuted.Render("x") {
+		t.Fatal("ListCursor(false) did not return the muted cursor style")
+	}
+	if th.ListCursor(true).Render("x") == th.ListCursor(false).Render("x") {
+		t.Fatal("the focused and unfocused cursor styles render identically")
 	}
 }
 

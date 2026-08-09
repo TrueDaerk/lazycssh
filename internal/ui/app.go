@@ -961,8 +961,9 @@ func (a App) renderSidebar() string {
 		// same content. The selected panel is "focused"-styled only while the
 		// sidebar has focus; its expansion alone says "selected" when the grid
 		// does. The body's width budget is the box minus border and padding.
-		body := a.panelBody(panel, max(1, r.Width-4), max(1, h-2))
-		boxes = append(boxes, titledBox(a.theme, focused && panel == a.panel, r.Width, h, title, body))
+		panelFocused := focused && panel == a.panel
+		body := a.panelBody(panel, max(1, r.Width-4), max(1, h-2), panelFocused)
+		boxes = append(boxes, titledBox(a.theme, panelFocused, r.Width, h, title, body))
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, boxes...)

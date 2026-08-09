@@ -9,16 +9,19 @@ import (
 //
 // It serves the selected panel and the unselected previews alike: the height
 // budget, not the selection, decides how much of the content survives.
-func (a App) panelBody(panel Panel, width, height int) string {
+// focused reports whether this panel is both the selected one and holds the
+// sidebar's focus - the only case a list panel draws its cursor row with the
+// strong highlight rather than the muted marker (issue #222).
+func (a App) panelBody(panel Panel, width, height int, focused bool) string {
 	switch panel {
 	case PanelStatus:
 		return a.statusPanel(width)
 	case PanelGroups:
-		return a.groupsPanel(width, height)
+		return a.groupsPanel(width, height, focused)
 	case PanelSessions:
-		return a.sessionsPanel(width, height)
+		return a.sessionsPanel(width, height, focused)
 	case PanelCommandLog:
-		return a.logPanel(width, height)
+		return a.logPanel(width, height, focused)
 	default:
 		return a.theme.Muted.Render("not implemented yet")
 	}

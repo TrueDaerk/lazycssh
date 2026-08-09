@@ -214,8 +214,9 @@ func (a App) broadcastMode() broadcast.Mode {
 // sessionsPanel renders the open sessions: which exist, which is in the
 // foreground, and how many of each one's hosts are up.
 // The end question this panel asks floats over the frame rather than taking
-// its first line; see modal.go.
-func (a App) sessionsPanel(width, height int) string {
+// its first line; see modal.go. focused reports whether this panel is the one
+// that would actually receive a keystroke right now (issue #222).
+func (a App) sessionsPanel(width, height int, focused bool) string {
 	var b strings.Builder
 
 	if len(a.open) == 0 {
@@ -229,7 +230,7 @@ func (a App) sessionsPanel(width, height int) string {
 		if i > first {
 			b.WriteString("\n")
 		}
-		b.WriteString(a.openSessionLine(a.open[i], i == cursor, i == a.active))
+		b.WriteString(a.openSessionLine(a.open[i], i == cursor, i == a.active, focused))
 	}
 	if hidden := len(a.open) - last; hidden > 0 {
 		b.WriteString("\n")
@@ -241,7 +242,9 @@ func (a App) sessionsPanel(width, height int) string {
 
 // openSessionLine renders one open session. The foreground one is marked with
 // a character as well as a style, so it survives a terminal without colour.
-func (a App) openSessionLine(s openSession, underCursor, foreground bool) string {
+// focused decides whether the cursor row gets the strong highlight or the
+// muted one; see [Theme.ListCursor].
+func (a App) openSessionLine(s openSession, underCursor, foreground, focused bool) string {
 	up := 0
 	for _, id := range s.Hosts {
 		if a.state(id) == ssh.StateConnected {
@@ -259,7 +262,7 @@ func (a App) openSessionLine(s openSession, underCursor, foreground bool) string
 	}
 	switch {
 	case underCursor:
-		return a.theme.Cursor.Render(label)
+		return a.theme.ListCursor(focused).Render(label)
 	case foreground:
 		return a.theme.Selected.Render(label)
 	default:
