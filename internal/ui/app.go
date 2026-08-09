@@ -132,10 +132,15 @@ type Config struct {
 	// this package free of the resolver, and the views testable without a
 	// config file.
 	ConfigAliases []string
+	// Recent is the recent-host list earlier runs wrote, offered by the host
+	// picker as its `rec` rows. Nil means the run has no recent file and the
+	// picker offers none, same as before this existed (issue #254).
+	Recent RecentHosts
 	// HostSource supplies the fuzzy host picker's candidates. Nil means the
-	// picker offers [Config.ConfigAliases], which is what the program passes;
-	// the field exists so later sources can be plugged in without the picker
-	// changing (issue #246).
+	// three default sources merged - [Config.ConfigAliases], the saved groups
+	// of [Config.Sessions] and [Config.Recent] - and the field exists so a
+	// further source can be plugged in without the picker changing (issues
+	// #246, #254).
 	HostSource HostSource
 }
 
@@ -279,9 +284,14 @@ func NewApp(cfg Config) App {
 	}
 
 	if cfg.HostSource == nil {
-		// The default source is what the run already knows: the ssh-config
-		// aliases the completion hints come from.
-		cfg.HostSource = aliasSource(cfg.ConfigAliases)
+		// The default sources are what the run already knows, in the order
+		// that decides a repeated name: the ssh-config aliases the completion
+		// hints come from, the saved groups, then the recent hosts.
+		cfg.HostSource = MergeHostSources(
+			aliasSource(cfg.ConfigAliases),
+			groupSource{store: cfg.Sessions},
+			recentSource{store: cfg.Recent},
+		)
 	}
 
 	theme := NewTheme(cfg.Theme)

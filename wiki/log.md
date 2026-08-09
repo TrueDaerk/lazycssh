@@ -2,6 +2,24 @@
 
 ## 2026-08-10
 
+- Merged the saved groups and a new recent-host list into the host picker (issue #254). The
+  picker's one-method `HostSource` from #246 now returns tagged `PickerItem` rows, and
+  `MergeHostSources` concatenates three of them — `cfg` (ssh-config aliases), `grp` (saved
+  groups, listed as `@name`) and `rec` (hosts connected to in earlier runs) — deduplicating by
+  row name with the first source winning, so a host that is both an alias and a recent connect
+  stays one `cfg` row. The `@` prefix on group rows is what keeps a group and a host of the same
+  name two rows rather than a collision. A row carries the patterns connecting it sends, which
+  is how enter on a `grp` row connects the whole group without the picker knowing what a group
+  is; marks mix a group with hosts freely. New `internal/recent` persists the `rec` list to
+  `$XDG_CONFIG_HOME/lazycssh/recent` — most recent first, capped at 200, deduplicated on read
+  and on write — following the atomic-write/0600 shape of `internal/sessions` and
+  `internal/history`. `Model.recordRecent` records on every transport event the sessions that
+  reached `StateConnected`, by resolved alias rather than session identifier (`srv1#2` is not
+  connectable) and once per session per run; a host that failed to dial is not a recent host.
+  New concept document `core/recent-hosts.md`; `core/tui.md`, `core/keys.md` and `core/program.md`
+  updated. `internal/ui/hostsources.go`, `internal/ui/hostpicker.go`, `internal/ui/app.go`,
+  `internal/program/program.go`, `cmd/lazycssh/main.go`.
+
 - Clone the focused pane's connection into a second, independent session, `alt+shift+c` (issue
   #253): `tail -f` in one pane, an interactive shell in another, on the same host, without
   restarting with the host listed twice. It is almost entirely wiring over paths that already

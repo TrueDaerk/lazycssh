@@ -15,9 +15,10 @@ import (
 // picker answers "which hosts are there", which is a different question and
 // needs a list rather than five completion hints.
 //
-// Everything it lists comes from a [HostSource], so the ssh-config aliases are
-// one source rather than the only possible one - later issues add more, and
-// none of them has to reach into this file.
+// Everything it lists comes from a [HostSource] and arrives as a tagged
+// [PickerItem], so ssh-config aliases, saved groups and the recent-host list
+// are three sources of rows rather than three cases in this file; they live in
+// hostsources.go (issue #254).
 //
 // The picker never dials. Like every other connect path it emits a
 // [HostConnectMsg] and lets internal/program resolve and open the sessions,
@@ -28,23 +29,6 @@ import (
 // that grows with ~/.ssh/config would cover the fleet it is being opened over;
 // the rest is reached by filtering or by the cursor, which scrolls the window.
 const pickerListHeight = 10
-
-// HostSource supplies the host picker's candidates. It is an interface, not a
-// slice, so the picker's item source can grow - known hosts, a saved group's
-// members, a discovery backend - without the picker changing.
-type HostSource interface {
-	// Hosts returns the connectable names to offer, in display order. The
-	// picker calls it when it opens, not while rendering, so an implementation
-	// may do real work.
-	Hosts() []string
-}
-
-// aliasSource is the default source: the concrete ssh-config aliases the
-// program already resolved for the new-host prompt's completion.
-type aliasSource []string
-
-// Hosts returns the aliases as given.
-func (s aliasSource) Hosts() []string { return []string(s) }
 
 // hostPicker is the fuzzy picker's state: what has been typed, the candidates
 // it filters, where the cursor is and which rows are marked.
@@ -59,10 +43,10 @@ type hostPicker struct {
 	// input is the fuzzy filter.
 	input textinput.Model
 	// items are the candidates, snapshotted when the picker opened.
-	items []string
+	items []PickerItem
 	// cursor is the highlighted row within the current matches.
 	cursor int
-	// marked are the hosts space/tab toggled, in mark order.
+	// marked are the rows space/tab toggled, by name, in mark order.
 	marked []string
 }
 
@@ -72,9 +56,20 @@ func (a App) HostPickerOpen() bool { return a.picker.open }
 // HostPickerFilter is what has been typed into the picker's filter.
 func (a App) HostPickerFilter() string { return a.picker.input.Value() }
 
-// HostPickerMatches are the candidates the typed filter still selects, in
-// source order.
-func (a App) HostPickerMatches() []string { return a.picker.matches() }
+// HostPickerMatches are the names of the candidates the typed filter still
+// selects, in source order.
+func (a App) HostPickerMatches() []string {
+	matches := a.picker.matches()
+	names := make([]string, 0, len(matches))
+	for _, item := range matches {
+		names = append(names, item.Name)
+	}
+	return names
+}
+
+// HostPickerItems are the candidates the typed filter still selects, with
+// their origin tags, in source order.
+func (a App) HostPickerItems() []PickerItem { return slices.Clone(a.picker.matches()) }
 
 // HostPickerCursor is the index of the highlighted row within
 // [App.HostPickerMatches].
@@ -91,7 +86,7 @@ func (a App) openHostPicker() App {
 	p := hostPicker{open: true, input: newLineInput("filter, or a host pattern")}
 	p.input.Focus()
 	if a.cfg.HostSource != nil {
-		p.items = a.cfg.HostSource.Hosts()
+		p.items = a.cfg.HostSource.Items()
 	}
 	a.picker = p
 	return a
@@ -100,14 +95,14 @@ func (a App) openHostPicker() App {
 // matches are the candidates the filter still selects, in source order. An
 // empty filter matches everything, which is how the picker starts as a browser
 // rather than as a prompt.
-func (p hostPicker) matches() []string {
+func (p hostPicker) matches() []PickerItem {
 	filter := strings.TrimSpace(p.input.Value())
 	if filter == "" {
 		return p.items
 	}
-	var out []string
+	var out []PickerItem
 	for _, item := range p.items {
-		if fuzzyMatch(filter, item) {
+		if fuzzyMatch(filter, item.Name) {
 			out = append(out, item)
 		}
 	}
@@ -147,7 +142,7 @@ func (p hostPicker) toggleMark() hostPicker {
 	if p.cursor < 0 || p.cursor >= len(matches) {
 		return p
 	}
-	host := matches[p.cursor]
+	host := matches[p.cursor].Name
 
 	marked := slices.Clone(p.marked)
 	if i := slices.Index(marked, host); i >= 0 {
@@ -160,21 +155,40 @@ func (p hostPicker) toggleMark() hostPicker {
 	return p
 }
 
-// chosen is what enter connects: the marked hosts if there are any, otherwise
+// chosen is what enter connects: the marked rows if there are any, otherwise
 // the highlighted candidate, otherwise the typed text as a literal host pattern
 // - which is how a machine that is not in ~/.ssh/config is reached from here.
 // Nothing typed and nothing to highlight chooses nothing.
+//
+// A row becomes its patterns, not its name: a `grp` row connects every host of
+// the group it names, which is what picking a group has to mean.
 func (p hostPicker) chosen() []string {
 	if len(p.marked) > 0 {
-		return slices.Clone(p.marked)
+		var out []string
+		for _, name := range p.marked {
+			out = append(out, p.patternsFor(name)...)
+		}
+		return out
 	}
 	if matches := p.matches(); p.cursor >= 0 && p.cursor < len(matches) {
-		return []string{matches[p.cursor]}
+		return matches[p.cursor].connect()
 	}
 	if typed := strings.TrimSpace(p.input.Value()); typed != "" {
 		return []string{typed}
 	}
 	return nil
+}
+
+// patternsFor is what connecting the named row sends. A name with no item
+// behind it - which the marks cannot produce, since only rows can be marked -
+// is connected as itself rather than dropped.
+func (p hostPicker) patternsFor(name string) []string {
+	for _, item := range p.items {
+		if item.Name == name {
+			return item.connect()
+		}
+	}
+	return []string{name}
 }
 
 // handleHostPickerKey feeds the picker, which owns the keyboard while it is
@@ -239,7 +253,7 @@ func (a App) hostPickerModal() modal {
 
 // hostPickerRows renders the visible slice of the match list, or the line that
 // says what enter would do instead when nothing matches.
-func (a App) hostPickerRows(matches []string) []string {
+func (a App) hostPickerRows(matches []PickerItem) []string {
 	p := a.picker
 	if len(matches) == 0 {
 		if strings.TrimSpace(p.input.Value()) == "" {
@@ -263,14 +277,18 @@ func (a App) hostPickerRows(matches []string) []string {
 		// The mark is a character as well as a style, so it survives a
 		// terminal without colour.
 		marker := "  "
-		if p.isMarked(matches[i]) {
+		if p.isMarked(matches[i].Name) {
 			marker = "▸ "
 		}
-		label := marker + matches[i]
+		// The origin tag is text in the label rather than a style of its own,
+		// for the same reason the mark is: it has to survive a terminal
+		// without colour, and it has to stay readable inside the cursor's
+		// full-row highlight.
+		label := marker + matches[i].Kind.Tag() + "  " + matches[i].Name
 		switch {
 		case i == cursor:
 			lines = append(lines, a.theme.ListCursor(true).Render(label))
-		case p.isMarked(matches[i]):
+		case p.isMarked(matches[i].Name):
 			lines = append(lines, a.theme.Selected.Render(label))
 		default:
 			lines = append(lines, a.theme.Base.Render(label))
@@ -285,7 +303,7 @@ func (a App) hostPickerRows(matches []string) []string {
 // hostPickerHint names the keys that answer the picker. What enter does
 // depends on what is in front of the user, so the footer says which of the
 // three it would be.
-func (a App) hostPickerHint(matches []string) string {
+func (a App) hostPickerHint(matches []PickerItem) string {
 	submit := "connects the highlighted host"
 	switch {
 	case len(a.picker.marked) > 0:

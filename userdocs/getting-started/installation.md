@@ -69,6 +69,7 @@ nice to have:
 | `$SSH_AUTH_SOCK` | ssh-agent authentication, tried first |
 | `$XDG_CONFIG_HOME/lazycssh/sessions/` | saved groups (`~/.config/lazycssh/sessions/` when unset) |
 | `$XDG_CONFIG_HOME/lazycssh/history` | command line history (`~/.config/lazycssh/history` when unset) |
+| `$XDG_CONFIG_HOME/lazycssh/recent` | recently connected hosts, offered by the host picker (`~/.config/lazycssh/recent` when unset) |
 
 Nothing is written outside the sessions directory and the history file, and
 nothing written there ever contains a credential — see

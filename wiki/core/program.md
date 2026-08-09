@@ -4,7 +4,7 @@ title: Program assembly
 description: The one place every layer meets - building the fleet, wiring the router and the UI together, and the wrapper model that acts on what the UI may only ask for.
 resource: internal/program/program.go
 tags: [program, wiring, bubbletea, transport]
-timestamp: 2026-08-09T00:00:00Z
+timestamp: 2026-08-10T14:00:00Z
 ---
 
 # Program assembly
@@ -58,6 +58,11 @@ converts it (`OutputEvent` → `SessionOutputMsg`, everything else → `FleetUpd
 carry no payload and may be dropped by the transport under load; that is fine, because every
 `FleetUpdatedMsg` makes the UI's `Update` re-read the whole fleet into its model snapshot — one
 surviving event carries everything the dropped ones hinted at — see [TUI shell](./tui.md).
+
+Every pumped event also runs `recordRecent`, which writes the sessions that have reached
+connected since the last pass into the [recent-host list](./recent-hosts.md) — the picker's
+`rec` rows. The bookkeeping (which identifiers were already recorded) happens in `Update`; the
+file write happens in the returned `tea.Cmd`, and its failure is swallowed.
 
 ## Authentication, for now
 
