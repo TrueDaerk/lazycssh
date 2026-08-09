@@ -44,7 +44,8 @@ func (a App) aliasHints() []string {
 // connectModal is the new-host dialog: the pattern being typed, and the
 // ssh-config aliases it still matches under it.
 func (a App) connectModal() modal {
-	m := a.prompt("Connect host", "host", a.hostInput, "enter connects · esc cancels")
+	m := a.prompt("Connect host", "host", a.hostInput,
+		promptHint(does(a.keys.PromptSubmit, "connects"), does(a.keys.PromptCancel, "cancels")))
 
 	hints := a.aliasHints()
 	shown := min(len(hints), maxAliasHints)
@@ -55,7 +56,9 @@ func (a App) connectModal() modal {
 		m.Lines = append(m.Lines, a.theme.Muted.Render("  …"))
 	}
 	if shown > 0 {
-		m.Hint = "tab completes · enter connects · esc cancels"
+		// Only mention completion when there is something to complete to.
+		m.Hint = promptHint(does(a.keys.PromptComplete, "completes"),
+			does(a.keys.PromptSubmit, "connects"), does(a.keys.PromptCancel, "cancels"))
 	}
 	return m
 }

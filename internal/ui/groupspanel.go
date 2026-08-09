@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/TrueDaerk/lazycssh/internal/sessions"
@@ -195,10 +196,10 @@ func (a App) handleGroupDialogKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// and the typed input must survive until the result says what happened.
 		return a, nil
 	}
-	switch msg.String() {
-	case "esc":
+	switch {
+	case key.Matches(msg, a.keys.PromptCancel):
 		return a.cancelNewGroup(), nil
-	case "enter":
+	case key.Matches(msg, a.keys.PromptSubmit):
 		if a.groupStage == groupStageName {
 			name := strings.TrimSpace(a.groupNameInput.Value())
 			if name == "" {
@@ -293,10 +294,10 @@ func (a App) beginDeleteGroup() App {
 
 // handleGroupDeleteKey answers the delete question: enter or y removes the
 // file, esc or n withdraws the question, and anything else leaves it standing
-// (see [readConfirm]). An open session of that group is untouched - deleting a
+// (see [App.readConfirm]). An open session of that group is untouched - deleting a
 // definition must not tear down live connections.
 func (a App) handleGroupDeleteKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	answer := readConfirm(msg)
+	answer := a.readConfirm(msg)
 	if answer == answerNone {
 		return a, nil
 	}

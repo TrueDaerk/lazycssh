@@ -75,9 +75,9 @@ func (a App) beginEndSession() App {
 
 // handleSessionEndKey answers the end question: enter or y sends the shutdown
 // keystrokes, esc or n withdraws the question, and anything else leaves it
-// standing (see [readConfirm]).
+// standing (see [App.readConfirm]).
 func (a App) handleSessionEndKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	answer := readConfirm(msg)
+	answer := a.readConfirm(msg)
 	if answer == answerNone {
 		return a, nil
 	}

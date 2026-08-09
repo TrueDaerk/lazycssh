@@ -2,6 +2,18 @@
 
 ## 2026-08-09
 
+- The prompt and confirm keys moved into `KeyMap` (issue #226). `esc`, `enter`, `tab`, the
+  command-history arrows, `y`/`n`, `backspace`, `ctrl+c` and `ctrl+q` were matched by comparing
+  `msg.String()` to literals at every prompt site, which kept them out of the `?` overlay and
+  out of the invariants that keep the help honest. They are now bindings in a new `AreaPrompt`,
+  matched with `key.Matches`, and the overlay carries a **prompts** column in every context.
+  Dialog footers are generated from those bindings (`promptHint`/`does`/`note`) instead of
+  being hard-coded strings, so a hint cannot name a key the handler does not take. The same
+  pass moved the selection keys and the broadcast bar's literal `ctrl+a` onto their bindings.
+  `TestPromptKeysAreMatchedThroughTheKeyMap` parses the package and rejects any comparison of
+  `msg.String()` against a managed key. One behaviour fix fell out: `esc` on a broadcast auth
+  prompt now delivers its cancel `Cmd` instead of dropping it. `core/keys.md` updated.
+
 - Blocking I/O left `Update` (issue #225). The transport grew a per-session **stdin queue**
   (`internal/ssh/stdinqueue.go`): `Session.Write` now enqueues for a single drain goroutine and
   never blocks on the network, so every inline send path — per-keystroke `SendKey`, the

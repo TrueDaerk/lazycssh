@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
@@ -23,6 +24,13 @@ const (
 	AreaGrid
 	// AreaBroadcast covers the broadcast input bar under the grid.
 	AreaBroadcast
+	// AreaPrompt covers the dialogs and inline prompts. It is not a focus
+	// target: a prompt takes the keyboard from whatever had it, is resolved
+	// before any area binding is consulted, and hands the keyboard back when
+	// it closes. It is an area so that its keys are declared once like every
+	// other key, generate the footers of the boxes that use them, and appear
+	// in the `?` overlay (issue #226).
+	AreaPrompt
 )
 
 // String returns the name shown as a help column heading.
@@ -36,6 +44,8 @@ func (a Area) String() string {
 		return "panes"
 	case AreaBroadcast:
 		return "broadcast"
+	case AreaPrompt:
+		return "prompts"
 	default:
 		return "unknown(" + strconv.Itoa(int(a)) + ")"
 	}
@@ -102,8 +112,9 @@ type KeyMap struct {
 	// keystroke for the targets, so the bar keeps only the reserved escape,
 	// the pane chords, and the csshx-style ctrl+a prefix — plus enter as the
 	// way back from view mode.
-	BroadcastEscape key.Binding
-	BroadcastEdit   key.Binding
+	BroadcastEscape  key.Binding
+	BroadcastLiteral key.Binding
+	BroadcastEdit    key.Binding
 
 	LeaveTyping  key.Binding
 	ToggleSelect key.Binding
@@ -127,6 +138,23 @@ type KeyMap struct {
 	NextMatch    key.Binding
 	PrevMatch    key.Binding
 	ClearSearch  key.Binding
+
+	// Prompts and dialogs. These keys are matched before any area binding,
+	// because whatever prompt is open owns the keyboard while it is open.
+	// They are declared here for the same reason every other key is: the
+	// footers of the boxes are generated from them, so a hint cannot name a
+	// key the handler does not take (issue #226).
+	PromptSubmit   key.Binding
+	PromptCancel   key.Binding
+	PromptComplete key.Binding
+	PromptErase    key.Binding
+	HistoryPrev    key.Binding
+	HistoryNext    key.Binding
+	ConfirmYes     key.Binding
+	ConfirmNo      key.Binding
+	CopySelection  key.Binding
+	AuthCancel     key.Binding
+	ForceQuit      key.Binding
 }
 
 // DefaultKeyMap is the shipped set of bindings.
@@ -209,6 +237,8 @@ func DefaultKeyMap() KeyMap {
 		// ctrl+a ctrl+a and ctrl+a a send the literal.
 		BroadcastEscape: key.NewBinding(key.WithKeys("ctrl+a"),
 			key.WithHelp("ctrl+a", "prefix: ctrl+a or a = literal ctrl+a, esc = view mode, any other key goes to the hosts")),
+		BroadcastLiteral: key.NewBinding(key.WithKeys("ctrl+a", "a"),
+			key.WithHelp("ctrl+a/a", "after the prefix: send one literal ctrl+a")),
 		BroadcastEdit: key.NewBinding(key.WithKeys("enter"),
 			key.WithHelp("enter", "back to edit mode (from view mode)")),
 
@@ -249,7 +279,71 @@ func DefaultKeyMap() KeyMap {
 		NextMatch:    key.NewBinding(key.WithKeys("alt+["), key.WithHelp("alt+[", "older match")),
 		PrevMatch:    key.NewBinding(key.WithKeys("alt+]"), key.WithHelp("alt+]", "newer match")),
 		ClearSearch:  key.NewBinding(key.WithKeys("alt+c"), key.WithHelp("alt+c", "clear the search")),
+
+		PromptSubmit: key.NewBinding(key.WithKeys("enter"),
+			key.WithHelp("enter", "apply what was typed")),
+		// One esc backs out of everything transient: a prompt, a dialog, a
+		// mouse selection. Naming them together keeps the overlay honest
+		// about the key meaning the same thing in each.
+		PromptCancel: key.NewBinding(key.WithKeys("esc"),
+			key.WithHelp("esc", "cancel the prompt, or clear a mouse selection")),
+		PromptComplete: key.NewBinding(key.WithKeys("tab"),
+			key.WithHelp("tab", "complete the first matching ssh-config alias")),
+		// A pane's auth prompt is not a textinput - it echoes into the
+		// scrollback - so it does its own editing and needs the key named.
+		PromptErase: key.NewBinding(key.WithKeys("backspace"),
+			key.WithHelp("backspace", "erase the last character of an answer")),
+		HistoryPrev: key.NewBinding(key.WithKeys("up"),
+			key.WithHelp("↑", "previous command (in the command line)")),
+		HistoryNext: key.NewBinding(key.WithKeys("down"),
+			key.WithHelp("↓", "next command (in the command line)")),
+		// A confirm guards a file delete and a fleet-wide ctrl+c, so it takes
+		// a deliberate answer: everything outside these two bindings leaves
+		// the question standing rather than deciding it.
+		ConfirmYes: key.NewBinding(key.WithKeys("enter", "y", "Y"),
+			key.WithHelp("enter/y", "answer yes")),
+		ConfirmNo: key.NewBinding(key.WithKeys("esc", "n", "N"),
+			key.WithHelp("esc/n", "answer no")),
+		CopySelection: key.NewBinding(key.WithKeys("ctrl+c"),
+			key.WithHelp("ctrl+c", "copy the mouse selection (no interrupt is sent)")),
+		AuthCancel: key.NewBinding(key.WithKeys("esc", "ctrl+c"),
+			key.WithHelp("esc/ctrl+c", "cancel this pane's question")),
+		// ctrl+q is never a character in a text input, and an empty start
+		// opens straight into the host prompt - which must not be able to
+		// trap the user. Quit binds the chord too, for the app level.
+		ForceQuit: key.NewBinding(key.WithKeys("ctrl+q"),
+			key.WithHelp("ctrl+q", "quit, even from inside a prompt")),
 	}
+}
+
+// hintPart is one entry in a dialog's footer: either a binding and the verb
+// naming what it does in that dialog, or a plain note that names no key.
+type hintPart struct {
+	binding key.Binding
+	text    string
+}
+
+// does labels a binding with what it does in the dialog being described. The
+// key label comes from the binding, so the footer cannot name a key the
+// handler does not take (issue #226).
+func does(b key.Binding, verb string) hintPart { return hintPart{binding: b, text: verb} }
+
+// note is a footer entry with no key behind it, for the things a prompt has to
+// say about its input rather than about its keys.
+func note(text string) hintPart { return hintPart{text: text} }
+
+// promptHint renders a dialog footer: "tab completes · enter connects · esc
+// cancels", assembled from the bindings that actually handle those keys.
+func promptHint(parts ...hintPart) string {
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if label := part.binding.Help().Key; label != "" {
+			out = append(out, label+" "+part.text)
+			continue
+		}
+		out = append(out, part.text)
+	}
+	return strings.Join(out, " · ")
 }
 
 // global returns the bindings that work wherever focus is.
@@ -288,7 +382,25 @@ func (k KeyMap) grid() []key.Binding {
 // broadcastBar returns the bindings that act while the broadcast bar has the
 // keyboard. Everything else is a keystroke for the targets.
 func (k KeyMap) broadcastBar() []key.Binding {
-	return []key.Binding{k.LeaveTyping, k.BroadcastEscape, k.BroadcastEdit}
+	return []key.Binding{k.LeaveTyping, k.BroadcastEscape, k.BroadcastLiteral, k.BroadcastEdit}
+}
+
+// prompts returns the bindings that answer a dialog or an inline prompt. They
+// are listed as their own group rather than folded into the others because
+// they are live only while something is asking, and then they are the only
+// keys that are live at all.
+//
+// The group deliberately names one key more than once - esc cancels a prompt,
+// answers no, and clears a selection - because that is what esc does; which
+// meaning applies is decided by which prompt is open, not by focus. The
+// ambiguity tests therefore skip this area.
+func (k KeyMap) prompts() []key.Binding {
+	return []key.Binding{
+		k.PromptSubmit, k.PromptCancel, k.PromptComplete, k.PromptErase,
+		k.HistoryPrev, k.HistoryNext,
+		k.ConfirmYes, k.ConfirmNo,
+		k.CopySelection, k.AuthCancel, k.ForceQuit,
+	}
 }
 
 // Bindings returns the bindings of one area.
@@ -300,6 +412,8 @@ func (k KeyMap) Bindings(area Area) []key.Binding {
 		return k.grid()
 	case AreaBroadcast:
 		return k.broadcastBar()
+	case AreaPrompt:
+		return k.prompts()
 	default:
 		return k.global()
 	}
@@ -310,13 +424,18 @@ func (k KeyMap) All() []key.Binding {
 	out := k.global()
 	out = append(out, k.sidebar()...)
 	out = append(out, k.grid()...)
-	// The bar shares LeaveTyping with the grid; only its own two are new here.
-	out = append(out, k.BroadcastEscape, k.BroadcastEdit)
+	// The bar shares LeaveTyping with the grid; only its own three are new here.
+	out = append(out, k.BroadcastEscape, k.BroadcastLiteral, k.BroadcastEdit)
+	out = append(out, k.prompts()...)
 	return out
 }
 
-// Areas returns the areas in the order the help shows them.
-func Areas() []Area { return []Area{AreaGlobal, AreaSidebar, AreaGrid, AreaBroadcast} }
+// Areas returns the areas in the order the help shows them. Prompts come last:
+// they are not a focus target, so the column answers "what will the box in
+// front of me take" rather than "what can I do here".
+func Areas() []Area {
+	return []Area{AreaGlobal, AreaSidebar, AreaGrid, AreaBroadcast, AreaPrompt}
+}
 
 // For returns a [help.KeyMap] describing the bindings that apply while area has
 // focus: the area's own bindings plus the global ones.
@@ -347,6 +466,8 @@ func (c contextHelp) ShortHelp() []key.Binding {
 		return []key.Binding{k.LeaveTyping, k.PaneLeft, k.PaneRight, k.FullScreen, k.ScreenMode, k.ClosePane}
 	case AreaBroadcast:
 		return []key.Binding{k.LeaveTyping, k.BroadcastEscape, k.BroadcastEdit}
+	case AreaPrompt:
+		return []key.Binding{k.PromptSubmit, k.PromptCancel, k.ConfirmYes, k.ConfirmNo}
 	default:
 		return []key.Binding{k.NextTab, k.CommandLine, k.Help, k.Quit}
 	}

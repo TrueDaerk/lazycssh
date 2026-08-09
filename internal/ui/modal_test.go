@@ -19,7 +19,7 @@ func TestModalFloatsOverTheLayout(t *testing.T) {
 	if !strings.Contains(view, "Delete group") || !strings.Contains(view, `delete "prod"?`) {
 		t.Fatalf("the dialog is not on screen:\n%s", view)
 	}
-	if !strings.Contains(view, confirmHint) {
+	if !strings.Contains(view, confirmHint(a.keys)) {
 		t.Fatalf("the dialog does not name the keys that answer it:\n%s", view)
 	}
 	// The panels the dialog is asked from are still drawn around it.
@@ -152,8 +152,9 @@ func TestReadConfirm(t *testing.T) {
 		{tea.KeyPressMsg{Code: 'q', Text: "q"}, answerNone},
 		{tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}, answerNone},
 	}
+	app := App{keys: DefaultKeyMap()}
 	for _, c := range cases {
-		if got := readConfirm(c.key); got != c.want {
+		if got := app.readConfirm(c.key); got != c.want {
 			t.Fatalf("readConfirm(%q) = %v, want %v", c.key.String(), got, c.want)
 		}
 	}
