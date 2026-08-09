@@ -2,6 +2,16 @@
 
 ## 2026-08-09
 
+- Opt-in session logging to disk (issue #45): a new `internal/sessionlog` package writes one
+  file per host under a per-run directory created by `--log-dir DIR` — `0600` files in `0700`
+  directories, 8 MiB rotation keeping one older generation, reconnects appending with a marker.
+  The transport tees its post-filter output pump into `ssh.Config.Log`; keystrokes never pass
+  through. While broadcast mode is `single` the log is suppressed fleet-wide with visible
+  pause/resume markers, wired by `program.loggedTargets` wrapping the router's `SetMode`. The
+  pre-existing `ui.Config.Logging` status flag (`SESSION LOGGING ON`) is now set; a clean exit
+  prints the run directory, a lossy log makes the exit non-zero. New `core/session-logging.md`;
+  `core/cli.md`, `core/command-log.md`, user docs and README updated. Version 0.10.6.
+
 - The broadcast bar's `ctrl+a` prefix now **forwards by default** (issue #214), superseding the
   one-shot command dispatch of issue #148. `ctrl+a ctrl+a` (freed by issue #213) and `ctrl+a a`
   send one literal `0x01` via `sendBroadcastRaw`; `ctrl+a esc` still enters view mode; every

@@ -4,7 +4,7 @@ title: Command log
 description: The in-memory audit trail of what this run sent, to how many hosts, in which mode — and what it deliberately never records.
 resource: internal/commandlog
 tags: [audit, broadcast, security, ui]
-timestamp: 2026-07-30T20:00:00Z
+timestamp: 2026-08-09T00:00:00Z
 ---
 
 # Command log
@@ -41,8 +41,9 @@ reads the same twice.
 
 ## In memory only
 
-Nothing here writes to disk. Session logging is a separate, opt-in feature (issue #45); the log
-type takes no path and the panel offers no way to name one.
+Nothing here writes to disk. Session logging is a separate, opt-in feature — see
+[Session logging](./session-logging.md); the log type takes no path and the panel offers no
+way to name one.
 
 The log is bounded (1000 entries by default) and drops the oldest first. Dropping is **visible**:
 the panel renders `(N older entries dropped)` at the top, because an audit trail that quietly

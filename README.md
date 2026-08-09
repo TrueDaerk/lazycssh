@@ -94,6 +94,11 @@ receive them — `BROADCAST all (7/8 up)`, `TYPING web-01 — ctrl+] leaves`.
 - **Command log** — what this run sent, to how many hosts, in which mode.
   Keystrokes and `single`-mode input are deliberately never recorded, because
   that is where a sudo password is typed.
+- **Opt-in session logging** — `--log-dir DIR` writes each host's output to
+  its own file (rotated, `0600`), and the status bar says `SESSION LOGGING ON`
+  for the whole run. Keystrokes are never written, and logging pauses — with a
+  visible marker — while `single` mode is answering a password prompt. Off by
+  default: session bytes only reach disk when this run asked for it.
 - **Mouse support** — click a pane to type into it, drag to select text, wheel
   to scroll the pane under the pointer.
 

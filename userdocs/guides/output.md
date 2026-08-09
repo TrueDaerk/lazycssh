@@ -132,3 +132,24 @@ Anything that changes the view clears the selection: a click without a drag,
 ++esc++, leaving the grid, a page or chunk turn, a re-tile, a zoom, the pane
 closing, or scrolling. New output under a tail-following pane redraws beneath
 the highlight without moving it.
+
+## Logging a run to disk
+
+Off by default. Start a run with `--log-dir DIR` and every host's output is
+written to its own file in a fresh run directory:
+
+```
+DIR/2026-08-09_14-05-09/web-01.log
+```
+
+While logging is on, the status bar carries `SESSION LOGGING ON` for the whole
+run, and a clean exit prints where the logs went. Files rotate at 8 MiB (one
+older generation, `web-01.log.1`, is kept), a reconnect appends to the same
+file with a visible marker, and everything is `0600` in a `0700` directory.
+
+What never reaches the files: your keystrokes — the log taps only what the
+hosts print — and any output that arrives while `single` mode is active,
+because that is the mode a sudo prompt is answered in. The pause is marked in
+the file (`[lazycssh: output not logged: single-mode input]`), so a gap is
+visible instead of silent. Before typing a password into a pane, switch to
+`single` mode; that is what pauses the pen.

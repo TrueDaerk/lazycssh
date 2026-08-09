@@ -4,7 +4,7 @@ title: Command line interface
 description: Flags, arguments and exit codes of the lazycssh binary.
 resource: cmd/lazycssh/main.go
 tags: [cli, flags, exit-codes]
-timestamp: 2026-07-29T19:00:00Z
+timestamp: 2026-08-09T00:00:00Z
 ---
 
 # Command line interface
@@ -46,6 +46,7 @@ that is not saved is an error listing the sessions that are.
 | `--insecure-ignore-host-key` | Accept any host key without checking `known_hosts`. Dangerous, prints a warning on every run — see [Host key verification](./host-keys.md). |
 | `--list-sessions` | List the saved sessions with their host counts and exit. |
 | `--sessions-dir <dir>` | Read sessions from this directory instead of `$XDG_CONFIG_HOME/lazycssh/sessions`. |
+| `--log-dir <dir>` | Write every host's session output to files in a new run directory under `<dir>`. Off by default — see [Session logging](./session-logging.md). An unwritable directory fails before the TUI starts; a clean exit prints the run directory to stdout. |
 
 ## Exit codes
 

@@ -19,6 +19,7 @@ import (
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 	"github.com/TrueDaerk/lazycssh/internal/commandlog"
 	"github.com/TrueDaerk/lazycssh/internal/hosts"
+	"github.com/TrueDaerk/lazycssh/internal/sessionlog"
 	"github.com/TrueDaerk/lazycssh/internal/sessions"
 	"github.com/TrueDaerk/lazycssh/internal/ssh"
 	"github.com/TrueDaerk/lazycssh/internal/ui"
@@ -40,6 +41,10 @@ type Config struct {
 	// Insecure disables host key verification. It is a per-run choice the
 	// status bar reports for the whole run.
 	Insecure bool
+	// Logs is the opt-in session log for this run, nil when logging is off.
+	// When set, every host's output is copied to its file and the status bar
+	// says SESSION LOGGING ON for the whole run.
+	Logs *sessionlog.Run
 
 	// NewSession overrides the session factory. Nil means the real one, which
 	// dials; tests inject fakes here so nothing in this package needs a
@@ -58,6 +63,7 @@ type Model struct {
 	mgr      *ssh.Manager
 	ws       *workingset.Manager
 	router   *broadcast.Router
+	targets  loggedTargets
 	resolver *hosts.Resolver
 	store    *sessions.Store
 
@@ -109,7 +115,7 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 		// time (issues #173, #175).
 		prompter = &keyPrompter{questions: make(chan *keyQuestion)}
 		secrets = &secretPrompter{questions: make(chan *secretQuestion)}
-		factory, err = realFactory(ctx, cfg.Insecure, prompter, secrets)
+		factory, err = realFactory(ctx, cfg.Insecure, prompter, secrets, cfg.Logs)
 		if err != nil {
 			return nil, err
 		}
@@ -132,8 +138,12 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 		return nil, err
 	}
 	router.Attach(mgr)
+	// The UI's mode switches go through targets, which keeps the session log's
+	// suppression in lockstep: single mode is where passwords are typed, and
+	// its output must never reach the disk.
+	targets := loggedTargets{Router: router, logs: cfg.Logs}
 	if cfg.Broadcast.Valid() {
-		if err := router.SetMode(cfg.Broadcast); err != nil {
+		if err := targets.SetMode(cfg.Broadcast); err != nil {
 			return nil, err
 		}
 	}
@@ -143,7 +153,7 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 	uiCfg := ui.Config{
 		SessionName: cfg.SessionName,
 		Fleet:       mgr,
-		Targets:     router,
+		Targets:     targets,
 		WorkingSet:  ws,
 		RunPatterns: cfg.Patterns,
 		Sender:      router,
@@ -151,6 +161,7 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 		Recorder:    logbook,
 		CommandLog:  logbook,
 		Insecure:    cfg.Insecure,
+		Logging:     cfg.Logs != nil,
 		// The Hosts panel offers these as connect candidates; the UI still
 		// cannot dial, it can only ask.
 		ConfigAliases: resolver.Aliases(),
@@ -167,6 +178,7 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 		mgr:      mgr,
 		ws:       ws,
 		router:   router,
+		targets:  targets,
 		resolver: resolver,
 		store:    cfg.Store,
 		prompter: prompter,
@@ -182,7 +194,7 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 // keyboard-interactive answers through the secret prompter (issue #175). The
 // transport caches what it asked for - once per user, once per key file - so
 // a fleet asks once, not forty times.
-func realFactory(ctx context.Context, insecure bool, prompter ssh.HostKeyPrompter, secrets ssh.Prompter) (ssh.Factory, error) {
+func realFactory(ctx context.Context, insecure bool, prompter ssh.HostKeyPrompter, secrets ssh.Prompter, logs *sessionlog.Run) (ssh.Factory, error) {
 	creds := &ssh.Credentials{Prompter: secrets}
 
 	callback := func(sessionID string, host hosts.Host) cryptossh.HostKeyCallback {
@@ -203,13 +215,39 @@ func realFactory(ctx context.Context, insecure bool, prompter ssh.HostKeyPrompte
 	}
 
 	return func(req ssh.SessionRequest) ssh.Session {
-		return ssh.New(req.ID, ssh.Config{
+		cfg := ssh.Config{
 			Host:            req.Host,
 			Auth:            creds.Methods(ctx, req.ID, req.Host),
 			HostKeyCallback: callback(req.ID, req.Host),
 			Terminal:        req.Terminal,
-		}, req.Events)
+		}
+		if logs != nil {
+			// One log per host, keyed by session id: a reconnect appends to
+			// the same file rather than starting a second one.
+			cfg.Log = logs.HostLog(req.ID)
+		}
+		return ssh.New(req.ID, cfg, req.Events)
 	}, nil
+}
+
+// loggedTargets is the router as the UI sees it, with one addition: switching
+// the broadcast mode keeps the session log's suppression in lockstep. Single
+// mode is how a password prompt is answered, so while it is active no host
+// output may reach the disk - not even the echo of what is being typed.
+type loggedTargets struct {
+	*broadcast.Router
+	logs *sessionlog.Run
+}
+
+// SetMode switches the mode and pauses or resumes the session log with it.
+func (t loggedTargets) SetMode(m broadcast.Mode) error {
+	if err := t.Router.SetMode(m); err != nil {
+		return err
+	}
+	if t.logs != nil {
+		t.logs.SetSuppressed(m == broadcast.ModeSingle)
+	}
+	return nil
 }
 
 // Manager exposes the fleet for the caller's shutdown path.
@@ -367,7 +405,7 @@ func (m *Model) openGroup(msg ui.GroupOpenMsg) (tea.Model, tea.Cmd) {
 	m.ws.SetHosts(m.mgr.IDs())
 
 	if mode, err := sess.Mode(); err == nil {
-		_ = m.router.SetMode(mode)
+		_ = m.targets.SetMode(mode)
 	}
 	if sel, err := sess.Selector(); err == nil && sel != nil {
 		_ = m.ws.Apply(sel)
