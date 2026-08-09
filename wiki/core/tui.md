@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-03T00:00:00Z
+timestamp: 2026-08-09T12:00:00Z
 ---
 
 # TUI shell
@@ -105,7 +105,7 @@ host: pane movement steps over it, a click on it selects nothing, focus never re
 the broadcast set and every host count exclude it (`nonHoles`). `ctrl+r` closes the holes and
 re-tiles on request (and resizes the PTYs). Growth is immediate — a new pane has to appear
 somewhere, appended after the existing slots — and an explicit view change (session switch,
-`ctrl+a`, `ctrl+s`) compacts and tiles for the new view rather than keeping a museum of the old
+`ctrl+s`) compacts and tiles for the new view rather than keeping a museum of the old
 one. A terminal resize reflows the cells but keeps the slots as they are: the user changed the
 window, not the run. While typing, `ctrl+r` belongs to the host (readline reverse-search).
 
@@ -150,33 +150,27 @@ into a one-host send: it is an explicit zoom with its own way back.
 - the page is clamped on every render: a terminal that shrinks produces more pages, and the page
   the user was on may stop existing.
 
-### Connected-only filter
+### The fleet snapshot
 
-`ctrl+a` narrows the grid to the hosts that can take input right now, and — unlike paging — it
-narrows the broadcast with it: the visible set is pushed into the router's
-[visibility limit](./broadcast-scope.md), so `all`/`selected` reach only what is on screen.
-The filter is a view, not a removal: a host that reconnects reappears without a keypress — its
-state change is a fleet event, the event refreshes the model's **fleet snapshot** inside
-`Update` (`App.snapshotFleet`, issue #136), and the redraw recomputes the visible list from it.
+The visible list is a view over the model's **fleet snapshot**, not over live session state: a
+host that reconnects reappears without a keypress — its state change is a fleet event, the event
+refreshes the snapshot inside `Update` (`App.snapshotFleet`, issue #136), and the redraw
+recomputes the visible list from it.
 Render helpers never read live session state: `hostIDs()` is a pure function of model fields,
 so every computation inside one frame agrees. Two computations inside one render used to
-disagree — a mass disconnect under the filter shrank the list between a bounds check and the
+disagree — a mass disconnect shrank the list between a bounds check and the
 index it guarded, and `renderPane` panicked (issue #135); the snapshot removes the class of bug,
-and a spy-fleet test plus a `-race` state-flip hammer pin it down. While it is on, the status bar carries `CONNECTED HOSTS ONLY`; a filter that hides
-every pane renders `no connected hosts` rather than an empty run. While typing into a pane,
-`ctrl+a` stays a keystroke for the hosts — readline start-of-line. In the broadcast bar it is
-the csshx-style escape prefix instead: the literal is `ctrl+a a`, and the toggle is reachable
-from the bar's view mode, where `ctrl+a` is a command again — see the broadcast bar section.
+and a spy-fleet test plus a `-race` state-flip hammer pin it down.
 
 ### Split
 
 `ctrl+s` asks for a number and splits the visible hosts into consecutive chunks of that size:
 ten hosts split by five shows the first five terminals. `ctrl+shift+→`/`ctrl+shift+←` page through the
 chunk and then show the next or previous chunk, wrapping at the ends (see The window above). Broadcast follows the visible chunk
-through the same [visibility limit](./broadcast-scope.md) the connected-only filter uses, and
+through the router's [visibility limit](./broadcast-scope.md), and
 the status bar carries `SPLIT 1/2 (5 hosts)` in the warning style for as long as the split
-narrows anything. An empty prompt or `0` clears the split, `esc` keeps it; the split composes
-with `ctrl+a` — chunks are cut from the filtered list — and a chunk whose hosts left the run
+narrows anything. An empty prompt or `0` clears the split, `esc` keeps it; chunks are cut
+from the session's host list, and a chunk whose hosts left the run
 clamps to the last one instead of rendering an empty grid. The typing exception applies here
 too: in a pane, `ctrl+s` is flow control for the host.
 
@@ -452,7 +446,7 @@ The pane-management chords (`shift+alt+arrows` and friends) keep working from th
 
 The bar is modal, vim-like in the minimal sense of having exactly two modes. **Edit mode** is
 the default and everything above: keystrokes go to the hosts. **View mode** routes every key to
-the app-level commands instead — broadcast scope, selection, panel numbers, `ctrl+a`, `ctrl+r`,
+the app-level commands instead — broadcast scope, selection, panel numbers, `ctrl+r`,
 the pane chords — and sends nothing, so commands work without leaving the input.
 
 Mode switching is modeled on csshx, with `ctrl+a` as the escape prefix inside the bar:
@@ -463,8 +457,8 @@ Mode switching is modeled on csshx, with `ctrl+a` as the escape prefix inside th
 - `ctrl+a` `a` — send one literal `ctrl+a` to the targets, which is how a remote `screen` or
   `tmux` behind the broadcast stays reachable. The literal never enters the assembled line.
 - `ctrl+a` anything else — a **one-shot lazycssh command** (issue #148): the key is dispatched
-  to the app keymap exactly as if the bar did not have the keyboard — `ctrl+a` `ctrl+a` toggles
-  connected-only, `ctrl+a` `?` opens the help, `ctrl+a` `→` pages, `ctrl+a` `q` quits. The
+  to the app keymap exactly as if the bar did not have the keyboard — `ctrl+a` `?` opens the
+  help, `ctrl+a` `→` pages, `ctrl+a` `q` quits. The
   prefix is cleared before the second key is handled, so it cannot chain, and a key with no app
   binding is a no-op the status bar names rather than a silently swallowed keystroke. Nothing
   after the prefix reaches the hosts except the literal `a`.
@@ -474,11 +468,10 @@ style, or `BROADCAST VIEW — keys are commands` in the calm typing style, and a
 shows as `ctrl+a… next key = command · a = literal · esc = view`. The modal state does not outlive the bar's
 focus — leaving in view mode and coming back lands in edit mode.
 
-The `ctrl+a` prefix shadows the global connected-only toggle (and the readline start-of-line
-the bar used to forward) while edit mode has the keyboard. That is deliberate: the global
-binding itself is unchanged, and it is reachable from inside the bar as `ctrl+a` `ctrl+a` —
-the prefixed key runs the app binding directly — or from view mode, which routes every key to
-the app-level commands.
+The `ctrl+a` prefix shadows the readline start-of-line the bar used to forward while edit mode
+has the keyboard. That is deliberate: the literal stays reachable as `ctrl+a` `a`, and outside
+the bar `ctrl+a` carries no app-level binding at all (issue #213) — inside a pane it is
+forwarded to the host unchanged.
 
 ## Mouse
 

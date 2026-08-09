@@ -34,8 +34,7 @@ func (a App) handleBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if key.Matches(msg, a.keys.BroadcastEscape) {
 		// The prefix shadows the ctrl+a the bar used to forward; the literal
-		// is still reachable as ctrl+a a, and the global connected-only toggle
-		// as ctrl+a esc ctrl+a.
+		// is still reachable as ctrl+a a.
 		a.broadcastPending = true
 		return a, nil
 	}
@@ -92,8 +91,8 @@ func (a App) handleBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 // handleBroadcastViewKey is the bar in view mode: every key is an app-level
 // command and none reaches a host. enter is the one key the mode keeps for
-// itself — it returns to edit mode. ctrl+a is a command here too, which is how
-// the global connected-only toggle stays reachable from inside the bar.
+// itself — it returns to edit mode. Every other key is dispatched to the app
+// keymap, so the global commands stay reachable from inside the bar.
 func (a App) handleBroadcastViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, a.keys.BroadcastEdit) {
 		a.broadcastView = false
@@ -105,8 +104,8 @@ func (a App) handleBroadcastViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // resolveBroadcastEscape is the key after ctrl+a: esc switches to view mode, a
 // sends a literal ctrl+a to the targets, and **any other key is a one-shot
 // lazycssh command** (issue #148) — dispatched to the app keymap exactly as if
-// the bar did not have the keyboard, so ctrl+a ctrl+a toggles connected-only
-// and ctrl+a ? opens the help without leaving the bar. The prefix is cleared
+// the bar did not have the keyboard, so ctrl+a ? opens the help and
+// ctrl+a → pages without leaving the bar. The prefix is cleared
 // before the second key is handled, so it cannot chain. A key with no app
 // binding is a no-op that says so, because a silently swallowed keystroke
 // reads as a hung bar; nothing after the prefix ever reaches the hosts except

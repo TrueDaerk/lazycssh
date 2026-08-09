@@ -180,8 +180,8 @@ func (a App) syncBroadcastLimit() App {
 		// No usable grid area yet - before the first size message, or a
 		// terminal too small to draw a pane. There is no page to limit to, and
 		// an empty limit would silently swallow every keystroke, so fall back
-		// to the filters alone.
-		if (a.active < 0 || a.active >= len(a.open)) && !a.connectedOnly && a.splitSize <= 0 {
+		// to the filter alone.
+		if (a.active < 0 || a.active >= len(a.open)) && a.splitSize <= 0 {
 			a.cfg.Targets.SetLimit(nil)
 			return a
 		}

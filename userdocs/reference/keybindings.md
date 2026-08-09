@@ -23,7 +23,6 @@ not typing into a pane, not in the broadcast bar's edit mode, not in a prompt.
 | ++exclam++ | jump to the next host whose last command failed |
 | ++shift+s++ | save the run as a session, prompt prefilled |
 | ++n++ | connect a new host (pattern prompt; `~/.ssh/config` aliases complete with ++tab++) |
-| ++ctrl+a++ | show only the connected hosts; broadcast follows the visible set |
 | ++ctrl+r++ | re-tile the grid for the current hosts |
 | ++ctrl+s++ | split the grid into chunks of N panes (empty or `0` clears) |
 | ++ctrl+shift+right++ / ++ctrl+shift+left++ | next / previous screenful: pages, then split chunks, wrapping; works while typing too. Plain ++ctrl+right++ / ++ctrl+left++ stay word movement for the hosts |
@@ -89,7 +88,7 @@ In **edit mode**, every keystroke goes to the target set. The bar keeps
 |---|---|
 | ++ctrl+a++ ++escape++ | switch to view mode |
 | ++ctrl+a++ ++a++ | send one literal ++ctrl+a++ to the targets |
-| ++ctrl+a++ *other* | run that key as a one-shot lazycssh command (++ctrl+a++ ++ctrl+a++ toggles connected-only, ++ctrl+a++ ++question++ opens the help) |
+| ++ctrl+a++ *other* | run that key as a one-shot lazycssh command (++ctrl+a++ ++question++ opens the help, ++ctrl+a++ ++ctrl+r++ re-tiles) |
 | ++enter++ | send a carriage return and record the assembled line |
 
 In **view mode** every key is an app-level command instead, and nothing is sent.

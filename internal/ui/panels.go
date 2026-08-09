@@ -117,11 +117,6 @@ func (a App) activeFlags() []string {
 	if a.cfg.Targets != nil && a.cfg.Targets.Warning() {
 		flags = append(flags, a.theme.StatusWarning.Render("BROADCASTING TO EVERY HOST"))
 	}
-	if a.connectedOnly {
-		// Hidden panes are hidden targets: the filter must be on screen for
-		// as long as it narrows what a keystroke reaches.
-		flags = append(flags, a.theme.StatusWarning.Render("CONNECTED HOSTS ONLY"))
-	}
 	return flags
 }
 

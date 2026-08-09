@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-08-09T10:04:19Z
+timestamp: 2026-08-09T12:00:00Z
 ---
 
 # Keymap and help
@@ -46,7 +46,6 @@ duplicate still fails.
 | `!` | global | jump to the next host whose last command failed |
 | `S` | global (app level) | save the run as a session, prompt prefilled |
 | `n` | global (app level) | connect a new host: opens the pattern prompt in the Status panel, ssh-config aliases complete with `tab` |
-| `ctrl+a` | global (app level) | show only the connected hosts; broadcast follows the visible set. In the broadcast bar's edit mode it is reachable as `ctrl+a ctrl+a` via the escape prefix; view mode reaches it directly |
 | `ctrl+r` | global (app level) | re-tile the grid for the current hosts (a departure keeps the shape) |
 | `ctrl+s` | global (app level) | split the grid into chunks of N panes (prompt; empty or 0 clears) |
 | `ctrl+shift+→` / `ctrl+shift+←` | global (works while typing too) | next / previous screenful: pages, then split chunks, wrapping at the ends. Plain `ctrl+arrows` are never claimed — they stay readline word movement for the hosts, and IDEs and window managers swallow them anyway (issue #208) |
@@ -69,7 +68,7 @@ duplicate still fails.
 | `alt+backspace` / `alt+delete` | panes | kill the previous / next word: `ESC DEL` / `ESC d` (opt+backspace, opt+forward-delete) |
 | `super+backspace` | panes | kill to line start: `ctrl+u` (cmd+backspace) |
 | `alt+<char>` | panes (unbound chords) | meta: `ESC` + character, so `alt+b`/`alt+f`/`alt+.` reach readline |
-| `ctrl+a` | broadcast bar (edit mode) | escape prefix: the next key is a one-shot lazycssh command (`ctrl+a ctrl+a` toggles connected-only, `ctrl+a ?` help); `a` sends a literal `ctrl+a`, `esc` switches to view mode, an unbound key is a named no-op |
+| `ctrl+a` | broadcast bar (edit mode) | escape prefix: the next key is a one-shot lazycssh command (`ctrl+a ?` help, `ctrl+a ctrl+r` re-tile); `a` sends a literal `ctrl+a`, `esc` switches to view mode, an unbound key is a named no-op |
 | `enter` | broadcast bar (view mode) | back to edit mode |
 | `ctrl+]` | panes | stop typing: back to the app level, on the Status panel |
 | `alt+space` | panes (and app level) | toggle the focused pane's host in the selection |

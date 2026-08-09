@@ -74,7 +74,6 @@ The full model — selectors, clamping, named sets — is in
 
 Narrowing what is **on screen** is a third thing again:
 
-- ++ctrl+a++ shows only the connected hosts, and narrows the broadcast with it;
 - ++ctrl+s++ splits the visible hosts into chunks of N, and narrows the
   broadcast with it;
 - ++ctrl+shift+right++ / ++ctrl+shift+left++ page the window, and change **nothing** about

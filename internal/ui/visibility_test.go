@@ -9,132 +9,14 @@ import (
 	"github.com/TrueDaerk/lazycssh/internal/ssh"
 )
 
-// The acceptance criterion: 8 hosts, 2 down - ctrl+a shows 6 panes and
-// broadcast all reaches 6.
-func TestConnectedOnlyHidesTheDownHosts(t *testing.T) {
-	a, fleet, router, _ := statusApp(t, "web-01", "web-02", "web-03")
-	router.Attach(fleetSessions{fleet})
-	fleet.connect(t, "web-01")
-	fleet.connect(t, "web-03")
-	fleet.fail(t, "web-02")
-	a = syncFleet(t, a)
-
-	a = pressKey(t, a, "ctrl+a")
-	if !a.ConnectedOnly() {
-		t.Fatal("ctrl+a did not switch the filter on")
-	}
-	if got := strings.Join(a.hostIDs(), ","); got != "web-01,web-03" {
-		t.Fatalf("visible hosts = %q with the filter on", got)
-	}
-	if got := strings.Join(router.Targets(), ","); got != "web-01,web-03" {
-		t.Fatalf("Targets() = %q; broadcast must follow the visible set", got)
-	}
-
-	a = pressKey(t, a, "ctrl+a")
-	if a.ConnectedOnly() {
-		t.Fatal("ctrl+a did not switch the filter off again")
-	}
-	if got := len(a.hostIDs()); got != 3 {
-		t.Fatalf("%d hosts visible after clearing the filter, want 3", got)
-	}
-}
-
-// A host reconnecting while the filter is on reappears without a keypress:
-// the visible list is computed from live state, and the limit follows on the
-// fleet event.
-func TestReconnectingHostReappearsUnderTheFilter(t *testing.T) {
-	a, fleet, router, _ := statusApp(t, "web-01", "web-02")
-	router.Attach(fleetSessions{fleet})
-	fleet.connect(t, "web-01")
-	a = syncFleet(t, a)
-
-	a = pressKey(t, a, "ctrl+a")
-	if got := strings.Join(a.hostIDs(), ","); got != "web-01" {
-		t.Fatalf("visible hosts = %q before the reconnect", got)
-	}
-
-	fleet.connect(t, "web-02")
-	model, _ := a.Update(FleetUpdatedMsg{})
-	a = model.(App)
-
-	if got := strings.Join(a.hostIDs(), ","); got != "web-01,web-02" {
-		t.Fatalf("visible hosts = %q after the reconnect", got)
-	}
-	if got := strings.Join(router.Targets(), ","); got != "web-01,web-02" {
-		t.Fatalf("Targets() = %q after the reconnect", got)
-	}
-}
-
-// The narrowing must be unmissable for as long as it is in force.
-func TestConnectedOnlyIsOnTheStatusBar(t *testing.T) {
-	a, fleet, _, _ := statusApp(t, "web-01")
-	fleet.connect(t, "web-01")
-
-	a = pressKey(t, a, "ctrl+a")
-	if got := plain(a.View().Content); !strings.Contains(got, "CONNECTED HOSTS ONLY") {
-		t.Fatalf("the filter is not on the status bar:\n%s", got)
-	}
-
-	a = pressKey(t, a, "ctrl+a")
-	if got := plain(a.View().Content); strings.Contains(got, "CONNECTED HOSTS ONLY") {
-		t.Fatalf("the flag survived clearing the filter:\n%s", got)
-	}
-}
-
-// Every host down under the filter must not read as an empty run.
-func TestFilterHidingEveryPaneSaysSo(t *testing.T) {
-	a, _, _, _ := statusApp(t, "web-01")
-
-	a = pressKey(t, a, "ctrl+a")
-	if got := plain(a.View().Content); !strings.Contains(got, "no connected hosts") {
-		t.Fatalf("an all-hidden grid does not say why:\n%s", got)
-	}
-}
-
 // While typing into a pane, ctrl+a is readline start-of-line: it belongs to
-// the host, and the filter must not flip.
+// the host, and no app-level binding may swallow it.
 func TestCtrlAIsForwardedWhileTyping(t *testing.T) {
 	a, fleet := typingApp(t, "web-01")
 	a = pressKey(t, a, "ctrl+a")
 
-	if a.ConnectedOnly() {
-		t.Fatal("ctrl+a flipped the filter while typing")
-	}
 	if got := fleet.sessions["web-01"].Written(); got != "\x01" {
 		t.Fatalf("the host received %q, want the raw ctrl+a byte", got)
-	}
-}
-
-// Toggling emits GridChangedMsg so the program can resize the PTYs.
-func TestToggleAsksForAResize(t *testing.T) {
-	a, fleet, _, _ := statusApp(t, "web-01", "web-02")
-	fleet.connect(t, "web-01")
-
-	model, cmd := a.Update(keyMsgFor(t, "ctrl+a"))
-	if _, ok := model.(App); !ok {
-		t.Fatalf("Update returned a %T", model)
-	}
-	if cmd == nil {
-		t.Fatal("toggling produced no command")
-	}
-	if _, ok := cmd().(GridChangedMsg); !ok {
-		t.Fatalf("toggling produced a %T", cmd())
-	}
-}
-
-// The filter composes with sessions: it narrows the foreground session, not
-// the fleet.
-func TestFilterAppliesToTheForegroundSession(t *testing.T) {
-	a, fleet, _, _ := statusApp(t, "web-01", "web-02", "db-01")
-	fleet.connect(t, "web-01")
-	fleet.connect(t, "db-01")
-
-	model, _ := a.Update(SessionOpenedMsg{Name: "front", Hosts: []string{"web-01", "web-02"}})
-	a = model.(App)
-	a = pressKey(t, a, "ctrl+a")
-
-	if got := strings.Join(a.hostIDs(), ","); got != "web-01" {
-		t.Fatalf("visible hosts = %q; db-01 is connected but not in the session", got)
 	}
 }
 
@@ -243,23 +125,6 @@ func TestSplitEscKeepsTheSplit(t *testing.T) {
 	}
 }
 
-// The split composes with the connected-only filter: chunks are cut from the
-// filtered list.
-func TestSplitComposesWithConnectedOnly(t *testing.T) {
-	a, fleet, _ := splitApp(t)
-	fleet.sessions["web-02"].Disconnect(ssh.ErrDisconnected())
-	a = syncFleet(t, a)
-
-	a = pressKey(t, a, "ctrl+a")
-	a = applySplitSize(t, a, "5")
-	if got := strings.Join(a.hostIDs(), ","); got != "web-01,web-03,web-04,web-05,web-06" {
-		t.Fatalf("visible hosts = %q with filter and split", got)
-	}
-	if got := plain(a.View().Content); !strings.Contains(got, "SPLIT 1/2") {
-		t.Fatalf("chunk count ignores the filter:\n%s", got)
-	}
-}
-
 // A chunk past the end - hosts left the run - clamps to the last one instead
 // of rendering an empty grid.
 func TestSplitChunkClampsWhenHostsLeave(t *testing.T) {
@@ -326,8 +191,7 @@ func (f *flakyFleet) Session(id string) (ssh.Session, bool) {
 	return flakySession{Session: s, fleet: f}, true
 }
 
-// The regression for issue #135: with the connected-only filter on, a host
-// disconnecting between two hostIDs() computations of the same View call
+// The regression for issue #135: a host disconnecting between two hostIDs() computations of the same View call
 // shrank the list under an index that was guarded against the longer one,
 // and renderPane panicked with index out of range. Since issue #136 the
 // render path reads only the model's snapshot, so the flip cannot even be
@@ -343,7 +207,6 @@ func TestViewSurvivesHostListShrinkingMidRender(t *testing.T) {
 	flaky := &flakyFleet{fakeFleet: fleet, flaky: "web-03", flipAfter: 2}
 	a.cfg.Fleet = flaky
 
-	a = pressKey(t, a, "ctrl+a") // connected-only: the list follows liveness
 	a.fullScreen = true
 	a.paneIndex = 2 // the pane whose host is about to vanish
 

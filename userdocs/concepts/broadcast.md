@@ -72,9 +72,8 @@ one-host path that bypasses the router entirely, whatever the broadcast mode
 says. The scope governs the broadcast bar (++5++) and the command line
 (++colon++) — nothing else.
 
-**Narrowing the view narrows the scope.** The connected-only filter
-(++ctrl+a++), an active split (++ctrl+s++), the foreground session — and the
-page you are on — each narrow the visibility limit pushed into the router, so
+**Narrowing the view narrows the scope.** An active split (++ctrl+s++), the
+foreground session — and the page you are on — each narrow the visibility limit pushed into the router, so
 `all` and `selected` stop at what is on screen. Ten hosts on a terminal that
 draws nine panes means nine targets; page on (++ctrl+shift+right++) and the tenth is
 the one that receives. `fleet` is deliberately exempt — an escape hatch that can

@@ -24,8 +24,8 @@ remote shell. The lazycssh equivalents are the ++alt++ chords, which work while
 typing, or leave the pane first with ++ctrl+bracket-right++.
 
 Inside the broadcast bar, ++ctrl+a++ is the escape prefix: ++ctrl+a++
-++ctrl+a++ runs the global connected-only toggle, ++ctrl+a++ ++question++ opens
-the help, ++ctrl+a++ ++a++ sends a literal ++ctrl+a++ to the hosts.
+++question++ opens the help, ++ctrl+a++ ++a++ sends a literal ++ctrl+a++ to the
+hosts.
 
 ++ctrl+q++ quits from anywhere, including out of a text field.
 
@@ -38,8 +38,8 @@ actually receive the next keystroke. Reasons it is smaller than your run:
   (19/20 up)`. `all` means the working set, by design;
 - **hosts that are down** — a host that cannot take input is excluded from the
   count and from delivery;
-- **the connected-only filter** (`CONNECTED HOSTS ONLY`) or an active **split**
-  (`SPLIT 1/2 (5 hosts)`) — both narrow the broadcast to what is on screen;
+- **an active split** (`SPLIT 1/2 (5 hosts)`) — it narrows the broadcast to
+  what is on screen;
 - **a background session** — `all` and `selected` stop at the foreground
   session's edge;
 - **full-screen apps** — `1 alt-screen skipped` in the label; see

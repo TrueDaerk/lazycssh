@@ -2,6 +2,15 @@
 
 ## 2026-08-09
 
+- Removed the `ctrl+a` connected-only visibility filter (issue #213): the `ConnectedOnly`
+  binding, the `connectedOnly` model field, `toggleConnectedOnly`, the `ConnectedOnly()`
+  accessor, the `CONNECTED HOSTS ONLY` status flag and the "no connected hosts" empty state are
+  gone. `filteredHosts` is now a pass-through of `sessionHosts()` that the `ctrl+s` split still
+  chunks, so the split and its broadcast narrowing are unchanged. Outside the broadcast bar
+  `ctrl+a` has no app-level meaning; in a pane it still reaches the host as `0x01`, and in the
+  bar it stays the csshx escape prefix (freed for the passthrough work in issue #214).
+  `core/tui.md`, `core/keys.md` and the user docs updated. Version 0.10.4.
+
 - Up/down no longer switch the focused sidebar panel (issue #212): they moved a list cursor
   inside the Groups/Sessions/Command-log panels, but jumped to the next/previous panel at the
   first/last entry and did nothing useful on the Status panel's absent cursor — the same key
