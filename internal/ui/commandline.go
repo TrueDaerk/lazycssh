@@ -170,6 +170,10 @@ func (a App) sendCommand(command string) (tea.Model, tea.Cmd) {
 		a.cfg.Recorder.Record(command, delivery.Mode, delivery.Delivered)
 	}
 
+	// The send opens a new comparison window for the Output diff panel: each
+	// reached target's scrollback length now is where its answer starts.
+	a = a.markDiff(command, delivery)
+
 	sent := CommandSentMsg{Command: command, Delivery: delivery}
 	return a, func() tea.Msg { return sent }
 }

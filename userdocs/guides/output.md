@@ -27,6 +27,21 @@ as well as colour.
 Exit codes come from a prompt hook. A shell that never ran the hook reports
 nothing, and lazycssh shows nothing rather than a made-up zero.
 
+## Which machines disagree
+
+After sending a command with ++colon++, press ++6++: the Output diff panel
+groups the hosts by the output they produced since that send, largest group
+first — the consensus leads, the outliers follow in the warning colour. The
+preview shows the answer under the cursor whole, with the hosts that gave it.
+
+The comparison ignores everything printed before the send, trims trailing
+whitespace, and treats a host's own name — the prompt, a `hostname` echo — as
+equal across machines. Timestamps are not smoothed over: a command that prints
+the clock will not converge.
+
+++enter++ on a variant makes its hosts the selection; ++shift+b++ then
+addresses it, so the fix goes to exactly the machines that disagree.
+
 ## Scrollback
 
 Each session keeps a bounded ring buffer — 10,000 lines by default. When it is

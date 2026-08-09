@@ -109,7 +109,7 @@ change resizes them just like a window resize does (issue #219).
 The main area is lazygit's detail view: it shows the selection of whatever side panel has the
 keyboard (issue #218). The pane grid is the fleet's detail view, so it keeps the area whenever
 the **grid** or the **Status** panel — the panel that describes the run as a whole — has focus.
-The three list panels replace it with a read-only **preview** of their cursor row, so moving the
+The list panels replace it with a read-only **preview** of their cursor row, so moving the
 cursor says what `enter` would act on before it is pressed:
 
 | Panel | Preview |
@@ -117,6 +117,7 @@ cursor says what `enter` would act on before it is pressed:
 | `[2] Groups` | the group's host count, description, whether it is already open, and its host patterns as typed |
 | `[3] Sessions` | foreground or background, ending, `n/m up`, and every host with its connection state (and the failure text behind a failed one) |
 | `[4] Command log` | the whole command, the timestamp, and the scope it went out in — the list row truncates a long command, this does not |
+| `[6] Output diff` | the variant under the cursor whole: the command, which hosts gave this answer, and the output as the first of them printed it — see [Cross-host output diff](./output-diff.md) |
 
 Previews are built from model state alone — the group rows the store was last read into, the
 [fleet snapshot](#the-fleet-snapshot), the in-memory [command log](./command-log.md). Nothing in
@@ -558,6 +559,14 @@ an unnamed run — each with its up count, the foreground one marked with `▸`.
 
 Every command sent this run, newest last, each with its target count and mode — see
 [Command log](./command-log.md). `enter` sends an entry again, to the **current** target set.
+
+### [6] Output diff
+
+The hosts grouped by the output they produced since the last command line send, largest group
+first, every group past the consensus in the warning style — see
+[Cross-host output diff](./output-diff.md). `enter` makes the variant's hosts the selection, so
+`B` can broadcast a fix to exactly the machines that disagree. It sits on `6`, not `5`: the
+broadcast bar had `5` first, and a new panel is not worth renumbering it.
 
 ## The broadcast bar
 

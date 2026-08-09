@@ -16,6 +16,7 @@ not typing into a pane, not in the broadcast bar's edit mode, not in a prompt.
 | ++ctrl+q++ | quit from anywhere, including out of a text field and the help overlay |
 | ++tab++ / ++shift+tab++ | next / previous stop: each sidebar panel, then the grid |
 | ++1++ ++2++ ++3++ ++4++ | Status, Groups, Sessions, Command log |
+| ++6++ | Output diff — hosts grouped by the last command's output (`5` stays the broadcast bar's) |
 | ++5++ | focus the broadcast bar |
 | ++b++ / ++shift+b++ / ++s++ | broadcast to the working set / the selection / one pane |
 | ++ctrl+alt+b++ | broadcast to **every** host in the run |
@@ -37,7 +38,7 @@ not typing into a pane, not in the broadcast bar's edit mode, not in a prompt.
 | Key | Action |
 |---|---|
 | ++up++ / ++k++, ++down++ / ++j++ | move the cursor inside the focused panel; a no-op at the top/bottom of the list, and on the Status panel, which has none |
-| ++left++ / ++right++ | previous / next panel, stopping at Status / Command log |
+| ++left++ / ++right++ | previous / next panel, stopping at Status / Output diff |
 | ++enter++ / ++space++ | choose the row: open a group, foreground a session, resend a log entry |
 | ++w++ | save the run as a group |
 | ++bracket-left++ / ++bracket-right++ | previous / next chunk of hosts |

@@ -47,6 +47,7 @@ live at the same time.
 | `tab` / `shift+tab` | global (app level) | next / previous stop in the cycle: each sidebar panel, then the grid; forwarded while typing |
 | `1`–`4` | global (app level) | status, groups, sessions, command log |
 | `5` | global (app level) | focus the broadcast bar |
+| `6` | global (app level) | output diff panel — hosts grouped by the last command's output (issue #46); `6` not `5` because the bar had `5` first |
 | `b` / `B` / `s` | global | broadcast to the working set / the selection / one pane |
 | `ctrl+alt+b` | global | broadcast to **every** host |
 | `:` | global | send a command |
@@ -62,7 +63,7 @@ live at the same time.
 | `u` | global (app level) | select the hosts that are up |
 | `d` | global (app level) | select the hosts that are down |
 | `↑`/`k`, `↓`/`j` | sidebar | move the cursor inside the focused panel only — a no-op at the top/bottom of the list, and on the Status panel, which has no list. Never switches the focused panel (issue #212) |
-| `←`/`h`, `→`/`l` | sidebar | previous / next panel, stopping at Status / Command log — the explicit way to switch panels, since neither key means anything else while the sidebar has focus. `h`/`l` alias `←`/`→`, lazygit style, matching `j`/`k` on `↑`/`↓`; a pane and the broadcast bar keep plain `h`/`l` as keystrokes for the hosts (issue #220) |
+| `←`/`h`, `→`/`l` | sidebar | previous / next panel, stopping at Status / Output diff — the explicit way to switch panels, since neither key means anything else while the sidebar has focus. `h`/`l` alias `←`/`→`, lazygit style, matching `j`/`k` on `↑`/`↓`; a pane and the broadcast bar keep plain `h`/`l` as keystrokes for the hosts (issue #220) |
 | `enter` / `space` | sidebar | choose the row: open a group, foreground a session, resend a log entry |
 | `w` | sidebar | save the run as a group |
 | `n` | Groups panel | new group (shadows the global connect while the panel has focus) |

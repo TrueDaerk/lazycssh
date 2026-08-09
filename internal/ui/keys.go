@@ -67,6 +67,7 @@ type KeyMap struct {
 	Panel3  key.Binding
 	Panel4  key.Binding
 	Panel5  key.Binding
+	Panel6  key.Binding
 
 	// Broadcast scope. Fleet is deliberately awkward - it is the one mode that
 	// ignores the working set, and it should not be reachable by cycling.
@@ -177,6 +178,8 @@ func DefaultKeyMap() KeyMap {
 		Panel3:  key.NewBinding(key.WithKeys("3"), key.WithHelp("3", "sessions panel")),
 		Panel4:  key.NewBinding(key.WithKeys("4"), key.WithHelp("4", "command log")),
 		Panel5:  key.NewBinding(key.WithKeys("5"), key.WithHelp("5", "broadcast bar")),
+		// 6, not 5: the bar had 5 first, in the docs and in muscle memory.
+		Panel6: key.NewBinding(key.WithKeys("6"), key.WithHelp("6", "output diff panel")),
 
 		BroadcastAll:      key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "broadcast to the working set")),
 		BroadcastSelected: key.NewBinding(key.WithKeys("B"), key.WithHelp("B", "broadcast to the selection")),
@@ -350,7 +353,7 @@ func promptHint(parts ...hintPart) string {
 func (k KeyMap) global() []key.Binding {
 	return []key.Binding{
 		k.Help, k.Quit, k.NextTab, k.PrevTab,
-		k.Panel1, k.Panel2, k.Panel3, k.Panel4, k.Panel5,
+		k.Panel1, k.Panel2, k.Panel3, k.Panel4, k.Panel5, k.Panel6,
 		k.BroadcastAll, k.BroadcastSelected, k.BroadcastSingle, k.BroadcastFleet,
 		k.CommandLine, k.NextFailure, k.QuickSave, k.NewHost,
 		k.Retile, k.Split, k.NextSplit, k.PrevSplit,
