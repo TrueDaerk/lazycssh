@@ -85,18 +85,33 @@ been that size.
 
 ## Search
 
-++alt+slash++ opens a search prompt that owns the keyboard while it is open.
+++slash++ opens a search prompt that owns the keyboard while it is open — from
+the app level, where plain letters are commands. A focused pane is a terminal, so
+there the slash goes to the host and ++alt+slash++ opens the same prompt.
 ++enter++ commits the term and scrolls the focused pane to the **newest** match —
 you are almost always hunting the error that just happened.
 
 | Key | Effect |
 |---|---|
-| ++alt+bracket-left++ / ++alt+bracket-right++ | older / newer match, without wrapping |
-| ++alt+c++ | clear the term |
+| ++n++ / ++shift+n++ | older / newer match, without wrapping (while a search is live) |
+| ++alt+bracket-left++ / ++alt+bracket-right++ | the same, and they work while typing to a host |
+| ++esc++ / ++alt+c++ | leave the search: highlight off, panes back where they were |
 
 Matching lines are drawn in the match style with their own colours dropped — a
-highlight fighting the remote's colours would lose. A bare ++esc++ belongs to the
-remote shell.
+highlight fighting the remote's colours would lose — and the line you are
+standing on is drawn louder still. The status bar counts it:
+
+```
+search "error" 3/17
+```
+
+A term that matches nothing says `search "error" no match` and moves nothing.
+Leaving the search puts every pane it scrolled back where it was. While typing
+to a host, a bare ++esc++ belongs to the remote shell; ++alt+c++ leaves the
+search from there.
+
+While a search is live, ++n++ means "older match" rather than "connect a new
+host". ++esc++ ends the search and gives the letter back.
 
 One term is shared by every pane, because "which of my hosts printed this" is a
 question about the run. The cross-pane form is the command line:

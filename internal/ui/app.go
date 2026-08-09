@@ -217,6 +217,13 @@ type App struct {
 	scroll     map[string]int
 	searchTerm string
 
+	// matchAt is each pane's current match as a virtual line index, and
+	// searchAnchor is the scroll offset that pane had before the search first
+	// moved it, so esc can put the window back (issue #250). Both are empty
+	// while no search is live.
+	matchAt      map[string]int
+	searchAnchor map[string]int
+
 	cmdHistory    []string
 	cmdHistoryPos int
 	lastDelivery  string
@@ -648,6 +655,14 @@ func (a App) handleAppKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			a.panels.groups.beginDelete()
 			return a, nil
 		}
+	}
+
+	// The scrollback search is a mode of this scope: `/` opens it, and while a
+	// term is live n/N walk the matches - shadowing "connect a new host" for
+	// exactly as long as the search lasts (issue #250). A focused pane never
+	// gets here, so `/` and `n` still reach the host while typing.
+	if next, handled := a.handleSearchModeKey(msg); handled {
+		return next, nil
 	}
 
 	switch {
@@ -1167,8 +1182,8 @@ func (a App) renderStatusBar() string {
 		// behind a frozen window must not look like a quiet host.
 		parts = append(parts, a.theme.StatusWarning.Render(label))
 	}
-	if a.searchTerm != "" {
-		parts = append(parts, a.theme.Muted.Render(fmt.Sprintf("search %q", a.searchTerm)))
+	if label := a.searchLabel(); label != "" {
+		parts = append(parts, a.theme.Muted.Render(label))
 	}
 
 	// The flags that weaken a default live on the status bar as well as in the

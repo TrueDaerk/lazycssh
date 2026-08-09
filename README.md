@@ -81,9 +81,10 @@ receive them — `BROADCAST all (7/8 up)`, `TYPING web-01 — ctrl+] leaves`.
 - **Failure visibility** — a pane whose last command exited non-zero gets a
   danger border and an `exit N` marker, the status bar counts them, and `!`
   jumps to the next failing host.
-- **Scrollback per host** — bounded ring buffer (10,000 lines), search across
-  every pane (`alt+/`, or `/find <text>` for "which of my hosts printed this"),
-  keyboard and mouse copy over OSC 52.
+- **Scrollback per host** — bounded ring buffer (10,000 lines), search with `/`
+  (`alt+/` while typing to a host), `n`/`N` between matches with a `3/17`
+  counter, `esc` back to where you were, or `/find <text>` for "which of my
+  hosts printed this"; keyboard and mouse copy over OSC 52.
 - **Host key verification on by default** — an unknown key asks in the pane,
   ssh-style; a *changed* key is a hard failure with no click-through. The
   opt-out is an explicit flag that stays on the status bar.

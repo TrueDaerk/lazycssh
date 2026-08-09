@@ -2,6 +2,19 @@
 
 ## 2026-08-09
 
+- Scrollback search in the focused pane, on the pager keys (issue #250). The search that `alt+/`
+  already opened gained the interaction a pager trained everyone to expect: `/` opens it from the
+  UI command scope — never from broadcast typing, where a focused pane still sends the literal
+  slash to its host — `enter` lands on the newest match, and `n`/`N` walk to older/newer ones.
+  The step **does not wrap**: running out of matches in a direction stays put, like pane
+  movement. New model state is a per-pane match cursor (`matchAt`) and the pre-search scroll
+  offset (`searchAnchor`), so the current match can be drawn in its own louder style, the status
+  bar can count it (`search "error" 3/17`, or `no match`, which moves no viewport at all), and
+  `esc`/`alt+c` can put every pane the search scrolled back where it was. `n`, `N` and `esc` are
+  live only while a term is — a declared shadow of the app-level `n` in the new `AreaSearch`
+  help column, ended by `esc`. `internal/ui/scroll.go`, `keys.go`, `theme.go`, `pane.go`,
+  `app.go`; `core/tui.md` and `core/keys.md` updated.
+
 - Live expansion preview for typed host patterns (issue #249). The new-host prompt and the host
   picker's free-text fallback now show, below the input, up to the first three names `Expand`
   would produce plus the total count — `web01, web02, web03 … (8 hosts)` — updated on every

@@ -139,6 +139,44 @@ func (a App) openSearch() App {
 	return a
 }
 
+// MatchPosition is where the focused pane's search cursor stands: the 1-based
+// rank of the current match and the number of matches in that pane. Both are
+// zero when nothing matches, which is what the status bar renders as "no
+// match".
+func (a App) MatchPosition() (position, total int) {
+	id := a.FocusedHost()
+	matches := a.matchLines(id)
+	if len(matches) == 0 {
+		return 0, 0
+	}
+	current, ok := a.matchAt[id]
+	if !ok {
+		return 0, len(matches)
+	}
+	for i, line := range matches {
+		if line == current {
+			return i + 1, len(matches)
+		}
+	}
+	return 0, len(matches)
+}
+
+// CurrentMatch is the virtual line the focused pane's search cursor sits on, or
+// -1 when the search has not landed on one.
+func (a App) CurrentMatch() int { return a.matchCursor(a.FocusedHost()) }
+
+// matchCursor is a host's current match line, or -1.
+func (a App) matchCursor(id string) int {
+	if id == "" || a.searchTerm == "" {
+		return -1
+	}
+	line, ok := a.matchAt[id]
+	if !ok {
+		return -1
+	}
+	return line
+}
+
 // handleSearchKey drives the search input, which owns the keyboard while it is
 // open, for the same reason the filter does: a term containing any letter must
 // be typeable without acting on a pane.
@@ -146,14 +184,22 @@ func (a App) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, a.keys.PromptSubmit):
 		a.searchInput.Blur()
-		a.searchTerm = strings.TrimSpace(a.searchInput.Value())
-		if a.searchTerm == "" {
-			return a.clearSearch(), nil
+		term := strings.TrimSpace(a.searchInput.Value())
+		if term == "" {
+			return a.exitSearch(), nil
 		}
+		a.searchTerm = term
+		// A new term starts a new hunt: the old cursor pointed into the old
+		// term's matches.
+		a.matchAt = nil
 		// Land on the newest match: the reader is almost always hunting the
-		// error that just happened.
+		// error that just happened. No match leaves every pane where it was;
+		// the status bar says "no match".
 		return a.gotoMatch(a.newestMatch(a.FocusedHost())), nil
 	case key.Matches(msg, a.keys.PromptCancel):
+		// esc here abandons the editing, not the search: whatever term was
+		// live before the input opened is still live, with its highlight and
+		// its scroll position. A second esc leaves the search itself.
 		a.searchInput.Blur()
 		a.searchInput.SetValue("")
 		return a, nil
@@ -164,11 +210,62 @@ func (a App) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return a, cmd
 }
 
-// clearSearch drops the term and the highlights.
+// handleSearchModeKey is the search's own key scope, live wherever plain
+// letters are commands - the sidebar and the broadcast bar's view mode, never a
+// focused pane's terminal.
+//
+// `/` opens the input for the focused pane; it does nothing without one, so the
+// key is not swallowed on an empty run. n, N and esc are live only while a term
+// is: outside a search `n` is still "connect a new host" and esc still belongs
+// to whatever else answers it.
+func (a App) handleSearchModeKey(msg tea.KeyPressMsg) (App, bool) {
+	if key.Matches(msg, a.keys.SearchOpen) {
+		if a.FocusedHost() == "" {
+			return a, false
+		}
+		return a.openSearch(), true
+	}
+	if a.searchTerm == "" {
+		return a, false
+	}
+	switch {
+	case key.Matches(msg, a.keys.MatchOlder):
+		return a.stepMatch(-1), true
+	case key.Matches(msg, a.keys.MatchNewer):
+		return a.stepMatch(+1), true
+	case key.Matches(msg, a.keys.SearchLeave):
+		return a.exitSearch(), true
+	}
+	return a, false
+}
+
+// clearSearch drops the term, the highlights and the match cursor. The scroll
+// positions stay where the search put them: this is "stop highlighting", not
+// "undo the search".
 func (a App) clearSearch() App {
 	a.searchTerm = ""
 	a.searchInput.SetValue("")
+	a.matchAt, a.searchAnchor = nil, nil
 	return a
+}
+
+// exitSearch is what esc means once a term is live: the highlight goes, the
+// cursor goes, and every pane the search scrolled goes back to where its window
+// was before it did (issue #250). A pane the user scrolled themselves after the
+// jump is not restored - the anchor is recorded once, at the first jump, and
+// dropped here.
+func (a App) exitSearch() App {
+	for id, offset := range a.searchAnchor {
+		if a.scroll == nil {
+			break
+		}
+		if offset == 0 {
+			delete(a.scroll, id)
+			continue
+		}
+		a.scroll[id] = offset
+	}
+	return a.clearSearch()
 }
 
 // matchLines returns the virtual-line indices in a host's pane that contain
@@ -196,7 +293,9 @@ func (a App) newestMatch(id string) int {
 }
 
 // gotoMatch scrolls the focused pane so a virtual line is on screen, roughly
-// centred. A negative line - no match - changes nothing.
+// centred, and records the line as the pane's current match. A negative line -
+// no match - changes nothing, so a search that finds nothing leaves the
+// viewport exactly where it was.
 func (a App) gotoMatch(line int) App {
 	id := a.FocusedHost()
 	if id == "" || line < 0 {
@@ -207,21 +306,41 @@ func (a App) gotoMatch(line int) App {
 	if a.scroll == nil {
 		a.scroll = make(map[string]int)
 	}
+	if a.searchAnchor == nil {
+		a.searchAnchor = make(map[string]int)
+	}
+	if _, recorded := a.searchAnchor[id]; !recorded {
+		// Where the window sat before the search moved it, so esc can put it
+		// back. Recorded once per pane per search.
+		a.searchAnchor[id] = a.scroll[id]
+	}
 	a.scroll[id] = clamp(total-line-1-h/2, 0, max(0, total-h))
+	if a.matchAt == nil {
+		a.matchAt = make(map[string]int)
+	}
+	a.matchAt[id] = line
 	return a
 }
 
-// stepMatch moves to the next match in a direction: negative is older, up the
-// buffer; positive is newer. The step does not wrap - running out of matches
-// in a direction stays put, exactly like pane movement.
+// stepMatch moves the search cursor in a direction: negative is older, up the
+// buffer; positive is newer. The step does not wrap - running out of matches in
+// a direction stays put, exactly like pane movement, and the counter in the
+// status bar shows which end the cursor is at.
+//
+// Without a cursor yet - `n` pressed on a term set by /find, which highlights
+// without jumping - the first step lands on the newest match, the same place
+// enter lands.
 func (a App) stepMatch(direction int) App {
 	id := a.FocusedHost()
 	matches := a.matchLines(id)
-	if len(matches) == 0 {
+	if id == "" || len(matches) == 0 {
 		return a
 	}
 
-	current := a.currentLine(id)
+	current := a.matchCursor(id)
+	if current < 0 {
+		return a.gotoMatch(matches[len(matches)-1])
+	}
 	if direction < 0 {
 		for i := len(matches) - 1; i >= 0; i-- {
 			if matches[i] < current {
@@ -236,14 +355,6 @@ func (a App) stepMatch(direction int) App {
 		}
 	}
 	return a
-}
-
-// currentLine is the virtual line the focused pane's window is anchored on:
-// the centre of what is visible.
-func (a App) currentLine(id string) int {
-	_, h := a.paneExtent()
-	total := len(a.virtualLines(id))
-	return clamp(total-1-a.scrollOffset(id)-h/2, 0, max(0, total-1))
 }
 
 // searchReport says which hosts matched, for the cross-pane question "which
@@ -305,11 +416,33 @@ func (a App) applyFind(line string) (App, string, bool) {
 
 	term := strings.TrimSpace(rest)
 	if term == "" {
-		a = a.clearSearch()
+		a = a.exitSearch()
 		return a, "search cleared", true
 	}
 	a.searchTerm = term
+	// The report answers "which hosts", so nothing is scrolled; the cursor
+	// starts unset and the first n/N lands on the newest match.
+	a.matchAt = nil
 	return a, a.searchReport(), true
+}
+
+// searchLabel is the status bar's word on the active search: the term and where
+// the focused pane's cursor stands in its matches, "no match" when that pane
+// holds none. Empty when no term is live.
+func (a App) searchLabel() string {
+	if a.searchTerm == "" {
+		return ""
+	}
+	position, total := a.MatchPosition()
+	switch {
+	case total == 0:
+		return fmt.Sprintf("search %q no match", a.searchTerm)
+	case position == 0:
+		// A term set by /find, not yet stepped into on this pane.
+		return fmt.Sprintf("search %q %d matches", a.searchTerm, total)
+	default:
+		return fmt.Sprintf("search %q %d/%d", a.searchTerm, position, total)
+	}
 }
 
 // renderSearchLine draws the search prompt in place of the status bar while

@@ -171,6 +171,10 @@ type Theme struct {
 
 	// Match highlights a scrollback line the active search matches.
 	Match lipgloss.Style
+	// MatchCurrent highlights the one match the search cursor is on, so
+	// "where am I in 17 hits" is answered on the screen and not only in the
+	// status bar (issue #250).
+	MatchCurrent lipgloss.Style
 
 	// Selection highlights mouse-selected pane text (issue #149).
 	Selection lipgloss.Style
@@ -274,6 +278,11 @@ func NewTheme(opts Options) Theme {
 	// Bold and underlined as well as coloured, so a match survives a terminal
 	// without colour.
 	t.Match = fg(palette.Warning).Bold(true).Underline(true)
+
+	// The current match takes reverse video on top, the way a pager marks the
+	// hit it is standing on: it is legible next to the other matches even when
+	// the terminal has no colour at all.
+	t.MatchCurrent = fg(palette.Warning).Bold(true).Underline(true).Reverse(true)
 
 	// Reverse video, like a terminal's own selection: it works over any
 	// remote colours and survives a terminal without colour.

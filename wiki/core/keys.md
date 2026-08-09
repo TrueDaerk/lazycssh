@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-08-10T01:00:00Z
+timestamp: 2026-08-10T02:00:00Z
 ---
 
 # Keymap and help
@@ -24,6 +24,7 @@ A key press is dispatched by focus. Each binding belongs to one area:
 | `AreaBroadcast` | the broadcast bar under the grid — a terminal for the whole target set; kept for itself: `ctrl+]`, the pane chords, and the csshx-style `ctrl+a` escape prefix. In the bar's **view mode** every key is an app-level command instead — see [TUI shell](./tui.md#edit-and-view-mode) |
 | `AreaGrid` | the host panes on the right — a focused pane is a terminal, so its bindings are all `alt`/`shift` chords plus the reserved `ctrl+]`; every plain key is forwarded to the host (a test enforces the chord rule) |
 | `AreaPrompt` | the dialogs and inline prompts. **Not a focus target**: a prompt takes the keyboard from whatever had it, is resolved before any area binding is consulted, and hands it back when it closes |
+| `AreaSearch` | the focused pane's scrollback search (issue #250). **Not a focus target** either but a *mode*: `/` opens it from the UI command scope, and while a term is live `n`/`N` walk the matches and `esc` ends the search. Its plain letters are matched before the global ones, so `n` is "older match" for exactly as long as the search lasts |
 
 The sidebar and the grid may reuse a key — they are never focused at the same time — but a
 global binding may not collide with either, because the two are always live together. Both rules
@@ -31,6 +32,11 @@ are tests, not conventions. The one sanctioned exception is a **declared panel s
 Groups panel keeps `n` and `d` for itself, lazygit style, resolved by routing order before the
 global bindings are consulted; the tests carry the explicit allowlist, so an undeclared
 duplicate still fails.
+
+`AreaSearch` is outside them for the same reason a panel shadow is: its letters are live only
+while a search is, and the router consults them before the global set. Outside a search `n` is
+still "connect a new host" and `esc` still belongs to whatever else answers it — a test presses
+both with no term live and proves it.
 
 `AreaPrompt` is deliberately outside those two collision rules. Its keys mean different things
 in different boxes — `esc` cancels a prompt, answers *no* to a confirm and clears a mouse
@@ -94,7 +100,10 @@ live at the same time.
 | `shift+home` / `shift+end` | panes (and app level) | oldest retained output / back to the tail |
 | `alt+/` | panes (and app level) | search the scrollback |
 | `alt+[` / `alt+]` | panes (and app level) | older / newer match |
-| `alt+c` | panes (and app level) | clear the search |
+| `alt+c` | panes (and app level) | leave the search: highlight off, every pane it scrolled back where it was |
+| `/` | search (app level) | search the focused pane's scrollback — the pager key, live where plain letters are commands; a focused pane still types it to the host |
+| `n` / `N` | search (app level, while a term is live) | older / newer match; shadows "connect a new host" until the search ends |
+| `esc` | search (app level, while a term is live) | leave the search, exactly like `alt+c` |
 | `enter` | prompts | apply what was typed: connect the pattern, save the group, run the command, jump to the newest match |
 | `esc` | prompts | cancel the prompt, or clear a mouse selection |
 | `tab` | the connect prompt | complete the first matching ssh-config alias |

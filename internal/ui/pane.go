@@ -278,12 +278,18 @@ func (a App) paneBody(id string, width, height int) string {
 	}
 
 	if a.searchTerm != "" {
+		cursor := a.matchCursor(id)
 		for i, line := range window {
 			if text := ansi.Strip(line); containsFold(text, a.searchTerm) {
 				// The whole line takes the match style, its own colours
 				// dropped: a highlight fighting the remote's colours would
-				// lose.
-				window[i] = a.theme.Match.Render(text)
+				// lose. The line the search cursor stands on takes the louder
+				// style, so 3/17 is visible on the screen too.
+				style := a.theme.Match
+				if start+i == cursor {
+					style = a.theme.MatchCurrent
+				}
+				window[i] = style.Render(text)
 			}
 		}
 	}
