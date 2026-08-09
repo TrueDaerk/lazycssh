@@ -2,6 +2,16 @@
 
 ## 2026-08-09
 
+- Cut `-race` test wall time (issue #230): `TestRenderSurvivesConcurrentStateFlips` renders 50
+  frames instead of 500 and its flip goroutines yield per iteration instead of busy-spinning —
+  that one test alone took 201s under `-race`. `TestFakeFlood` floods 10 500 lines (just past
+  the 10k cap) instead of 20 000; `TestFakeIsConcurrencySafe` does 4×100 mixed ops with a full
+  render every fifth instead of 4×250 with one per op. The encrypted/plain test keys in
+  `internal/ssh` are generated and marshaled once per package (bcrypt KDF dominated); each test
+  still gets its own file in `t.TempDir()`. The slow independent tests in both packages now run
+  with `t.Parallel()`. Locally under `-race`: `internal/ui` 201s → 16s, `internal/ssh` 30s →
+  12s, full suite 18s wall. No test deleted, no assertion weakened. Version 0.10.7.
+
 - Opt-in session logging to disk (issue #45): a new `internal/sessionlog` package writes one
   file per host under a per-run directory created by `--log-dir DIR` — `0600` files in `0700`
   directories, 8 MiB rotation keeping one older generation, reconnects appending with a marker.

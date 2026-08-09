@@ -237,12 +237,15 @@ func TestFakeExitWithStatus(t *testing.T) {
 }
 
 func TestFakeFlood(t *testing.T) {
+	t.Parallel()
 	f := NewFake("s1", fakeHost(), nil)
 	if err := f.Start(t.Context()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 
-	f.Flood(20_000)
+	// Just over the 10k retention cap: enough to prove the overflow without
+	// paying for another 9500 lines under -race (issue #230).
+	f.Flood(10_500)
 
 	if got := f.Terminal().HistoryLen(); got > 10_000 {
 		t.Errorf("history holds %d lines, want it capped at 10000", got)
@@ -332,6 +335,7 @@ func TestFakeNeverBlocksOnAnUndrainedChannel(t *testing.T) {
 }
 
 func TestFakeIsConcurrencySafe(t *testing.T) {
+	t.Parallel()
 	f := NewFake("s1", fakeHost(), nil)
 	if err := f.Start(t.Context()); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -342,12 +346,17 @@ func TestFakeIsConcurrencySafe(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 250; j++ {
+			for j := 0; j < 100; j++ {
 				f.Write([]byte("x\r"))
 				f.Emit("out\r\n")
 				_ = f.State()
 				_ = f.Written()
-				_ = f.Terminal().Text()
+				// A full render every iteration made this the third most
+				// expensive test under -race; every fifth still overlaps
+				// renders with every other operation (issue #230).
+				if j%5 == 0 {
+					_ = f.Terminal().Text()
+				}
 				// Height changes are cheap; a width change reflows the whole
 				// history, so it is exercised concurrently but sparsely — no
 				// real workload re-wraps a pane hundreds of times per second.

@@ -33,9 +33,19 @@ func authHost(alias string, identityFiles ...string) hosts.Host {
 	}
 }
 
-// writeKey writes an ed25519 private key, optionally encrypted, and returns its
-// path and public key.
-func writeKey(t *testing.T, passphrase string) (path string, pub ssh.PublicKey) {
+// testKey is a generated private key marshaled once and reused by every test:
+// encrypting with a passphrase runs the bcrypt KDF, which under -race made key
+// generation the most expensive part of this package (issue #230). Tests only
+// need *a* valid key, not a distinct one, so one per passphrase suffices.
+type testKey struct {
+	once sync.Once
+	pem  []byte
+	pub  ssh.PublicKey
+}
+
+var testKeys = map[string]*testKey{"": {}, testPassphrase: {}}
+
+func (k *testKey) generate(t *testing.T, passphrase string) {
 	t.Helper()
 
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
@@ -53,16 +63,33 @@ func writeKey(t *testing.T, passphrase string) (path string, pub ssh.PublicKey) 
 		t.Fatalf("marshal key: %v", err)
 	}
 
-	path = filepath.Join(t.TempDir(), "id_ed25519")
-	if err := os.WriteFile(path, pem.EncodeToMemory(block), 0o600); err != nil {
-		t.Fatalf("write key: %v", err)
-	}
-
 	signer, err := ssh.NewSignerFromKey(priv)
 	if err != nil {
 		t.Fatalf("build signer: %v", err)
 	}
-	return path, signer.PublicKey()
+	k.pem, k.pub = pem.EncodeToMemory(block), signer.PublicKey()
+}
+
+// writeKey writes an ed25519 private key, optionally encrypted, and returns its
+// path and public key. The key material is cached per passphrase; only the file
+// in t.TempDir() is fresh per test.
+func writeKey(t *testing.T, passphrase string) (path string, pub ssh.PublicKey) {
+	t.Helper()
+
+	k, ok := testKeys[passphrase]
+	if !ok {
+		t.Fatalf("no cached test key for passphrase %q; add it to testKeys", passphrase)
+	}
+	k.once.Do(func() { k.generate(t, passphrase) })
+	if k.pem == nil {
+		t.Fatal("test key generation failed in an earlier test")
+	}
+
+	path = filepath.Join(t.TempDir(), "id_ed25519")
+	if err := os.WriteFile(path, k.pem, 0o600); err != nil {
+		t.Fatalf("write key: %v", err)
+	}
+	return path, k.pub
 }
 
 func TestCredentialsPromptsOncePerMachine(t *testing.T) {
@@ -190,6 +217,7 @@ func TestCredentialsForgetPassword(t *testing.T) {
 }
 
 func TestCredentialsLoadsEncryptedIdentityOncePerFile(t *testing.T) {
+	t.Parallel()
 	keyPath, _ := writeKey(t, testPassphrase)
 
 	var calls atomic.Int32
@@ -244,6 +272,7 @@ func TestCredentialsUnencryptedIdentityNeedsNoPrompt(t *testing.T) {
 }
 
 func TestCredentialsWrongPassphraseIsForgotten(t *testing.T) {
+	t.Parallel()
 	keyPath, _ := writeKey(t, testPassphrase)
 
 	var calls atomic.Int32
@@ -294,6 +323,7 @@ func TestCredentialsMissingIdentityIsNotFatalWhenAnotherWorks(t *testing.T) {
 }
 
 func TestCredentialsWithoutPrompter(t *testing.T) {
+	t.Parallel()
 	keyPath, _ := writeKey(t, testPassphrase)
 	creds := &Credentials{DisableAgent: true}
 
@@ -414,6 +444,7 @@ func assertMethodOrder(t *testing.T, creds *Credentials, host hosts.Host, want .
 // TestNoSecretEverAppearsInAnError is the security guarantee: a credential must
 // not reach a log line, an error string or a rendered view.
 func TestNoSecretEverAppearsInAnError(t *testing.T) {
+	t.Parallel()
 	keyPath, _ := writeKey(t, testPassphrase)
 
 	creds := &Credentials{
@@ -476,6 +507,7 @@ func TestNoSecretEverAppearsInAnError(t *testing.T) {
 
 // TestAuthAgainstServer exercises the whole chain against the in-process server.
 func TestAuthAgainstServer(t *testing.T) {
+	t.Parallel()
 	t.Run("password", func(t *testing.T) {
 		srv := newTestServer(t)
 		creds := &Credentials{
