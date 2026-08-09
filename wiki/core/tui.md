@@ -635,7 +635,11 @@ typed, and the audit trail is for commands.
 | `FleetUpdatedMsg` | re-read the fleet into the model snapshot, then redraw from it |
 | `SessionOutputMsg` | redraw; the pane reads the internally synchronized emulator itself |
 | `HostsChangedMsg` | replace the host list, keeping the focused host |
-| `SessionsChangedMsg` | re-read the group directory |
+| `SessionsChangedMsg` | start a `tea.Cmd` that re-reads the group directory — disk I/O never runs inside `Update` (issue #225) |
+| `GroupsLoadedMsg` | the directory re-read's result: replace the Groups panel's rows |
+| `GroupSavedMsg` | the new-group write's result: close the dialog and re-read, or keep it open with the error |
+| `GroupRemovedMsg` | the delete's result: surface an error in the panel, re-read either way |
+| `SaveResultMsg` | the save-as write's result: close the prompt and re-read, ask `overwrite?` on a taken name, or report the failure |
 | `GroupOpenMsg` | emitted, not handled: the program resolves and connects a saved group's hosts |
 | `SessionOpenedMsg` | a group's hosts are in the fleet: upsert its open session and foreground it |
 | `GridChangedMsg` | emitted, not handled: the visible panes changed shape, the program resizes the PTYs |
@@ -647,8 +651,13 @@ typed, and the audit trail is for commands.
 | `CommandResendMsg` | resend a logged command to the current broadcast set |
 | `CommandSentMsg` | emitted after a send, carrying the delivery report |
 
-`Init` returns `tea.RequestBackgroundColor`, which is what makes the palette match the terminal
-rather than guessing.
+`Init` returns `tea.RequestBackgroundColor` — which is what makes the palette match the
+terminal rather than guessing — batched with the first group-directory read, so not even
+startup touches the disk inline.
+
+While a group or save write is in flight its dialog keeps the keyboard and swallows keys: a
+second `enter` cannot start a second write, and the typed input survives until the result
+message says what happened.
 
 ## Testing a TUI
 

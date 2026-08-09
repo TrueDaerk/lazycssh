@@ -13,6 +13,11 @@ import (
 // path of a focused pane. It is the narrowest possible slice of [ssh.Manager],
 // declared here so typing can be tested against a fake and so this package
 // still cannot dial.
+//
+// Both methods are called inline from Update, once per keystroke: they must
+// never block on the network. The transport honours that with a per-session
+// stdin queue - a stalled host refuses the write rather than stalling the
+// loop (issue #225).
 type PaneWriter interface {
 	// Writer returns where the host's raw bytes go, or false when the
 	// session cannot take input.

@@ -68,6 +68,33 @@ func drive(t *testing.T, m *Model, msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
+// settle drives a message and every command it spawns to completion - the
+// synchronous stand-in for the runtime draining the async work Update started
+// (issue #225). Not for messages that re-arm the pump: that command blocks.
+func settle(t *testing.T, m *Model, msg tea.Msg) {
+	t.Helper()
+	runCmd(t, m, drive(t, m, msg))
+}
+
+// runCmd executes one command tree and feeds its messages back into Update.
+func runCmd(t *testing.T, m *Model, cmd tea.Cmd) {
+	t.Helper()
+	if cmd == nil {
+		return
+	}
+	msg := cmd()
+	if msg == nil {
+		return
+	}
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			runCmd(t, m, c)
+		}
+		return
+	}
+	runCmd(t, m, drive(t, m, msg))
+}
+
 func TestInitDialsTheFleet(t *testing.T) {
 	m, _ := testModel(t, "srv{1..3}")
 	if cmd := m.Init(); cmd == nil {
@@ -172,7 +199,7 @@ func TestGroupOpenAddsTheSavedHosts(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	drive(t, m, ui.GroupOpenMsg{Name: "web"})
+	settle(t, m, ui.GroupOpenMsg{Name: "web"})
 	m.Manager().Wait()
 
 	want := []string{"srv1", "web1", "web2"}
@@ -195,7 +222,7 @@ func TestGroupOpenOfAMissingNameLeavesTheRunAlone(t *testing.T) {
 	m.Init()
 	m.Manager().Wait()
 
-	drive(t, m, ui.GroupOpenMsg{Name: "no-such"})
+	settle(t, m, ui.GroupOpenMsg{Name: "no-such"})
 	m.Manager().Wait()
 
 	if got := m.Manager().Len(); got != 1 {
@@ -279,7 +306,7 @@ func TestEmptyRunGrowsByGroupOpen(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	drive(t, m, ui.GroupOpenMsg{Name: "web"})
+	settle(t, m, ui.GroupOpenMsg{Name: "web"})
 	m.Manager().Wait()
 
 	if got := m.Manager().Counts(); got.Connected != 3 {
@@ -296,7 +323,7 @@ func TestHostConnectRequestAddsHosts(t *testing.T) {
 		t.Fatalf("setup: Len() = %d", m.Manager().Len())
 	}
 
-	drive(t, m, ui.HostConnectMsg{Patterns: []string{"web-{01..02}"}})
+	settle(t, m, ui.HostConnectMsg{Patterns: []string{"web-{01..02}"}})
 	got := m.Manager().SortedIDs()
 	if len(got) != 2 || got[0] != "web-01" || got[1] != "web-02" {
 		t.Fatalf("IDs() = %v after connecting web-{01..02}", got)
@@ -307,8 +334,8 @@ func TestHostConnectRequestAddsHosts(t *testing.T) {
 func TestHostConnectRequestSkipsRunningHosts(t *testing.T) {
 	m, _ := testModel(t, "web-01")
 
-	drive(t, m, ui.HostConnectMsg{Patterns: []string{"web-01", "db-01"}})
-	drive(t, m, ui.HostConnectMsg{Patterns: []string{"web-01"}})
+	settle(t, m, ui.HostConnectMsg{Patterns: []string{"web-01", "db-01"}})
+	settle(t, m, ui.HostConnectMsg{Patterns: []string{"web-01"}})
 
 	got := m.Manager().SortedIDs()
 	if len(got) != 2 || got[0] != "db-01" || got[1] != "web-01" {
@@ -319,7 +346,7 @@ func TestHostConnectRequestSkipsRunningHosts(t *testing.T) {
 func TestHostConnectRequestReportsResolveErrors(t *testing.T) {
 	m, _ := testModel(t)
 
-	drive(t, m, ui.HostConnectMsg{Patterns: []string{"web-{01"}})
+	settle(t, m, ui.HostConnectMsg{Patterns: []string{"web-{01"}})
 	if m.Manager().Len() != 0 {
 		t.Fatalf("Len() = %d after a failed resolve", m.Manager().Len())
 	}
@@ -333,7 +360,7 @@ func TestRemoveHostRequestDropsThePane(t *testing.T) {
 	m.Init()
 	m.Manager().Wait()
 
-	drive(t, m, ui.RemoveHostMsg{ID: "web-01"})
+	settle(t, m, ui.RemoveHostMsg{ID: "web-01"})
 	got := m.Manager().IDs()
 	if len(got) != 1 || got[0] != "web-02" {
 		t.Fatalf("IDs() = %v after removing web-01", got)
@@ -349,20 +376,20 @@ func TestRemoveHostRequestDropsThePane(t *testing.T) {
 func TestRunPatternsFollowRuntimeConnects(t *testing.T) {
 	m, _ := testModel(t, "web-{01..02}")
 
-	drive(t, m, ui.HostConnectMsg{Patterns: []string{"db-01"}})
+	settle(t, m, ui.HostConnectMsg{Patterns: []string{"db-01"}})
 	if got := strings.Join(m.patterns, ","); got != "web-{01..02},db-01" {
 		t.Fatalf("patterns = %q after a runtime connect", got)
 	}
 
 	// Connecting the same pattern again does not duplicate it.
-	drive(t, m, ui.HostConnectMsg{Patterns: []string{"cache-01", "db-01"}})
+	settle(t, m, ui.HostConnectMsg{Patterns: []string{"cache-01", "db-01"}})
 	if got := strings.Join(m.patterns, ","); got != "web-{01..02},db-01,cache-01" {
 		t.Fatalf("patterns = %q after a repeated connect", got)
 	}
 
 	// Removing a host drops its exact pattern; a brace pattern stays.
-	drive(t, m, ui.RemoveHostMsg{ID: "db-01"})
-	drive(t, m, ui.RemoveHostMsg{ID: "web-01"})
+	settle(t, m, ui.RemoveHostMsg{ID: "db-01"})
+	settle(t, m, ui.RemoveHostMsg{ID: "web-01"})
 	if got := strings.Join(m.patterns, ","); got != "web-{01..02},cache-01" {
 		t.Fatalf("patterns = %q after removals", got)
 	}
@@ -382,9 +409,9 @@ func TestReopeningAGroupDoesNotDuplicateHosts(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	drive(t, m, ui.GroupOpenMsg{Name: "web"})
+	settle(t, m, ui.GroupOpenMsg{Name: "web"})
 	m.Manager().Wait()
-	drive(t, m, ui.GroupOpenMsg{Name: "web"})
+	settle(t, m, ui.GroupOpenMsg{Name: "web"})
 	m.Manager().Wait()
 
 	if got := m.Manager().Len(); got != 3 {
@@ -395,5 +422,35 @@ func TestReopeningAGroupDoesNotDuplicateHosts(t *testing.T) {
 	}
 	if got := strings.Join(m.app.OpenSessionNames(), ","); got != "adhoc,web" {
 		t.Fatalf("open sessions = %q", got)
+	}
+}
+
+// The store read and the resolution run in the returned Cmd, not in Update
+// (issue #225): until the command runs, the fleet is untouched.
+func TestGroupOpenResolvesInTheCommandNotInUpdate(t *testing.T) {
+	m, _ := testModel(t, "srv1")
+	m.Init()
+	m.Manager().Wait()
+
+	if err := m.store.Save(&sessions.Session{
+		Version: sessions.FormatVersion,
+		Name:    "web",
+		Hosts:   []sessions.HostEntry{{Pattern: "web{1..2}"}},
+	}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	cmd := drive(t, m, ui.GroupOpenMsg{Name: "web"})
+	if cmd == nil {
+		t.Fatal("opening a group produced no command")
+	}
+	if got := m.Manager().Len(); got != 1 {
+		t.Fatalf("Update touched the fleet: Len() = %d, want 1", got)
+	}
+
+	runCmd(t, m, cmd)
+	m.Manager().Wait()
+	if got := m.Manager().Len(); got != 3 {
+		t.Fatalf("Len() = %d after the command ran, want 3", got)
 	}
 }

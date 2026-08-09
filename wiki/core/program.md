@@ -4,7 +4,7 @@ title: Program assembly
 description: The one place every layer meets - building the fleet, wiring the router and the UI together, and the wrapper model that acts on what the UI may only ask for.
 resource: internal/program/program.go
 tags: [program, wiring, bubbletea, transport]
-timestamp: 2026-07-30T23:00:00Z
+timestamp: 2026-08-09T00:00:00Z
 ---
 
 # Program assembly
@@ -31,13 +31,18 @@ acted on:
 |---------|--------|
 | `ui.ReconnectHostMsg` | `Manager.Reconnect` in a `tea.Cmd`, then a redraw |
 | `ui.CloseHostMsg` | `Manager.Close` in a `tea.Cmd`, then a redraw |
-| `ui.RemoveHostMsg` | `Manager.Remove` + `Router.Forget` + `SetHosts` + PTY resize, then `HostsChangedMsg` |
+| `ui.RemoveHostMsg` | `Manager.Remove` in a `tea.Cmd` — it waits for the session's goroutines; the bookkeeping (`Router.Forget` + `SetHosts` + PTY resize, then `HostsChangedMsg`) follows when the internal `hostRemovedMsg` lands |
+| `ui.GroupOpenMsg` | store load + `~/.ssh/config` resolution in a `tea.Cmd`; the internal `groupResolvedMsg` then does `Manager.Add` per host on the `Update` goroutine |
+| `ui.HostConnectMsg` | pattern resolution in a `tea.Cmd`; the internal `hostsResolvedMsg` then adds the hosts, or carries the resolve error back as `ConnectErrorMsg` |
+| `tea.WindowSizeMsg` | forwarded to the UI, then every remote PTY is resized to the pane content size |
+
+Filesystem work — the store read, the ssh-config resolution, the goroutine wait inside
+`Remove` — always runs in the `tea.Cmd`; the managers are only ever mutated where the result
+message lands, on the `Update` goroutine (issue #225).
 
 The program owns the run's live pattern list: seeded from the CLI, extended by every runtime
 connect and session launch, pruned when a removal names a pattern exactly, and handed to the UI
 with every `HostsChangedMsg` so a save writes how the run was actually assembled.
-| `ui.SessionLaunchMsg` | load the saved session, resolve its patterns, `Manager.Add` each host |
-| `tea.WindowSizeMsg` | forwarded to the UI, then every remote PTY is resized to the pane content size |
 
 Launching and merging a session both **add** hosts: panes already in the run are never torn
 down by loading more. A non-merge launch additionally applies the session's broadcast mode and

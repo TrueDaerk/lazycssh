@@ -207,6 +207,7 @@ type sshSession struct {
 	client        *ssh.Client
 	session       *ssh.Session
 	stdin         io.WriteCloser
+	input         *stdinQueue
 	droppedEvents int
 	lastExit      int
 	hasExit       bool
@@ -396,16 +397,35 @@ func (s *sshSession) startShell(session *ssh.Session) error {
 		return fmt.Errorf("start shell on %s: %w", s.cfg.Host.Alias, err)
 	}
 
-	s.mu.Lock()
-	s.stdin = stdin
-	s.mu.Unlock()
-
 	// Arm the exit code reporting before anything else is typed. The bytes
 	// queue in the PTY input until the shell reads them; a shell that does not
 	// understand the hook prints an error once and the session still works.
+	// This is the one direct stdin write: it happens on the dial goroutine,
+	// before the queue below exists, so it cannot reorder against queued input.
 	if _, err := stdin.Write([]byte(ExitSetupCommand)); err != nil {
 		return fmt.Errorf("arm exit reporting on %s: %w", s.cfg.Host.Alias, err)
 	}
+
+	// Everything after this point writes through the queue: Write enqueues and
+	// returns, and this goroutine alone touches the channel. An SSH channel
+	// write blocks when the remote window is exhausted - a host frozen by
+	// ctrl+s, a hung peer - and the writers are the UI loop (issue #225).
+	input := newStdinQueue(s.cfg.Host.Alias, 0, s.closed)
+	s.mu.Lock()
+	s.stdin = stdin
+	s.input = input
+	s.mu.Unlock()
+
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		input.run(stdin)
+		// This goroutine owns stdin, closing included: x/crypto's CloseWrite
+		// races a Write in flight, so the close happens here, after the last
+		// write has returned. Close unblocks a stalled write by tearing down
+		// the session and client underneath it.
+		_ = stdin.Close()
+	}()
 
 	s.wg.Add(2)
 	// Only stdout carries the prompt, so only stdout gets the scanner and the
@@ -492,20 +512,19 @@ func (s *sshSession) waitForExit(session *ssh.Session) {
 	s.setState(StateFailed, fmt.Errorf("session on %s ended: %w", s.cfg.Host.Alias, err))
 }
 
-// Write sends bytes to the remote shell's stdin.
+// Write sends bytes to the remote shell's stdin. It never blocks on the
+// network: the bytes are enqueued for the session's single writer goroutine,
+// and a backlog left by a stalled host refuses the write with an error rather
+// than stalling the caller - which is the UI's Update loop (issue #225).
 func (s *sshSession) Write(p []byte) (int, error) {
 	s.mu.Lock()
-	stdin, state := s.stdin, s.state
+	input, state := s.input, s.state
 	s.mu.Unlock()
 
-	if stdin == nil {
+	if input == nil {
 		return 0, fmt.Errorf("write to %s: session is %s", s.cfg.Host.Alias, state)
 	}
-	n, err := stdin.Write(p)
-	if err != nil {
-		return n, fmt.Errorf("write to %s: %w", s.cfg.Host.Alias, err)
-	}
-	return n, nil
+	return input.Write(p)
 }
 
 // Resize informs the remote PTY of a new window size.
@@ -540,13 +559,14 @@ func (s *sshSession) Close() error {
 		close(s.closed)
 
 		s.mu.Lock()
-		stdin, session, client := s.stdin, s.session, s.client
-		s.stdin, s.session, s.client = nil, nil, nil
+		session, client := s.session, s.client
+		s.stdin, s.session, s.client, s.input = nil, nil, nil, nil
 		s.mu.Unlock()
 
-		if stdin != nil {
-			stdin.Close()
-		}
+		// stdin is not closed here: the drain goroutine owns it and closes it
+		// on its way out, so a close can never race a write in flight.
+		// Closing the session and client below unblocks that goroutine if a
+		// stalled host has it stuck mid-write.
 		if session != nil {
 			session.Close()
 		}
