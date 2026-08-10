@@ -246,7 +246,7 @@ func (a App) clearSearch() App {
 	a.searchTerm = ""
 	a.searchInput.SetValue("")
 	a.matchAt, a.searchAnchor = nil, nil
-	return a
+	return a.dropSearchCache()
 }
 
 // exitSearch is what esc means once a term is live: the highlight goes, the
@@ -269,15 +269,34 @@ func (a App) exitSearch() App {
 }
 
 // matchLines returns the virtual-line indices in a host's pane that contain
-// the term, oldest first.
+// the term, oldest first. It runs once per rendered frame (the status bar's
+// counter) and on every n/N step, so it must not materialize the virtual line
+// space: the history portion comes from the incremental match cache
+// (searchcache.go, issue #278), and only the marker and the screen rows — a
+// pane's height at most — are checked in place.
 func (a App) matchLines(id string) []int {
 	if a.searchTerm == "" {
 		return nil
 	}
-	var out []int
-	for i, line := range a.virtualLines(id) {
+	c, ok := a.paneContent(id)
+	if !ok {
+		return nil
+	}
+	hist := a.histMatches(id, c.histLen)
+	out := make([]int, 0, len(hist))
+	off := 0
+	if c.marker {
+		if containsFold(droppedMarkerText, a.searchTerm) {
+			out = append(out, 0)
+		}
+		off = 1
+	}
+	for _, i := range hist {
+		out = append(out, off+i)
+	}
+	for i, line := range c.screen {
 		if containsFold(ansi.Strip(line), a.searchTerm) {
-			out = append(out, i)
+			out = append(out, c.screenTop+i)
 		}
 	}
 	return out

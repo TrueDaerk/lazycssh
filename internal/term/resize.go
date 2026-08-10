@@ -44,6 +44,10 @@ func (e *Emulator) Resize(width, height int) {
 	if width == oldW && height == oldH {
 		return
 	}
+	// A width reflow rewrites the vt working depth in place, and a height
+	// change moves rows between screen and history; retained indices from
+	// before this resize point at different lines after it.
+	e.histGen++
 
 	// Drain first: the reflow below is O(vt scrollback), and resize storms
 	// (host joins on a busy fleet) must not pile cell lines past the working
