@@ -288,10 +288,22 @@ func (t loggedTargets) SetMode(m broadcast.Mode) error {
 // Manager exposes the fleet for the caller's shutdown path.
 func (m *Model) Manager() *ssh.Manager { return m.mgr }
 
-// fleetEventMsg wraps a transport event for the UI. The wrapper type exists so
-// Update knows to re-arm the pump after delivering it.
+// fleetEventMsg is one coalesced batch of transport events for the UI. The
+// wrapper type exists so Update knows to re-arm the pump after delivering it.
+//
+// It is a batch rather than a single event because a chatty fleet must not
+// starve key handling (issue #272): every output chunk of every host emits an
+// event, and delivering them one per Update cycle put hundreds of messages in
+// front of the next keystroke. Events carry no payload, so a batch says exactly
+// what the individual events said - which hosts have new output, and whether
+// the fleet changed at all.
 type fleetEventMsg struct {
-	inner tea.Msg
+	// outputs are the sessions that appended output in this batch, deduplicated
+	// and in first-seen order.
+	outputs []string
+	// fleetUpdated says at least one non-output event arrived, which makes the
+	// UI re-read the whole fleet - once per batch, however many arrived.
+	fleetUpdated bool
 }
 
 // pumpClosedMsg says the event channel is gone; the pump is not re-armed.
@@ -303,9 +315,15 @@ type hostRemovedMsg struct {
 	id string
 }
 
-// pump drains one transport event and converts it to the message the UI
-// documents. It blocks until an event arrives, which is fine inside a tea.Cmd:
-// commands run on their own goroutines.
+// pump drains the transport's events and converts them to one coalesced
+// message. It blocks until the first event arrives - which is fine inside a
+// tea.Cmd, commands run on their own goroutines - and then takes everything
+// already queued without blocking.
+//
+// Coalescing is what keeps a burst of output from starving key handling (issue
+// #272). It loses nothing: an output event carries no bytes, only "this host
+// has new scrollback", and the fleet's authoritative state lives on the
+// sessions. Two hints for the same host say what one says.
 func (m *Model) pump() tea.Cmd {
 	events := m.mgr.Events()
 	return func() tea.Msg {
@@ -313,11 +331,32 @@ func (m *Model) pump() tea.Cmd {
 		if !ok {
 			return pumpClosedMsg{}
 		}
-		switch ev := ev.(type) {
-		case ssh.OutputEvent:
-			return fleetEventMsg{inner: ui.SessionOutputMsg{ID: ev.ID}}
-		default:
-			return fleetEventMsg{inner: ui.FleetUpdatedMsg{}}
+		var batch fleetEventMsg
+		seen := make(map[string]bool)
+		add := func(ev ssh.Event) {
+			out, isOutput := ev.(ssh.OutputEvent)
+			if !isOutput {
+				batch.fleetUpdated = true
+				return
+			}
+			if !seen[out.ID] {
+				seen[out.ID] = true
+				batch.outputs = append(batch.outputs, out.ID)
+			}
+		}
+		add(ev)
+		for {
+			select {
+			case ev, ok := <-events:
+				if !ok {
+					// Closed mid-drain: deliver what this batch already holds;
+					// the pump Update re-arms reports the close.
+					return batch
+				}
+				add(ev)
+			default:
+				return batch
+			}
 		}
 	}
 }
@@ -333,8 +372,18 @@ func (m *Model) Init() tea.Cmd {
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case fleetEventMsg:
-		cmd := m.forward(msg.inner)
-		return m, tea.Batch(cmd, m.recordRecent(), m.pump())
+		cmds := make([]tea.Cmd, 0, len(msg.outputs)+3)
+		if msg.fleetUpdated {
+			cmds = append(cmds, m.forward(ui.FleetUpdatedMsg{}))
+		}
+		// One redraw hint per host with new output, not one per chunk: the
+		// UI's work per hint is the same either way, and the count is bounded
+		// by the fleet size instead of by how loud the fleet is.
+		for _, id := range msg.outputs {
+			cmds = append(cmds, m.forward(ui.SessionOutputMsg{ID: id}))
+		}
+		cmds = append(cmds, m.recordRecent(), m.pump())
+		return m, tea.Batch(cmds...)
 
 	case pumpClosedMsg:
 		return m, nil
@@ -350,7 +399,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg {
 			// The error is already on the session as state; the pane shows it.
 			_ = m.mgr.Reconnect(m.ctx, id)
-			return fleetEventMsg{inner: ui.FleetUpdatedMsg{}}
+			return fleetEventMsg{fleetUpdated: true}
 		}
 
 	case ui.ReconnectAllMsg:
@@ -358,7 +407,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Same reasoning as ReconnectHostMsg: each redial's error is
 			// already on its session as state, which is what the panes show.
 			m.mgr.ReconnectAll(m.ctx)
-			return fleetEventMsg{inner: ui.FleetUpdatedMsg{}}
+			return fleetEventMsg{fleetUpdated: true}
 		}
 
 	case ui.CloneHostMsg:
@@ -368,7 +417,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		id := msg.ID
 		return m, func() tea.Msg {
 			_ = m.mgr.Close(id)
-			return fleetEventMsg{inner: ui.FleetUpdatedMsg{}}
+			return fleetEventMsg{fleetUpdated: true}
 		}
 
 	case ui.RemoveHostMsg:
