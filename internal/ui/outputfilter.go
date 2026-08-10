@@ -80,8 +80,7 @@ func (a App) handleFilterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.applyOutputFilter("")
 	}
 
-	var cmd tea.Cmd
-	a.filterInput, cmd = a.filterInput.Update(msg)
+	cmd := a.filterInput.Update(msg)
 	return a, cmd
 }
 

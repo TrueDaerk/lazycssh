@@ -144,8 +144,7 @@ func (a App) handleCommandLineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.recallHistory(+1), nil
 	}
 
-	var cmd tea.Cmd
-	a.cmdInput, cmd = a.cmdInput.Update(msg)
+	cmd := a.cmdInput.Update(msg)
 	return a, cmd
 }
 

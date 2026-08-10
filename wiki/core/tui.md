@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-10T15:00:00Z
+timestamp: 2026-08-10T18:00:00Z
 ---
 
 # TUI shell
@@ -127,10 +127,16 @@ Two structural rules keep it that way. First, `View` plants a **one-frame memo**
 copy of the model (`framememo.go`): the visible host list and the tiled grid are computed once
 per frame however often the renderers ask, and the memo dies with the copy — it can never leak
 state into `Update`. Second, the root model must stay **cheap to copy**: it travels by value
-through every method call, and Go heap-allocates implicit copies above 64 KiB, so the fat
+through every method call, and Go heap-allocates implicit copies of 64 KiB or more, so the fat
 singletons (`Theme`, `KeyMap`) are held by pointer — both are immutable after construction —
-and `TestAppStaysCheapToCopy` pins the size budget. A new field that is big or grows must go
-behind a pointer.
+and every `textinput.Model` (~7.8 KiB each, nine across the model) sits in a `boxedInput`
+(`boxedinput.go`, issue #279): a pointer with **copy-on-write mutators** — every write clones
+the widget and repoints the field, so two model copies can never see each other's typing, and
+reads go straight through the pointer. The `help.Model` is behind a pointer under the same
+discipline, replaced at its two mutation sites (resize, theme change). That puts `App` at
+~3.2 KiB, and `TestAppStaysCheapToCopy` pins it under the 64 KiB cliff. A new field that is
+big or grows must go behind a pointer; a new input goes in a `boxedInput`, and a new mutator
+on it must clone first — never write through the shared pointer.
 
 ## The main area
 

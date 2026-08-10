@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"charm.land/bubbles/v2/key"
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/TrueDaerk/lazycssh/internal/sessions"
@@ -171,9 +170,11 @@ type groupsPanel struct {
 	rows    []groupRow
 	loadErr error
 
-	// The new-group dialog: first the name, then the host patterns.
-	nameInput  textinput.Model
-	hostsInput textinput.Model
+	// The new-group dialog: first the name, then the host patterns. The
+	// inputs are boxed - the panel lives by value inside App, and each
+	// widget is ~7.8 KiB (issue #279).
+	nameInput  boxedInput
+	hostsInput boxedInput
 	stage      groupStage
 	dialogErr  error
 	// saving marks the dialog's disk write in flight: the dialog keeps the
@@ -185,7 +186,7 @@ type groupsPanel struct {
 	deletePending string
 
 	// The save-as prompt and its overwrite question.
-	saveInput        textinput.Model
+	saveInput        boxedInput
 	saveErr          error
 	confirmOverwrite bool
 	// savePending marks the save's disk write in flight, same shape as
@@ -342,13 +343,10 @@ func (p *groupsPanel) handleDialogKey(msg tea.KeyPressMsg) tea.Cmd {
 		return p.commitNew()
 	}
 
-	var cmd tea.Cmd
 	if p.stage == groupStageName {
-		p.nameInput, cmd = p.nameInput.Update(msg)
-	} else {
-		p.hostsInput, cmd = p.hostsInput.Update(msg)
+		return p.nameInput.Update(msg)
 	}
-	return cmd
+	return p.hostsInput.Update(msg)
 }
 
 // commitNew writes the group. The patterns are stored as typed - brace
@@ -486,9 +484,7 @@ func (p *groupsPanel) handleSaveKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 
-	var cmd tea.Cmd
-	p.saveInput, cmd = p.saveInput.Update(msg)
-	return cmd
+	return p.saveInput.Update(msg)
 }
 
 // commitSave writes the run as a group. An existing name is not replaced until

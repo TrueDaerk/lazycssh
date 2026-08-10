@@ -205,8 +205,7 @@ func (a App) handleSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	var cmd tea.Cmd
-	a.searchInput, cmd = a.searchInput.Update(msg)
+	cmd := a.searchInput.Update(msg)
 	return a, cmd
 }
 

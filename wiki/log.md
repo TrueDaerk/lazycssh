@@ -2,6 +2,20 @@
 
 ## 2026-08-10
 
+- The root `App` model is under the 64 KiB implicit-heap cliff (issue #279, closing the model-size
+  thread of the #274 audit). #274 left `App` at 78 KiB by value — still over the threshold above
+  which Go heap-allocates every implicit copy — with the fat spread across nine `textinput.Model`s
+  (~7.8 KiB each: five on `App`, three in the Groups panel, one in the host picker) and the
+  `help.Model` (4.6 KiB). The inputs now live in `boxedInput` (`internal/ui/boxedinput.go`), a
+  pointer wrapper whose mutators are all copy-on-write — clone the widget, mutate the clone,
+  repoint the field — so value semantics survive: a model copy mutating its input can never change
+  what another copy reads, pinned mutator by mutator in `boxedinput_test.go`. `help.Model` moved
+  behind a pointer under the same discipline at its two mutation sites. `App` is ~3.2 KiB by value
+  now; `TestAppStaysCheapToCopy` tightened from the old 80 KiB budget to the 64 KiB cliff itself.
+  Frame cost (`BenchmarkAppViewQuietFleet`): 1.32 MB/op → 0.93 MB/op, ~9% less time — the model
+  copies that used to be heap allocations are stack copies again. Updated: `core/tui.md`.
+  Version 0.10.38.
+
 - Live search no longer walks the full scrollback every frame (issue #278, the last render-path
   walk the #274 audit left open). The status bar's match counter materialized the focused
   pane's whole virtual line space per frame, and every n/N step walked it again — ~20 ms and
