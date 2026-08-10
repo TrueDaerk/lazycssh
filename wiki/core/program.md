@@ -4,7 +4,7 @@ title: Program assembly
 description: The one place every layer meets - building the fleet, wiring the router and the UI together, and the wrapper model that acts on what the UI may only ask for.
 resource: internal/program/program.go
 tags: [program, wiring, bubbletea, transport]
-timestamp: 2026-08-10T14:00:00Z
+timestamp: 2026-08-11T12:00:00Z
 ---
 
 # Program assembly
@@ -52,15 +52,26 @@ becomes visible.
 
 ## The event pump
 
-The transport's event channel is drained by a self-re-arming `tea.Cmd`: it blocks on one event,
-converts it (`OutputEvent` → `SessionOutputMsg`, everything else → `FleetUpdatedMsg`) and the
-`Update` that receives the converted message immediately returns the next pump command. Events
-carry no payload and may be dropped by the transport under load; that is fine, because every
-`FleetUpdatedMsg` makes the UI's `Update` re-read the whole fleet into its model snapshot — one
-surviving event carries everything the dropped ones hinted at — see [TUI shell](./tui.md).
+The transport's event channel is drained by a self-re-arming `tea.Cmd`: it blocks on the first
+event, then takes everything already queued with non-blocking reads, and the `Update` that
+receives the resulting batch immediately returns the next pump command. Events carry no payload
+and may be dropped by the transport under load; that is fine, because every `FleetUpdatedMsg`
+makes the UI's `Update` re-read the whole fleet into its model snapshot — one surviving event
+carries everything the dropped ones hinted at — see [TUI shell](./tui.md).
 
-Every pumped event also runs `recordRecent`, which writes the sessions that have reached
-connected since the last pass into the [recent-host list](./recent-hosts.md) — the picker's
+**One batch, not one message per event** (issue #272). The batch is coalesced: `OutputEvent`s
+are deduplicated by session identifier, every other event collapses into a single
+`FleetUpdatedMsg`. `Update` then forwards at most one `FleetUpdatedMsg` plus one
+`SessionOutputMsg` per host with new output. Delivering events individually meant a fleet
+echoing a held key put hundreds of messages in bubbletea's queue, and the *next* key press was
+handled only after all of them — the UI felt like it replayed inputs serially. Coalescing loses
+nothing that was not already lossy by design: an output event says "this host has new
+scrollback", nothing more, and the emit path already drops events when the channel is full. The
+cost per batch is now bounded by the fleet size instead of by how loud the fleet is.
+
+Every pumped batch also runs `recordRecent` — once per batch, not once per raw event — which
+writes the sessions that have reached connected since the last pass into the
+[recent-host list](./recent-hosts.md) — the picker's
 `rec` rows. The bookkeeping (which identifiers were already recorded) happens in `Update`; the
 file write happens in the returned `tea.Cmd`, and its failure is swallowed.
 

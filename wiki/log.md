@@ -2,6 +2,20 @@
 
 ## 2026-08-11
 
+- Coalesce transport events in the pump, so an output burst cannot starve key handling
+  (issue #272). Holding a key made the UI feel like it replayed inputs serially: every output
+  chunk of every host emits one `OutputEvent`, the pump delivered **one event per Update
+  cycle**, and a fleet echoing a held key put hundreds of `fleetEventMsg`s in bubbletea's queue
+  — a freshly pressed key landed behind all of them. `pump()` now blocks for the first event and
+  then drains everything already queued with non-blocking reads: `OutputEvent`s deduplicated by
+  session identifier, every other event collapsed into a single `FleetUpdatedMsg`. `Update`
+  forwards at most one fleet update plus one redraw hint per host with new output, and
+  `recordRecent` — which walks every session under its locks — runs once per batch instead of
+  once per chunk. Nothing is lost: an output event carries no bytes, only "this host has new
+  scrollback", the authoritative state lives on the sessions, and the emit path already dropped
+  events when the channel was full. The work per batch is now bounded by the fleet size rather
+  than by how loud the fleet is. `core/program.md` updated. Version 0.10.33.
+
 - Resend a logged command to the hosts that **missed** it, `m` in the Command log panel
   (issue #256). A host that reconnects into a fleet that already ran three commands missed
   them; re-sending to the whole scope would run them a second time on the thirty-nine machines

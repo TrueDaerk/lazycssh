@@ -1,6 +1,7 @@
 package program
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -119,17 +120,104 @@ func TestPumpConvertsTransportEvents(t *testing.T) {
 	if !ok {
 		t.Fatalf("pump produced %T, want fleetEventMsg", msg)
 	}
-	out, ok := ev.inner.(ui.SessionOutputMsg)
-	if !ok {
-		t.Fatalf("output arrived as %T, want ui.SessionOutputMsg", ev.inner)
+	if ev.fleetUpdated {
+		t.Error("an output event was reported as a fleet update")
 	}
-	if out.ID != "srv1" {
-		t.Errorf("SessionOutputMsg.ID = %q, want srv1", out.ID)
+	if got := ev.outputs; len(got) != 1 || got[0] != "srv1" {
+		t.Errorf("outputs = %v, want [srv1]", got)
 	}
 
 	// A fleet event re-arms the pump.
 	if cmd := drive(t, m, ev); cmd == nil {
 		t.Fatal("delivering a fleet event returned no command; the pump is dead")
+	}
+}
+
+// TestPumpCoalescesOutputBursts is issue #272: a host echoing a held key
+// queued one message per chunk, and the next keystroke waited behind all of
+// them. One pump call must take the whole burst.
+func TestPumpCoalescesOutputBursts(t *testing.T) {
+	m, lookup := testModel(t, "srv1")
+	m.Init()
+	m.Manager().Wait()
+	drain(t, m)
+
+	for range 50 {
+		lookup("srv1").Emit("x\r\n")
+	}
+	msg := m.pump()()
+	ev, ok := msg.(fleetEventMsg)
+	if !ok {
+		t.Fatalf("pump produced %T, want fleetEventMsg", msg)
+	}
+	if got := ev.outputs; len(got) != 1 || got[0] != "srv1" {
+		t.Fatalf("outputs = %v, want [srv1]: 50 chunks must coalesce into one hint", got)
+	}
+	// Nothing is left over: the next pump has to block for new output, so
+	// there is no backlog for a keystroke to queue behind.
+	select {
+	case ev := <-m.Manager().Events():
+		t.Fatalf("event left queued after the pump drained: %#v", ev)
+	default:
+	}
+}
+
+// TestPumpKeepsEveryHost checks the deduplication is per host: a batch that
+// dropped a host would leave that pane stale until its next chunk.
+func TestPumpKeepsEveryHost(t *testing.T) {
+	m, lookup := testModel(t, "srv1", "srv2", "srv3")
+	m.Init()
+	m.Manager().Wait()
+	drain(t, m)
+
+	for range 5 {
+		for _, id := range []string{"srv1", "srv2", "srv3"} {
+			lookup(id).Emit("x\r\n")
+		}
+	}
+	ev, ok := m.pump()().(fleetEventMsg)
+	if !ok {
+		t.Fatal("pump produced no fleet event")
+	}
+	got := append([]string(nil), ev.outputs...)
+	slices.Sort(got)
+	want := []string{"srv1", "srv2", "srv3"}
+	if !slices.Equal(got, want) {
+		t.Errorf("outputs = %v, want %v", got, want)
+	}
+}
+
+// TestPumpDeliversStateEventsBehindOutput proves a lifecycle event queued
+// behind a burst still reaches the UI - once for the batch, which is all
+// FleetUpdatedMsg needs: it makes the UI re-read the whole fleet.
+func TestPumpDeliversStateEventsBehindOutput(t *testing.T) {
+	m, lookup := testModel(t, "srv1")
+	m.Init()
+	m.Manager().Wait()
+	drain(t, m)
+
+	for range 20 {
+		lookup("srv1").Emit("x\r\n")
+	}
+	lookup("srv1").Disconnect(ssh.ErrDisconnected())
+
+	ev, ok := m.pump()().(fleetEventMsg)
+	if !ok {
+		t.Fatal("pump produced no fleet event")
+	}
+	if !ev.fleetUpdated {
+		t.Error("the state event behind the output burst was lost")
+	}
+	if got := ev.outputs; len(got) != 1 || got[0] != "srv1" {
+		t.Errorf("outputs = %v, want [srv1]", got)
+	}
+
+	// The batch reaches the UI: the fleet snapshot must show the failure.
+	if cmd := drive(t, m, ev); cmd == nil {
+		t.Fatal("delivering the batch returned no command")
+	}
+	if got := m.mgr.Counts().Failed; got != 1 {
+		t.Errorf("Counts().Failed = %d, want 1", got)
 	}
 }
 
