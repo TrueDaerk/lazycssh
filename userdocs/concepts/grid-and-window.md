@@ -61,7 +61,8 @@ and nothing on the pages behind them, and paging moves the broadcast with it.
 screen (++f++) is a zoom — it keeps its page's targets rather than silently
 turning `all` into a one-host send.
 
-- ++ctrl+shift+right++ / ++ctrl+shift+left++ are the single navigator for "the next
+- ++ctrl+shift+right++ / ++ctrl+shift+left++ — or ++ctrl+a++ then ++right++ /
+  ++left++, which every terminal delivers — are the single navigator for "the next
   screenful": a whole page, and at a chunk boundary of an active split, the next
   chunk, wrapping at both ends. Pane focus follows onto the new screenful, so
   the pane that receives a keystroke is one you can see.
@@ -145,10 +146,10 @@ view only — they never change which hosts your next keystroke reaches.
 ++alt+z++ again returns, from whatever mode you were in. Full screen skips the
 overflow footer: an explicit zoom has its own way back.
 
-Inside a pane, ++ctrl+a++ is start-of-line and ++ctrl+s++ is flow control for
-the remote shell. ++ctrl+s++ is an app-level command only when no pane has the
-keyboard; ++ctrl+a++ has no app-level meaning at all — in the broadcast bar it
-is the escape prefix (see
+Inside a pane, ++ctrl+s++ is flow control for the remote shell and is an
+app-level command only when no pane has the keyboard. ++ctrl+a++ is the
+`screen`-style prefix everywhere: ++ctrl+a++ ++right++ / ++left++ page, and the
+start-of-line the shell wants is ++ctrl+a++ ++ctrl+a++ (see
 [Typing and broadcasting](../guides/broadcasting.md#the-ctrla-prefix)).
 
 ## Focus is always visible

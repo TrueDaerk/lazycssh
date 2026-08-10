@@ -9,17 +9,6 @@ import (
 	"github.com/TrueDaerk/lazycssh/internal/ssh"
 )
 
-// While typing into a pane, ctrl+a is readline start-of-line: it belongs to
-// the host, and no app-level binding may swallow it.
-func TestCtrlAIsForwardedWhileTyping(t *testing.T) {
-	a, fleet := typingApp(t, "web-01")
-	a = pressKey(t, a, "ctrl+a")
-
-	if got := fleet.sessions["web-01"].Written(); got != "\x01" {
-		t.Fatalf("the host received %q, want the raw ctrl+a byte", got)
-	}
-}
-
 // splitApp is ten connected hosts with the router attached.
 func splitApp(t *testing.T) (App, *fakeFleet, Selector) {
 	t.Helper()

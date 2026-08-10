@@ -71,17 +71,22 @@ Inside the bar, ++ctrl+a++ is a csshx-style escape prefix:
 |---|---|
 | ++ctrl+a++ ++ctrl+a++ | send one literal ++ctrl+a++ to the targets — the GNU-screen double press |
 | ++ctrl+a++ ++a++ | the same literal, matching `screen`'s own ++ctrl+a++ ++a++ |
+| ++ctrl+a++ ++right++ / ++left++ | page to the next / previous screenful |
 | ++ctrl+a++ ++escape++ | switch to view mode |
 | ++ctrl+a++ *anything else* | forward that key to the targets as a normal keystroke |
 
 The prefix exists for the remote multiplexer, so it forwards by default: press
 ++ctrl+a++ ++ctrl+a++ then ++c++ to open a `screen` window on every host, or
 ++ctrl+a++ ++ctrl+a++ then ++n++ to step them all to the next one. Only those
-three sequences are kept by lazycssh; everything else after the prefix reaches
+few sequences are kept by lazycssh; everything else after the prefix reaches
 the hosts. The prefix is cleared before the second key is handled, so it cannot
 chain, and a prefixed key never enters the recorded command line. While a prefix
 is armed the status bar says so:
-`ctrl+a… next key goes to the hosts · ctrl+a/a = literal · esc = view`.
+`ctrl+a… ←/→ page · ctrl+a/a = literal · esc = view · any other key goes to the hosts`.
+
+The same prefix works outside the bar — in a pane and at the app level — where
+++ctrl+a++ ++right++ / ++left++ page and ++ctrl+a++ ++a++ sends the literal to
+the focused host.
 
 App commands from inside the bar go through view mode (++ctrl+a++ ++escape++),
 which is the one place keys are commands instead of keystrokes.

@@ -192,11 +192,15 @@ type App struct {
 	// since the last enter. The truth is on the hosts; this is the reminder.
 	broadcastLine []rune
 
-	// broadcastView routes the bar's keys to commands instead of the hosts;
-	// broadcastPending is a typed ctrl+a waiting for its second key. Neither
-	// outlives the bar's focus: entering the bar always starts in edit mode.
-	broadcastView    bool
-	broadcastPending bool
+	// broadcastView routes the bar's keys to commands instead of the hosts.
+	// It does not outlive the bar's focus: entering the bar always starts in
+	// edit mode.
+	broadcastView bool
+
+	// prefixArmed is a typed ctrl+a waiting for its second key. The chord
+	// works wherever focus is - in a pane, in the bar and at the app level
+	// (issue #273) - and lasts exactly one key press; see prefix.go.
+	prefixArmed bool
 
 	// pendingPaste is a multiline paste addressed to more than one host, held
 	// until enter releases it or esc drops it; see broadcastbar.go (issue
@@ -573,9 +577,11 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // means one thing at a time; see [KeyMap].
 func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// The bar's modal state does not outlive its focus: whatever mode the bar
-	// was left in, coming back to it starts in edit mode.
+	// was left in, coming back to it starts in edit mode. An armed ctrl+a
+	// prefix is not bar state - it is live wherever focus is - so it survives
+	// here and is cleared by the key that resolves it (issue #273).
 	if a.focus != AreaBroadcast {
-		a.broadcastView, a.broadcastPending = false, false
+		a.broadcastView = false
 	}
 
 	// ctrl+q quits even while a text input has the keyboard: the chord is
@@ -693,6 +699,17 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // no terminal-like input owns the keyboard. The broadcast bar's view mode
 // enters here directly, which is what makes its keys commands.
 func (a App) handleAppKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// The ctrl+a chord is live here too, so paging works from the app level
+	// in terminals that never send ctrl+shift+arrows (issue #273); it is
+	// matched first, because a panel's plain letters must not shadow the key
+	// that resolves an armed prefix. See prefix.go.
+	if a.prefixArmed {
+		return a.resolveAppPrefix(msg)
+	}
+	if key.Matches(msg, a.keys.Prefix) {
+		return a.armPrefix(), nil
+	}
+
 	// The Groups panel's own letters shadow the global ones while it has
 	// focus: n creates a group rather than connecting a host, d asks to
 	// delete rather than selecting the hosts that are down.
@@ -804,7 +821,7 @@ func (a App) handleAppKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Selecting the bar is entering it fresh: 5 from view mode is the
 		// second way back to edit mode.
 		a.focus = AreaBroadcast
-		a.broadcastView, a.broadcastPending = false, false
+		a.broadcastView, a.prefixArmed = false, false
 		return a, nil
 	}
 
@@ -1155,9 +1172,9 @@ func (a App) renderStatusBar() string {
 				count = a.cfg.Targets.Count()
 			}
 			label := fmt.Sprintf("BROADCASTING EDIT → %d host%s — %s leaves", count, plural(count), escapeKeystroke)
-			if a.broadcastPending {
-				label = fmt.Sprintf("BROADCASTING → %d host%s — ctrl+a… next key goes to the hosts · ctrl+a/a = literal · esc = view",
-					count, plural(count))
+			if a.prefixArmed {
+				label = fmt.Sprintf("BROADCASTING → %d host%s — %s… ←/→ page · %s/a = literal · esc = view · any other key goes to the hosts",
+					count, plural(count), prefixKeystroke, prefixKeystroke)
 			}
 			parts = append(parts, a.theme.StatusWarning.Render(label))
 		}
@@ -1171,6 +1188,13 @@ func (a App) renderStatusBar() string {
 		}
 		parts = append(parts, a.theme.StatusTyping.Render(
 			"TYPING "+target+" — "+escapeKeystroke+" leaves · alt=app"))
+	}
+	if label := a.prefixLabel(); label != "" && a.focus != AreaBroadcast {
+		// An armed chord swallows the next key press, so it is announced for
+		// as long as it lasts: a user must never wonder why a keystroke
+		// became a command (issue #273). The bar says it in its own label
+		// above, together with the target count.
+		parts = append(parts, a.theme.StatusWarning.Render(label))
 	}
 
 	appLabel := "lazycssh"

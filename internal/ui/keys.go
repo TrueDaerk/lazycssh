@@ -36,6 +36,14 @@ const (
 	// command scope, and while a term is live its plain letters shadow the
 	// app-level ones until esc ends the search (issue #250).
 	AreaSearch
+	// AreaChord covers the GNU-screen-style ctrl+a prefix and the keys that
+	// follow it. Like AreaSearch it is not a focus target but a mode, and a
+	// very short one: it lasts exactly one key press, wherever focus is
+	// (issue #273). Its keys are plain arrows and a plain letter, which is
+	// the whole point — nothing about them can be swallowed by a terminal or
+	// a window manager — and they are only ever consulted while the prefix is
+	// armed, so they collide with nothing.
+	AreaChord
 )
 
 // String returns the name shown as a help column heading.
@@ -53,6 +61,8 @@ func (a Area) String() string {
 		return "prompts"
 	case AreaSearch:
 		return "search"
+	case AreaChord:
+		return "ctrl+a chord"
 	default:
 		return "unknown(" + strconv.Itoa(int(a)) + ")"
 	}
@@ -124,9 +134,15 @@ type KeyMap struct {
 	// keystroke for the targets, so the bar keeps only the reserved escape,
 	// the pane chords, and the csshx-style ctrl+a prefix — plus enter as the
 	// way back from view mode.
-	BroadcastEscape  key.Binding
-	BroadcastLiteral key.Binding
-	BroadcastEdit    key.Binding
+	BroadcastEdit key.Binding
+
+	// The ctrl+a chord. Prefix arms it wherever focus is; the rest are the
+	// keys that resolve it, live for exactly one key press (issue #273).
+	Prefix        key.Binding
+	PrefixNext    key.Binding
+	PrefixPrev    key.Binding
+	PrefixLiteral key.Binding
+	PrefixCancel  key.Binding
 
 	LeaveTyping  key.Binding
 	ToggleSelect key.Binding
@@ -235,6 +251,12 @@ func DefaultKeyMap() KeyMap {
 		// by IDEs (pane switching) and window managers (workspace switching)
 		// before lazycssh ever sees them, and they are readline word movement,
 		// so they stay keystrokes for the hosts in every context (issue #208).
+		//
+		// ctrl+shift+arrows have the opposite problem: macOS Terminal.app
+		// never transmits them at all, and Mission Control or an IDE keymap
+		// eats them elsewhere, so for those users paging was unreachable. The
+		// ctrl+a chord below is the portable way in — same action, keys no
+		// terminal can fail to send (issue #273). Both stay bound.
 		NextSplit: key.NewBinding(key.WithKeys("ctrl+shift+right"),
 			key.WithHelp("ctrl+shift+→", "next screenful (page, then chunk; wraps)")),
 		PrevSplit: key.NewBinding(key.WithKeys("ctrl+shift+left"),
@@ -275,13 +297,23 @@ func DefaultKeyMap() KeyMap {
 		SendMissing: key.NewBinding(key.WithKeys("m"),
 			key.WithHelp("m", "resend to the hosts that missed it")),
 
-		// Inside the broadcast bar ctrl+a is the csshx escape prefix, which
-		// shadows the readline start-of-line the bar used to forward;
-		// ctrl+a ctrl+a and ctrl+a a send the literal.
-		BroadcastEscape: key.NewBinding(key.WithKeys("ctrl+a"),
-			key.WithHelp("ctrl+a", "prefix: ctrl+a or a = literal ctrl+a, esc = view mode, any other key goes to the hosts")),
-		BroadcastLiteral: key.NewBinding(key.WithKeys("ctrl+a", "a"),
-			key.WithHelp("ctrl+a/a", "after the prefix: send one literal ctrl+a")),
+		// ctrl+a is the csshx/GNU-screen escape prefix, everywhere: in a pane,
+		// in the broadcast bar and at the app level. It shadows the readline
+		// start-of-line those contexts used to forward; ctrl+a ctrl+a and
+		// ctrl+a a send the literal, screen's own convention.
+		Prefix: key.NewBinding(key.WithKeys("ctrl+a"),
+			key.WithHelp("ctrl+a", "prefix: the next key is a chord command")),
+		// The chord's paging keys are plain arrows on purpose: they are the
+		// half of the chord that no terminal, IDE or window manager can eat,
+		// which is why the chord exists (issue #273).
+		PrefixNext: key.NewBinding(key.WithKeys("right"),
+			key.WithHelp("ctrl+a →", "next screenful (page, then chunk; wraps)")),
+		PrefixPrev: key.NewBinding(key.WithKeys("left"),
+			key.WithHelp("ctrl+a ←", "previous screenful (page, then chunk; wraps)")),
+		PrefixLiteral: key.NewBinding(key.WithKeys("ctrl+a", "a"),
+			key.WithHelp("ctrl+a a", "send one literal ctrl+a to the hosts")),
+		PrefixCancel: key.NewBinding(key.WithKeys("esc"),
+			key.WithHelp("ctrl+a esc", "cancel the prefix; in the broadcast bar: switch to view mode")),
 		BroadcastEdit: key.NewBinding(key.WithKeys("enter"),
 			key.WithHelp("enter", "back to edit mode (from view mode)")),
 
@@ -459,7 +491,15 @@ func (k KeyMap) grid() []key.Binding {
 // broadcastBar returns the bindings that act while the broadcast bar has the
 // keyboard. Everything else is a keystroke for the targets.
 func (k KeyMap) broadcastBar() []key.Binding {
-	return []key.Binding{k.LeaveTyping, k.BroadcastEscape, k.BroadcastLiteral, k.BroadcastEdit}
+	return []key.Binding{k.LeaveTyping, k.BroadcastEdit}
+}
+
+// chord returns the ctrl+a prefix and the keys that resolve it. They are their
+// own group for the reason the search keys are: they are live only while the
+// prefix is armed, and while it is they are the only keys that mean anything
+// besides the one that cancels them.
+func (k KeyMap) chord() []key.Binding {
+	return []key.Binding{k.Prefix, k.PrefixNext, k.PrefixPrev, k.PrefixLiteral, k.PrefixCancel}
 }
 
 // prompts returns the bindings that answer a dialog or an inline prompt. They
@@ -501,6 +541,8 @@ func (k KeyMap) Bindings(area Area) []key.Binding {
 		return k.prompts()
 	case AreaSearch:
 		return k.search()
+	case AreaChord:
+		return k.chord()
 	default:
 		return k.global()
 	}
@@ -511,10 +553,11 @@ func (k KeyMap) All() []key.Binding {
 	out := k.global()
 	out = append(out, k.sidebar()...)
 	out = append(out, k.grid()...)
-	// The bar shares LeaveTyping with the grid; only its own three are new here.
-	out = append(out, k.BroadcastEscape, k.BroadcastLiteral, k.BroadcastEdit)
+	// The bar shares LeaveTyping with the grid; only enter is new here.
+	out = append(out, k.BroadcastEdit)
 	out = append(out, k.prompts()...)
 	out = append(out, k.search()...)
+	out = append(out, k.chord()...)
 	return out
 }
 
@@ -522,7 +565,7 @@ func (k KeyMap) All() []key.Binding {
 // they are not a focus target, so the column answers "what will the box in
 // front of me take" rather than "what can I do here".
 func Areas() []Area {
-	return []Area{AreaGlobal, AreaSidebar, AreaGrid, AreaBroadcast, AreaPrompt, AreaSearch}
+	return []Area{AreaGlobal, AreaSidebar, AreaGrid, AreaBroadcast, AreaPrompt, AreaSearch, AreaChord}
 }
 
 // For returns a [help.KeyMap] describing the bindings that apply while area has
@@ -553,11 +596,13 @@ func (c contextHelp) ShortHelp() []key.Binding {
 		// name chords lazycssh actually keeps.
 		return []key.Binding{k.LeaveTyping, k.PaneLeft, k.PaneRight, k.FullScreen, k.ScreenMode, k.ClosePane}
 	case AreaBroadcast:
-		return []key.Binding{k.LeaveTyping, k.BroadcastEscape, k.BroadcastEdit}
+		return []key.Binding{k.LeaveTyping, k.Prefix, k.BroadcastEdit}
 	case AreaPrompt:
 		return []key.Binding{k.PromptSubmit, k.PromptCancel, k.ConfirmYes, k.ConfirmNo}
 	case AreaSearch:
 		return []key.Binding{k.MatchOlder, k.MatchNewer, k.SearchLeave}
+	case AreaChord:
+		return []key.Binding{k.PrefixNext, k.PrefixPrev, k.PrefixLiteral, k.PrefixCancel}
 	default:
 		return []key.Binding{k.NextTab, k.CommandLine, k.Help, k.Quit}
 	}

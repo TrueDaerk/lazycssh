@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings]
-timestamp: 2026-08-11T09:00:00Z
+timestamp: 2026-08-12T09:00:00Z
 ---
 
 # Keymap and help
@@ -21,9 +21,10 @@ A key press is dispatched by focus. Each binding belongs to one area:
 |------|----------------|
 | `AreaGlobal` | works wherever focus is: help, quit, panel numbers, broadcast mode, the command line |
 | `AreaSidebar` | the numbered panels down the left |
-| `AreaBroadcast` | the broadcast bar under the grid — a terminal for the whole target set; kept for itself: `ctrl+]`, the pane chords, and the csshx-style `ctrl+a` escape prefix. In the bar's **view mode** every key is an app-level command instead — see [TUI shell](./tui.md#edit-and-view-mode) |
+| `AreaBroadcast` | the broadcast bar under the grid — a terminal for the whole target set; kept for itself: `ctrl+]`, the pane chords, and the csshx-style `ctrl+a` escape prefix (declared in `AreaChord`, live everywhere since issue #273). In the bar's **view mode** every key is an app-level command instead — see [TUI shell](./tui.md#edit-and-view-mode) |
 | `AreaGrid` | the host panes on the right — a focused pane is a terminal, so its bindings are all `alt`/`shift` chords plus the reserved `ctrl+]`; every plain key is forwarded to the host (a test enforces the chord rule) |
 | `AreaPrompt` | the dialogs and inline prompts. **Not a focus target**: a prompt takes the keyboard from whatever had it, is resolved before any area binding is consulted, and hands it back when it closes |
+| `AreaChord` | the GNU-screen-style `ctrl+a` prefix and the keys that resolve it (issue #273). **Not a focus target** but a mode, and the shortest one there is: it lasts exactly one key press, wherever focus is. Its keys are plain arrows and a plain letter on purpose — the whole point of the chord is that nothing about it can be swallowed by a terminal or a window manager — and they are only consulted while the prefix is armed, so they collide with nothing |
 | `AreaSearch` | the focused pane's scrollback search (issue #250). **Not a focus target** either but a *mode*: `/` opens it from the UI command scope, and while a term is live `n`/`N` walk the matches and `esc` ends the search. Its plain letters are matched before the global ones, so `n` is "older match" for exactly as long as the search lasts |
 
 The sidebar and the grid may reuse a key — they are never focused at the same time — but a
@@ -66,6 +67,10 @@ live at the same time.
 | `ctrl+s` | global (app level) | split the grid into chunks of N panes (prompt; empty or 0 clears) |
 | `f` | global (app level) | filter the grid by pane output: only the panes whose output since the last send holds the pattern are drawn (case-insensitive substring; prompt, empty or `esc` clears). A **view, not a selection** — hidden panes still receive a broadcast (issue #255) |
 | `ctrl+shift+→` / `ctrl+shift+←` | global (works while typing too) | next / previous screenful: pages, then split chunks, wrapping at the ends. Plain `ctrl+arrows` are never claimed — they stay readline word movement for the hosts, and IDEs and window managers swallow them anyway (issue #208) |
+| `ctrl+a` `→` / `ctrl+a` `←` | chord (everywhere: panes, broadcast bar, app level) | the same screenful step, down the same `stepView` path — the portable alternative for the terminals that never deliver `ctrl+shift+arrows` (issue #273) |
+| `ctrl+a` `a` / `ctrl+a` `ctrl+a` | chord (panes, broadcast bar) | send one literal `ctrl+a` to the focused host or to the broadcast targets — `screen`'s convention, because `ctrl+a` is readline's beginning-of-line and typing must not lose it. At the app level there is no terminal to send it to, and the status line says so |
+| `ctrl+a` `esc` | chord | cancel the armed prefix; inside the broadcast bar it switches to view mode instead |
+| `ctrl+a` *anything else* | chord | cancel the prefix and handle that key as though it had been pressed alone — a swallowed keystroke is worse than an unhandled one |
 | `a` | global (app level) | select every host |
 | `i` | global (app level) | invert the selection |
 | `c` | global (app level) | clear the selection |
@@ -86,7 +91,7 @@ live at the same time.
 | `alt+backspace` / `alt+delete` | panes | kill the previous / next word: `ESC DEL` / `ESC d` (opt+backspace, opt+forward-delete) |
 | `super+backspace` | panes | kill to line start: `ctrl+u` (cmd+backspace) |
 | `alt+<char>` | panes (unbound chords) | meta: `ESC` + character, so `alt+b`/`alt+f`/`alt+.` reach readline |
-| `ctrl+a` | broadcast bar (edit mode) | escape prefix, forwarding by default (issue #214): `ctrl+a ctrl+a` and `ctrl+a a` send a literal `ctrl+a` for a remote `screen`/`tmux` (the `BroadcastLiteral` binding), `esc` switches to view mode, and **any other key is forwarded to the targets** as a keystroke |
+| `ctrl+a` | global (panes, broadcast bar, app level) | the escape prefix: the next key is a chord command (`Prefix`). Inside the bar it still forwards by default (issue #214) — everything that is not a chord key reaches the targets as the keystroke it is |
 | `enter` | broadcast bar (view mode) | back to edit mode |
 | `ctrl+]` | panes | stop typing: back to the app level, on the Status panel |
 | `alt+space` | panes (and app level) | toggle the focused pane's host in the selection |

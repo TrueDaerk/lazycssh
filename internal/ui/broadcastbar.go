@@ -30,19 +30,19 @@ func (a App) handleBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if key.Matches(msg, a.keys.LeaveTyping) {
 		a.focus = AreaSidebar
-		a.broadcastView, a.broadcastPending = false, false
+		a.broadcastView, a.prefixArmed = false, false
 		return a, nil
 	}
 	if a.broadcastView {
 		return a.handleBroadcastViewKey(msg)
 	}
-	if a.broadcastPending {
+	if a.prefixArmed {
 		return a.resolveBroadcastEscape(msg)
 	}
-	if key.Matches(msg, a.keys.BroadcastEscape) {
+	if key.Matches(msg, a.keys.Prefix) {
 		// The prefix shadows the ctrl+a the bar used to forward; the literal
 		// is still reachable as ctrl+a a.
-		a.broadcastPending = true
+		a.prefixArmed = true
 		return a, nil
 	}
 	if next, cmd, handled := a.handlePaneKey(msg); handled {
@@ -112,7 +112,7 @@ func (a App) handlePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 	}
 	// A paste mid ctrl+a-prefix has nothing to do with the prefix: it starts
 	// a fresh decision rather than being read as the prefix's second key.
-	a.broadcastPending = false
+	a.prefixArmed = false
 
 	lines := pasteLineCount(msg.Content)
 	hosts := 0
@@ -167,13 +167,15 @@ func (a App) handleBroadcastViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 // resolveBroadcastEscape is the key after ctrl+a. The prefix exists for the
-// remote multiplexer, so it forwards by default (issue #214): exactly three
-// keys are kept by lazycssh and everything else reaches the targets as the
-// keystroke it is.
+// remote multiplexer, so it forwards by default (issue #214): only the keys
+// listed below are kept by lazycssh and everything else reaches the targets as
+// the keystroke it is.
 //
 //   - ctrl+a — one literal ctrl+a, the GNU-screen double press; ctrl+a ctrl+a c
 //     opens a screen window on every host.
 //   - a — the same literal, matching screen's own ctrl+a a.
+//   - →/← — page to the next/previous screenful, the portable alternative to
+//     ctrl+shift+arrows that macOS Terminal.app never sends (issue #273).
 //   - esc — switch the bar to view mode, which is now the only way to run an
 //     app command from inside the bar; it supersedes the one-shot dispatch of
 //     issue #148.
@@ -182,13 +184,16 @@ func (a App) handleBroadcastViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // Forwarded keys take the same send path as plain typing but stay out of the
 // assembled line: a prefixed key is a control sequence, not command text.
 func (a App) resolveBroadcastEscape(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	a.broadcastPending = false
+	a.prefixArmed = false
+	if next, cmd, handled := a.resolvePrefixPaging(msg); handled {
+		return next, cmd
+	}
 	switch {
-	case key.Matches(msg, a.keys.PromptCancel):
+	case key.Matches(msg, a.keys.PrefixCancel):
 		a.broadcastView = true
 		return a, nil
-	case key.Matches(msg, a.keys.BroadcastLiteral):
-		return a.sendBroadcastRaw([]byte{0x01})
+	case key.Matches(msg, a.keys.PrefixLiteral):
+		return a.sendBroadcastRaw([]byte{literalPrefixByte})
 	}
 	return a.forwardBroadcastKey(msg)
 }
@@ -294,7 +299,7 @@ func (a App) renderBroadcastBar() string {
 	case focused && a.broadcastView:
 		// No cursor: nothing typed here is going anywhere.
 		line = a.theme.Muted.Render("view mode — keys are commands · enter returns to typing")
-	case focused && a.broadcastPending:
+	case focused && a.prefixArmed:
 		line = "▏" + a.theme.Muted.Render(" ctrl+a…")
 	case focused:
 		line = "▏" + a.theme.Muted.Render(" keys go to the targets live — the panes echo")

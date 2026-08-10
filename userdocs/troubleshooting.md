@@ -23,10 +23,16 @@ is reverse-search and ++ctrl+s++ is flow control — all of them belong to the
 remote shell. The lazycssh equivalents are the ++alt++ chords, which work while
 typing, or leave the pane first with ++ctrl+bracket-right++.
 
-Inside the broadcast bar, ++ctrl+a++ is the escape prefix, and it forwards by
-default: ++ctrl+a++ ++ctrl+a++ or ++ctrl+a++ ++a++ sends a literal ++ctrl+a++ to
-the hosts for a remote `screen` or `tmux`, any other key after it is forwarded
-as a keystroke, and ++ctrl+a++ ++escape++ switches to view mode, where keys are
+++ctrl+a++ is the one exception: it arms the `screen`-style prefix, wherever you
+are. The next key is a chord command — ++right++ / ++left++ page, ++a++ or
+++ctrl+a++ sends the literal ++ctrl+a++ the shell wants, ++escape++ cancels, and
+anything else cancels the prefix and does what it always does. The status bar
+says `ctrl+a…` for as long as the prefix is armed.
+
+Inside the broadcast bar the same prefix forwards by default: ++ctrl+a++
+++ctrl+a++ or ++ctrl+a++ ++a++ sends a literal ++ctrl+a++ to the hosts for a
+remote `screen` or `tmux`, any key that is not a chord key is forwarded as a
+keystroke, and ++ctrl+a++ ++escape++ switches to view mode, where keys are
 lazycssh commands.
 
 ++ctrl+q++ quits from anywhere, including out of a text field.
@@ -81,18 +87,24 @@ point it **pages** instead, and the overflow footer says so:
 +12 hosts — ctrl+shift+→ · page 1/3 · 2 more sessions — [3]
 ```
 
-++ctrl+shift+right++ / ++ctrl+shift+left++ move a screenful at a time. Paging changes what
-you see, never who receives a keystroke.
+++ctrl+shift+right++ / ++ctrl+shift+left++ move a screenful at a time, and
+++ctrl+a++ then ++right++ / ++left++ does the same for terminals that do not
+send that chord. Paging changes what you see, never who receives a keystroke.
 
 ## "ctrl+shift+arrows do nothing"
 
-Paging needs the terminal to deliver ++ctrl+shift+right++ as the xterm
-`CSI 1;6C` encoding, which most terminals do out of the box. Terminal.app on
-macOS is the known exception: its default keyboard profile has no entry for
-ctrl+shift+arrows, so the chord never reaches lazycssh. Add one under
+Press ++ctrl+a++ then ++right++ (or ++left++) instead. It pages exactly the
+same way and works in every terminal, in a pane, in the broadcast bar and at the
+app level.
+
+The reason: paging by chord needs the terminal to deliver ++ctrl+shift+right++
+as the xterm `CSI 1;6C` encoding, which most terminals do out of the box.
+Terminal.app on macOS is the known exception — its default keyboard profile has
+no entry for ctrl+shift+arrows, so the chord never reaches lazycssh. Mission
+Control and IDE keymaps can eat it elsewhere. You can add an entry under
 Settings → Profiles → Keyboard (send `\033[1;6C` for ctrl+shift+→ and
-`\033[1;6D` for ctrl+shift+←), or use iTerm2/kitty/WezTerm, which deliver the
-chord unconfigured.
+`\033[1;6D` for ctrl+shift+←) or use iTerm2/kitty/WezTerm, which deliver the
+chord unconfigured — but the ++ctrl+a++ chord needs no setup at all.
 
 ## "A pane is in the wrong place / there is an empty frame"
 

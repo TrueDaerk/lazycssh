@@ -60,7 +60,7 @@ func (a App) handleClick(x, y int) (tea.Model, tea.Cmd) {
 	case RegionBroadcast:
 		// Clicking the bar is entering it fresh: edit mode, no pending prefix.
 		a.focus = AreaBroadcast
-		a.broadcastView, a.broadcastPending = false, false
+		a.broadcastView, a.prefixArmed = false, false
 		return a, nil
 	}
 	return a, nil

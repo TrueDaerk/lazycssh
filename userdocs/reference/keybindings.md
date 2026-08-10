@@ -30,6 +30,7 @@ not typing into a pane, not in the broadcast bar's edit mode, not in a prompt.
 | ++ctrl+s++ | split the grid into chunks of N panes (empty or `0` clears) |
 | ++f++ | filter the grid by pane output: only the panes whose output since the last command holds what you type stay on screen (case-insensitive; empty or ++esc++ clears). A view only — hidden panes still receive a broadcast |
 | ++ctrl+shift+right++ / ++ctrl+shift+left++ | next / previous screenful: pages, then split chunks, wrapping; works while typing too. Plain ++ctrl+right++ / ++ctrl+left++ stay word movement for the hosts |
+| ++ctrl+a++ then ++right++ / ++left++ | the same screenful step, for terminals that never send ctrl+shift+arrows (Terminal.app on macOS). Works everywhere: in a pane, in the broadcast bar, at the app level |
 | ++a++ | select every host |
 | ++i++ | invert the selection |
 | ++c++ | clear the selection |
@@ -110,6 +111,7 @@ In **edit mode**, every keystroke goes to the target set. The bar keeps
 |---|---|
 | ++ctrl+a++ ++ctrl+a++ | send one literal ++ctrl+a++ to the targets — the GNU-screen double press |
 | ++ctrl+a++ ++a++ | the same literal, matching `screen`'s own ++ctrl+a++ ++a++ |
+| ++ctrl+a++ ++right++ / ++left++ | page to the next / previous screenful |
 | ++ctrl+a++ ++escape++ | switch to view mode |
 | ++ctrl+a++ *other* | forward that key to the targets as a normal keystroke |
 | ++enter++ | send a carriage return and record the assembled line |
