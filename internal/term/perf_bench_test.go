@@ -2,6 +2,7 @@ package term
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -44,6 +45,28 @@ func BenchmarkEmulatorText(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = e.Text()
+	}
+}
+
+// TestRetainedMemoryAtCap pins the retention win of issue #277: one emulator
+// at the 10k-line cap held ~75 MB when every scrolled-off line stayed a cell
+// grid; the compact store must keep it an order of magnitude below that. The
+// measurement mirrors the #274 audit: MemStats around New plus a flood.
+func TestRetainedMemoryAtCap(t *testing.T) {
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+
+	e := New(120, 40)
+	defer e.Close()
+	_, _ = e.Write(floodChunk(11000))
+
+	runtime.GC()
+	runtime.ReadMemStats(&after)
+	retained := int64(after.HeapAlloc) - int64(before.HeapAlloc)
+	t.Logf("retained at cap: %.1f MB", float64(retained)/(1<<20))
+	if retained > 20<<20 {
+		t.Errorf("retained %d bytes at the cap, want well under 20 MB (was ~75 MB before #277)", retained)
 	}
 }
 

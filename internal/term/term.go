@@ -81,6 +81,14 @@ type Emulator struct {
 	// ed3 counts the matched prefix bytes of the ESC[3J guard in Write.
 	ed3 int
 
+	// Compact retention state; see compact.go. All guarded by gridMu.
+	// hist holds the lines older than the vt working depth as rendered
+	// styled strings; vtDepth is that working depth; capTotal is the whole
+	// retention cap SetHistorySize configured.
+	hist     stringRing
+	vtDepth  int
+	capTotal int
+
 	mu           sync.Mutex
 	onReply      func([]byte)
 	cursorHidden bool
@@ -98,6 +106,7 @@ func New(width, height int) *Emulator {
 		height = 1
 	}
 	e := &Emulator{vt: vt.NewSafeEmulator(width, height)}
+	e.setRetentionLocked(vt.DefaultScrollbackSize)
 	// The vt emulator reports cursor visibility only through a callback, so it
 	// is mirrored here for the renderer to read. The callback runs inside
 	// Write, which never holds e.mu.
@@ -130,6 +139,9 @@ var ed3Sequence = []byte("\x1b[3J")
 func (e *Emulator) Write(p []byte) (int, error) {
 	e.gridMu.Lock()
 	defer e.gridMu.Unlock()
+	// Registered after the unlock, so it runs first: the retention cap is
+	// exact at every write boundary (see compact.go trimLocked).
+	defer e.trimLocked()
 
 	n := len(p)
 	e.mu.Lock()
@@ -153,7 +165,7 @@ func (e *Emulator) Write(p []byte) (int, error) {
 				return n, nil
 			}
 			// Mismatch: the held prefix was real output after all.
-			_, _ = e.vt.Write(ed3Sequence[:e.ed3])
+			e.feedLocked(ed3Sequence[:e.ed3])
 			e.ed3 = 0
 			continue
 		}
@@ -168,11 +180,11 @@ func (e *Emulator) Write(p []byte) (int, error) {
 					break
 				}
 			}
-			_, _ = e.vt.Write(p[:len(p)-held])
+			e.feedLocked(p[:len(p)-held])
 			e.ed3 = held
 			return n, nil
 		}
-		_, _ = e.vt.Write(p[:i])
+		e.feedLocked(p[:i])
 		p = p[i+len(ed3Sequence):]
 	}
 	return n, nil
@@ -204,7 +216,7 @@ func (e *Emulator) SetHistorySize(n int) {
 	}
 	e.gridMu.Lock()
 	defer e.gridMu.Unlock()
-	e.vt.SetScrollbackSize(n)
+	e.setRetentionLocked(n)
 }
 
 // HistoryLen is the number of lines that have scrolled off the screen and are
@@ -216,7 +228,7 @@ func (e *Emulator) HistoryLen() int {
 	if e.vt.IsAltScreen() {
 		return 0
 	}
-	return e.vt.ScrollbackLen()
+	return e.histLenLocked()
 }
 
 // HistoryFull reports whether the retention cap has been reached — the oldest
@@ -224,8 +236,8 @@ func (e *Emulator) HistoryLen() int {
 func (e *Emulator) HistoryFull() bool {
 	e.gridMu.Lock()
 	defer e.gridMu.Unlock()
-	sb := e.vt.Scrollback()
-	return sb.Len() > 0 && sb.Len() >= sb.MaxLines()
+	n := e.histLenLocked()
+	return n > 0 && n >= e.capTotal
 }
 
 // HistoryLine returns one scrolled-off line as styled text. Index 0 is the
@@ -233,11 +245,7 @@ func (e *Emulator) HistoryFull() bool {
 func (e *Emulator) HistoryLine(i int) string {
 	e.gridMu.Lock()
 	defer e.gridMu.Unlock()
-	line := e.vt.Scrollback().Line(i)
-	if line == nil {
-		return ""
-	}
-	return line.Render()
+	return e.histLineLocked(i)
 }
 
 // CursorVisible reports whether the remote app wants the cursor drawn.
@@ -308,7 +316,7 @@ func (e *Emulator) TailText(n int) string {
 func (e *Emulator) textLineCountLocked() int {
 	hist := 0
 	if !e.vt.IsAltScreen() {
-		hist = e.vt.ScrollbackLen()
+		hist = e.histLenLocked()
 	}
 	screen := strings.Split(e.vt.Render(), "\n")
 	for i := len(screen) - 1; i >= 0; i-- {
@@ -319,9 +327,8 @@ func (e *Emulator) textLineCountLocked() int {
 	if e.vt.IsAltScreen() {
 		return 0
 	}
-	sb := e.vt.Scrollback()
 	for i := hist - 1; i >= 0; i-- {
-		if strings.TrimRight(ansi.Strip(sb.Line(i).Render()), " ") != "" {
+		if strings.TrimRight(ansi.Strip(e.histLineLocked(i)), " ") != "" {
 			return i + 1
 		}
 	}
@@ -338,7 +345,7 @@ func (e *Emulator) tailTextLocked(n int) string {
 	count := n
 	hist := 0
 	if !e.vt.IsAltScreen() {
-		hist = e.vt.ScrollbackLen()
+		hist = e.histLenLocked()
 	}
 	total := e.textLineCountLocked()
 	start := total - count
@@ -347,7 +354,7 @@ func (e *Emulator) tailTextLocked(n int) string {
 	lines := make([]string, 0, count)
 	for i := start; i < total; i++ {
 		if i < hist {
-			lines = append(lines, strings.TrimRight(ansi.Strip(e.vt.Scrollback().Line(i).Render()), " "))
+			lines = append(lines, strings.TrimRight(ansi.Strip(e.histLineLocked(i)), " "))
 			continue
 		}
 		if screen == nil {

@@ -2,6 +2,21 @@
 
 ## 2026-08-10
 
+- Compact scrollback retention (issue #277, the storage follow-up from the #274 audit).
+  Scrolled-off lines were kept as styled cell grids (~128 B per rune), ~75 MB per host at
+  the 10k-line cap; a host running `yes` spent most of its ingest in the allocator, largely
+  the vt scrollback's per-line clone and its at-cap eviction memmove. The emulator now keeps
+  only a 128-line working depth of cell lines in the vt scrollback — enough for the width
+  reflow and the height-shrink restore, the only cell readers — and drains everything older
+  into a bounded ring of pre-rendered styled strings (`internal/term/compact.go`), rendered
+  once at drain time. Retention at the cap: ~8 MB per host (regression-tested); `Text` at
+  the cap 16.7 ms → 2.4 ms, a full history walk 13.9 ms → 0.30 ms; the allocator no longer
+  dominates the ingest profile (the remaining ingest cost is uv's screen-scroll
+  `DeleteLineArea`, upstream). The cap is now exact at every write/resize boundary. Trade:
+  compact lines are frozen at the width they scrolled off with — width reflow covers the
+  working depth only; the pane clips at render time. Updated: `core/terminal.md`.
+  Version 0.10.36.
+
 - Performance audit (issue #274): measured, fixed the confirmed hotspots, filed the rest.
   The CPU profile under a chatty 12-host fleet was >80% allocator/GC — the CPU and memory
   complaints were one complaint. Four contained fixes: panes render their visible window

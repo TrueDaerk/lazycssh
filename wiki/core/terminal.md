@@ -4,7 +4,7 @@ title: Terminal emulation
 description: The per-session vt emulator that holds everything a pane shows — screen, retained history, cursor, modes — encodes key presses per host, and reflows on resize.
 resource: internal/term
 tags: [terminal, vt, emulation, alt-screen, scrollback, keys, resize]
-timestamp: 2026-08-10T12:00:00Z
+timestamp: 2026-08-10T14:00:00Z
 ---
 
 # Terminal emulation
@@ -36,14 +36,27 @@ overflows, the oldest lines are dropped and the writer never blocks — the back
 survives the redesign unchanged. Trailing blank cells are not retained, so a prompt's
 trailing space does not survive into `Text` — terminals lose it too.
 
+**Retention is compact (issue #277).** Only a small working depth (128 lines) of scrolled-off
+content stays in the vt scrollback as full cell grids; everything older is drained on the
+write path into a bounded ring of pre-rendered styled strings (`internal/term/compact.go`) —
+one string per line, the exact string `HistoryLine` returns, rendered once at drain time
+instead of on every read. The cell representation costs ~128 B per rune; the string costs
+the bytes of the line. Measured as in the #274 audit, one host at the 10k-line cap retains
+~8 MB instead of ~75 MB, and because the vt scrollback never reaches its own cap, its
+O(lines) oldest-line eviction (a memmove of the whole line-header array per scrolled line)
+never runs — the allocator no longer dominates the ingest profile. The cap stays exact:
+overflow beyond it is trimmed at every write and resize boundary by dropping compact
+strings, an O(1) eviction each. The trade: compact lines are frozen at the width they
+scrolled off with (see the resize section below). `HistoryLen`/`HistoryLine`/`Text`/
+`TailText` read across the boundary transparently, and a reconnect hands the whole emulator
+— ring included — to the next session as before.
+
 **`Text` is expensive; per-event readers use the bounded calls.** Rendering the retained
 history costs milliseconds and megabytes per call at the cap — the performance audit (issue
 #274) measured ~15 ms and ~4 MB of allocations for one full `Text` — so anything that runs
 per frame or per output event asks for what it actually needs: `TextLineCount` for a
 watermark, `TailText(n)` for a bounded window. `Text` itself remains for the real
-whole-content consumers: the clipboard, the export, tests. The retention itself is also
-heavy — the vt scrollback stores one styled cell per rune, ~75 MB per host at the cap for
-plain text — which is a storage-design follow-up tracked in issue #277.
+whole-content consumers: the clipboard, the export, tests.
 
 **Clear keeps the history.** `ED 2` pushes the visible rows into the retention before
 clearing (the xterm behaviour), so a remote `clear` empties the pane while scrolling up still
@@ -94,8 +107,15 @@ height are simply gone. A fleet grid resizes on every host join, leave and windo
   truncate clipped, guarded by content prefix-matches so rewritten rows are never corrupted.
 
 The alt screen never reflows: its apps repaint themselves on the window change the session
-forwards. A width reflow is O(retained content); it runs per resize event, never per
-keystroke. Dimensions below one cell are clamped on `New` and `Resize`.
+forwards. Dimensions below one cell are clamped on `New` and `Resize`.
+
+Reflow covers the vt working depth plus the screen — not the compact history. Compact lines
+are frozen at the width they scrolled off with: re-materializing cells on resize would
+resurrect exactly the retention cost the drain removed, so a width reflow is O(working
+depth), never O(retention cap). A frozen line wider than the pane is clipped at render time
+(the pane truncates every window line); one narrower simply stays narrower. Real terminals
+without reflow behave like this for their entire scrollback — here only lines older than
+the working depth do.
 
 ## Where it sits in the session
 
@@ -133,5 +153,7 @@ wrapper's own grid mutex against `Write`; the vt `SafeEmulator` lock only covers
 calls. The reply drain never takes that mutex, so a query answered mid-`Write` cannot
 deadlock.
 
-One emulator is a cell grid of the pane's size plus a bounded history. Twenty panes cost a
-few megabytes; no lazy initialization is needed.
+One emulator is a cell grid of the pane's size, a cell working depth and a compact string
+history — ~8 MB at the full 10k-line cap, most of it the working depth's cells. Forty panes
+at the cap fit in a few hundred megabytes where they previously cost ~3 GB; no lazy
+initialization is needed.
