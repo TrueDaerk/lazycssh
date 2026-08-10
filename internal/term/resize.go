@@ -37,11 +37,19 @@ func (e *Emulator) Resize(width, height int) {
 
 	e.gridMu.Lock()
 	defer e.gridMu.Unlock()
+	// A height shrink pushes rows into the retention; keep the cap exact.
+	defer e.trimLocked()
 
 	oldW, oldH := e.vt.Width(), e.vt.Height()
 	if width == oldW && height == oldH {
 		return
 	}
+
+	// Drain first: the reflow below is O(vt scrollback), and resize storms
+	// (host joins on a busy fleet) must not pile cell lines past the working
+	// depth. Compact lines stay frozen at the width they scrolled off with —
+	// re-materializing cells here would resurrect the retention cost.
+	e.drainLocked(false)
 
 	if width != oldW && !e.vt.IsAltScreen() {
 		lines, tail := e.logicalLinesLocked(oldW, oldH)
