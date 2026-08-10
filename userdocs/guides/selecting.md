@@ -76,7 +76,8 @@ Narrowing what is **on screen** is a third thing again:
 
 - ++ctrl+s++ splits the visible hosts into chunks of N, and narrows the
   broadcast with it;
-- ++ctrl+shift+right++ / ++ctrl+shift+left++ page the window, and change **nothing** about
+- ++ctrl+shift+right++ / ++ctrl+shift+left++ (or ++ctrl+a++ then ++right++ /
+  ++left++) page the window, and change **nothing** about
   who receives a keystroke.
 
 See [The grid and the window](../concepts/grid-and-window.md#narrowing-what-is-on-screen).

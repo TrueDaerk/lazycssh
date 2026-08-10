@@ -39,6 +39,15 @@ type PaneWriter interface {
 // navigation, so pane movement takes shift as well and the bare chords are
 // forwarded by [keystrokeBytes].
 func (a App) handleTypingKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// The ctrl+a chord is checked before anything is forwarded, or the prefix
+	// would reach the host as the readline start-of-line it also is; the
+	// literal stays reachable as ctrl+a ctrl+a (issue #273). See prefix.go.
+	if a.prefixArmed {
+		return a.resolveTypingPrefix(msg)
+	}
+	if key.Matches(msg, a.keys.Prefix) {
+		return a.armPrefix(), nil
+	}
 	if key.Matches(msg, a.keys.LeaveTyping) {
 		return a.leaveTyping(), nil
 	}
@@ -102,7 +111,9 @@ func (a App) handlePaneKey(msg tea.KeyPressMsg) (App, tea.Cmd, bool) {
 		return a.enterPane().movePane(+a.grid().Columns).followFocus(), nil, true
 	// Paging works while typing too (issue #208): ctrl+shift+arrows are
 	// pane management like the alt chords, and without these cases the
-	// shift-stripping in motionKey would turn them into word movement.
+	// shift-stripping in motionKey would turn them into word movement. The
+	// ctrl+a chord reaches the same cases for the terminals that never send
+	// ctrl+shift+arrows at all (issue #273).
 	case key.Matches(msg, a.keys.NextSplit):
 		next, cmd := a.stepView(+1)
 		return next, cmd, true

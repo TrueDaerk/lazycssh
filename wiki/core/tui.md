@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-10T16:00:00Z
+timestamp: 2026-08-12T09:00:00Z
 ---
 
 # TUI shell
@@ -196,7 +196,10 @@ into a one-host send: it is an explicit zoom with its own way back.
   is one the user can see. The chords work while typing too, like the other pane-management
   chords. Plain `ctrl+arrows` were the paging keys once (issue #208) but IDEs and window managers
   swallow them before lazycssh sees them; they are never claimed now and stay keystrokes for the
-  hosts in every context (readline word movement),
+  hosts in every context (readline word movement). `ctrl+shift+arrows` have the opposite problem —
+  macOS Terminal.app never transmits them at all — so `ctrl+a` `→` / `ctrl+a` `←` is the portable
+  way to the same `stepView` path, live in a pane, in the broadcast bar and at the app level
+  (issue #273; see [the chord](#the-ctrla-chord)),
 - moving the pane focus off the edge of a page turns the page rather than focusing a pane that is
   not drawn, and the broadcast limit follows the new page,
 - the page indicator (`page 2/5`) appears in the status bar only when there is more than one page,
@@ -781,13 +784,16 @@ Mode switching is modeled on csshx, with `ctrl+a` as the escape prefix inside th
   (`ctrl+a` `ctrl+a` then `c` opens a window on every host). The literal never enters the
   assembled line.
 - `ctrl+a` `a` — the same literal, matching `screen`'s own `ctrl+a` `a`.
+- `ctrl+a` `→` / `ctrl+a` `←` — page to the next/previous screenful, exactly like
+  `ctrl+shift+arrows` (issue #273). The arrows are the two keys the prefix takes from the
+  passthrough; everything else about the bar's prefix is unchanged.
 - `ctrl+a` `esc` — switch to view mode.
 - `enter` (in view mode) — back to edit mode; selecting the bar again (`5`, a click) also
   re-enters it in edit mode.
 - `ctrl+a` anything else — **forwarded to the targets** as the keystroke it is (issue #214),
   through the same `paneKeyEvents` encoding as plain typing, but kept out of the assembled
   line: a prefixed key is a control sequence, not command text. The exception list is exactly
-  `ctrl+a`, `a` and `esc`.
+  `ctrl+a`, `a`, `→`, `←` and `esc`.
 
 The prefix is cleared before the second key is handled, so it cannot chain. Forwarding is the
 default because the prefix exists for the remote multiplexer; the one-shot lazycssh command
@@ -796,14 +802,37 @@ without leaving the bar.
 
 The mode is unmissable: the status bar carries `BROADCASTING EDIT → 7 hosts` in the warning
 style, or `BROADCAST VIEW — keys are commands` in the calm typing style, and an armed prefix
-shows as `ctrl+a… next key goes to the hosts · ctrl+a/a = literal · esc = view`. The modal state does not outlive the bar's
+shows as `ctrl+a… ←/→ page · ctrl+a/a = literal · esc = view · any other key goes to the hosts`. The modal state does not outlive the bar's
 focus — leaving in view mode and coming back lands in edit mode.
 
 The `ctrl+a` prefix shadows the readline start-of-line the bar used to forward while edit mode
 has the keyboard. That is deliberate: the literal stays reachable as `ctrl+a` `ctrl+a` and
-`ctrl+a` `a`, and outside
-the bar `ctrl+a` carries no app-level binding at all (issue #213) — inside a pane it is
-forwarded to the host unchanged.
+`ctrl+a` `a`.
+
+### The ctrl+a chord
+
+Since issue #273 the prefix is not the bar's alone — it is armed the same way wherever focus is,
+because paging had to become reachable in terminals that never deliver `ctrl+shift+arrows`:
+macOS Terminal.app does not transmit them, and Mission Control or an IDE keymap eats them
+elsewhere. Both bindings stay; the chord is the second way in, not a replacement.
+
+| After `ctrl+a` | In a pane | In the broadcast bar | At the app level |
+|----------------|-----------|----------------------|------------------|
+| `→` / `←` | next / previous screenful | same | same |
+| `a`, `ctrl+a` | one literal `ctrl+a` to the focused host | one literal to the targets | nothing to send: the status line says where the literal goes |
+| `esc` | cancel | switch to view mode | cancel |
+| anything else | handled as if pressed alone (so it reaches the host) | forwarded to the targets | dispatched as the app command it is |
+
+The armed state is one bool on the model (`prefixArmed`, mutated only in `Update`, see
+`internal/ui/prefix.go`); it lasts exactly one key press and cannot chain, because every handler
+clears it before resolving the second key. It is not bar state, so it survives the routing that
+resets the bar's modes. While it is armed the status bar carries
+`ctrl+a… — ←/→ page · ctrl+a/a = literal ctrl+a · esc cancels` in the warning style: the next
+key press is a command rather than input, and the user has to be able to read that.
+
+Inside a pane `ctrl+a` is
+the readline beginning-of-line, which is why `screen`'s double-press convention is followed
+rather than invented over: `ctrl+a` `ctrl+a` and `ctrl+a` `a` hand the literal back.
 
 ## Mouse
 

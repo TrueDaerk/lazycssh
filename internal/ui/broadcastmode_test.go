@@ -34,7 +34,7 @@ func TestBroadcastBarPendingPrefixIsIndicated(t *testing.T) {
 	a, _ := barApp(t, "web-01")
 
 	a = pressKey(t, a, "ctrl+a")
-	if !a.broadcastPending {
+	if !a.prefixArmed {
 		t.Fatal("ctrl+a did not arm the prefix")
 	}
 	if view := plain(a.View().Content); !strings.Contains(view, "ctrl+a…") {
@@ -52,7 +52,7 @@ func TestBroadcastBarCtrlAASendsTheLiteral(t *testing.T) {
 	if got := strings.Join(sender.sent, ","); got != "\x01" {
 		t.Fatalf("sent = %q, want exactly one literal ctrl+a", got)
 	}
-	if a.broadcastPending || a.broadcastView {
+	if a.prefixArmed || a.broadcastView {
 		t.Fatal("the literal did not return the bar to plain edit mode")
 	}
 	if a.BroadcastLine() != "" {
@@ -71,7 +71,7 @@ func TestBroadcastBarPrefixForwardsOtherKeys(t *testing.T) {
 	if got := strings.Join(sender.sent, ","); got != "<c>" {
 		t.Fatalf("sent = %q, want the prefixed key forwarded", got)
 	}
-	if a.broadcastPending || a.broadcastView {
+	if a.prefixArmed || a.broadcastView {
 		t.Fatal("the forward did not return the bar to plain edit mode")
 	}
 	if a.BroadcastLine() != "" {
@@ -98,19 +98,21 @@ func TestBroadcastBarPrefixDoesNotRunAppCommands(t *testing.T) {
 	if got := strings.Join(sender.sent, ","); got != "<?>" {
 		t.Fatalf("sent = %q, want the chord forwarded to the hosts", got)
 	}
-	if a.broadcastPending {
+	if a.prefixArmed {
 		t.Fatal("the prefix survived its second key")
 	}
 }
 
-// Non-text keys forward through the same encoding as plain typing.
-func TestBroadcastBarPrefixForwardsArrowKeys(t *testing.T) {
+// Non-text keys forward through the same encoding as plain typing. The arrows
+// are the exception since issue #273 - they page - so tab stands in for the
+// rest of the passthrough.
+func TestBroadcastBarPrefixForwardsNonTextKeys(t *testing.T) {
 	a, sender := barApp(t, "web-01")
 
 	a = pressKey(t, a, "ctrl+a")
-	press(t, a, tea.KeyPressMsg{Code: tea.KeyRight})
-	if got := strings.Join(sender.sent, ","); got != "<right>" {
-		t.Fatalf("sent = %q, want the arrow forwarded", got)
+	press(t, a, tea.KeyPressMsg{Code: tea.KeyTab})
+	if got := strings.Join(sender.sent, ","); got != "<tab>" {
+		t.Fatalf("sent = %q, want the key forwarded", got)
 	}
 }
 
@@ -169,7 +171,7 @@ func TestBroadcastBarReentryStartsInEditMode(t *testing.T) {
 	if a.Focus() != AreaBroadcast {
 		t.Fatalf("Focus() = %v, want the bar again", a.Focus())
 	}
-	if a.broadcastView || a.broadcastPending {
+	if a.broadcastView || a.prefixArmed {
 		t.Fatal("the bar was re-entered in a stale mode")
 	}
 }
@@ -201,7 +203,7 @@ func TestBroadcastBarCtrlACtrlASendsTheLiteral(t *testing.T) {
 	if got := strings.Join(sender.sent, ","); got != "\x01" {
 		t.Fatalf("sent = %q, want exactly one literal ctrl+a", got)
 	}
-	if a.broadcastPending || a.broadcastView {
+	if a.prefixArmed || a.broadcastView {
 		t.Fatal("the double press did not return the bar to plain edit mode")
 	}
 	if a.BroadcastLine() != "" {

@@ -241,7 +241,9 @@ func TestTypingKeyEncodings(t *testing.T) {
 		{"home", tea.KeyPressMsg{Code: tea.KeyHome}, "\x1b[H"},
 		{"end", tea.KeyPressMsg{Code: tea.KeyEnd}, "\x1b[F"},
 		{"delete", tea.KeyPressMsg{Code: tea.KeyDelete}, "\x1b[3~"},
-		{"ctrl+a", tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl}, "\x01"},
+		// ctrl+a is not in this table: it is the chord prefix, and the
+		// literal it took away is ctrl+a ctrl+a - see prefix_test.go
+		// (issue #273).
 		{"ctrl+c", tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}, "\x03"},
 		{"ctrl+z", tea.KeyPressMsg{Code: 'z', Mod: tea.ModCtrl}, "\x1a"},
 		{"ctrl+space", tea.KeyPressMsg{Code: tea.KeySpace, Mod: tea.ModCtrl}, "\x00"},

@@ -1,5 +1,24 @@
 # Log
 
+## 2026-08-12
+
+- `ctrl+a` is a GNU-screen-style prefix chord everywhere, as the portable way to page between
+  screenfuls (issue #273). `ctrl+shift+→`/`ctrl+shift+←` are correct bindings that never arrive
+  in several common environments — macOS Terminal.app does not transmit `ctrl+shift+arrow` at
+  all, Mission Control and IDE keymaps eat it elsewhere — so for those users paging was simply
+  unreachable. `ctrl+a` now arms a prefix in a focused pane, in the broadcast bar and at the app
+  level; `ctrl+a` `→`/`←` step a screenful down the same `stepView` path the shifted chords take,
+  `ctrl+a` `a` and `ctrl+a` `ctrl+a` deliver one literal `ctrl+a` (readline's beginning-of-line,
+  handed back the way `screen` does it), `esc` cancels — and switches the bar to view mode as
+  before — and any other key cancels the prefix and is handled as though it had been pressed
+  alone rather than swallowed. Both paging bindings stay. The armed state is one `prefixArmed`
+  bool on the model (`internal/ui/prefix.go`, mutated only in `Update`), it lasts exactly one key
+  press, cannot chain, and is announced in the status bar for as long as it lasts. The bar's
+  existing prefix (issue #214) is now the same mechanism: its passthrough loses only the two
+  arrows. The bindings live in a new `AreaChord` help group — a mode, not a focus target, like
+  `AreaSearch` — so the `?` overlay documents the chord and cannot drift from it.
+  `core/keys.md`, `core/tui.md` updated. Version 0.10.34.
+
 ## 2026-08-11
 
 - Coalesce transport events in the pump, so an output burst cannot starve key handling
