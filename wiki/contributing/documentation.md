@@ -4,7 +4,7 @@ title: Documentation layers
 description: The three places lazycssh documents itself — wiki, userdocs site, repo root files — and which change belongs where.
 resource: userdocs/
 tags: [documentation, mkdocs, wiki, process]
-timestamp: 2026-07-31T21:00:00Z
+timestamp: 2026-08-10T00:00:00Z
 ---
 
 # Documentation layers
@@ -31,13 +31,14 @@ MkDocs Material, sources in `userdocs/`, configuration in `mkdocs.yml` at the re
 ```sh
 pip install -r userdocs/requirements.txt
 mkdocs serve                 # preview on http://127.0.0.1:8000
-mkdocs build --strict        # what CI runs
+mkdocs build --strict        # run before merging a docs change
 ```
 
-`.github/workflows/docs.yml` builds the site on every pull request that touches `userdocs/`,
-`mkdocs.yml` or the workflow itself, and deploys to GitHub Pages on a push to `main`. `--strict`
-turns broken links and warnings into build failures, so a page that is not reachable from the
-`nav` in `mkdocs.yml` fails CI rather than being published as an orphan.
+The site is built and published manually; there is no CI workflow (the GitHub Actions
+workflows were removed in issue #287). Run `mkdocs build --strict` locally before merging a
+change that touches `userdocs/` or `mkdocs.yml` — `--strict` turns broken links and warnings
+into build failures, so a page that is not reachable from the `nav` in `mkdocs.yml` fails the
+build rather than being published as an orphan.
 
 `site/` is build output and is git-ignored.
 

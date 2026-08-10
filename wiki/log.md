@@ -2,6 +2,12 @@
 
 ## 2026-08-10
 
+- Removed the GitHub Actions workflows (`ci.yml`, `docs.yml`; issue #287) — CI and the
+  automated GitHub Pages deployment are no longer needed. Checks (`gofmt`, `go vet`,
+  `go test -race ./...`, `mkdocs build --strict`) now run locally before merge; the docs
+  site is published manually. Updated: `contributing/workflow.md`,
+  `contributing/conventions.md`, `contributing/documentation.md`. Version 0.10.40.
+
 - Screen scroll no longer copies the grid cell by cell (issue #282, the last confirmed
   hotspot of the #274 audit chain). After #277, 64% of `BenchmarkEmulatorWrite`'s CPU sat in
   `ultraviolet.(*Buffer).DeleteLineArea`: each line feed at the bottom margin shifted the
