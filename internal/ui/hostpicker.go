@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"charm.land/bubbles/v2/key"
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -40,8 +39,10 @@ type hostPicker struct {
 	// open reports that the picker owns the keyboard. It is separate from the
 	// input's focus only so a zero picker reads as closed.
 	open bool
-	// input is the fuzzy filter.
-	input textinput.Model
+	// input is the fuzzy filter, boxed so the widget's ~7.8 KiB stays off
+	// the App value (issue #279). The zero box reads as blurred and empty,
+	// which is what a closed picker should say.
+	input boxedInput
 	// items are the candidates, snapshotted when the picker opened.
 	items []PickerItem
 	// cursor is the highlighted row within the current matches.
@@ -83,7 +84,7 @@ func (a App) HostPickerMarked() []string { return slices.Clone(a.picker.marked) 
 // candidates once. A run with no source opens it all the same: the free-text
 // fallback is the whole point of it still being usable then.
 func (a App) openHostPicker() App {
-	p := hostPicker{open: true, input: newLineInput("filter, or a host pattern")}
+	p := hostPicker{open: true, input: boxInput(newLineInput("filter, or a host pattern"))}
 	p.input.Focus()
 	if a.cfg.HostSource != nil {
 		p.items = a.cfg.HostSource.Items()
@@ -225,8 +226,7 @@ func (a App) handleHostPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	before := a.picker.input.Value()
-	var cmd tea.Cmd
-	a.picker.input, cmd = a.picker.input.Update(msg)
+	cmd := a.picker.input.Update(msg)
 	if a.picker.input.Value() != before {
 		// The match list moved under the cursor; the first row is the only
 		// position that still means something.

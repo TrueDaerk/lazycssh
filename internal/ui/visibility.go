@@ -89,8 +89,7 @@ func (a App) handleSplitKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	var cmd tea.Cmd
-	a.splitInput, cmd = a.splitInput.Update(msg)
+	cmd := a.splitInput.Update(msg)
 	return a, cmd
 }
 

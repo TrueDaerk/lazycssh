@@ -153,8 +153,13 @@ type App struct {
 	cfg    Config
 	keys   *KeyMap
 	theme  *Theme
-	help   help.Model
 	layout Layout
+
+	// help is behind a pointer for the same reason the inputs are boxed: it
+	// is ~4.6 KiB of styles, immutable except at resize and theme change,
+	// and both of those sites replace the pointer rather than write through
+	// it (issue #279).
+	help *help.Model
 
 	// memo is the one-frame render cache. Nil outside View; View plants one
 	// on its value copy of the model, so it can never leak into Update. See
@@ -164,9 +169,11 @@ type App struct {
 	// panels are the sidebar's child models; see internal/ui/sidepanel.go.
 	panels panelSet
 
-	cmdInput    textinput.Model
-	searchInput textinput.Model
-	hostInput   textinput.Model
+	// The prompts are boxed - held by pointer, mutated copy-on-write - so
+	// their ~7.8 KiB each stays off the App value; see boxedinput.go.
+	cmdInput    boxedInput
+	searchInput boxedInput
+	hostInput   boxedInput
 
 	// picker is the fuzzy host picker overlay; see internal/ui/hostpicker.go.
 	picker hostPicker
@@ -181,7 +188,7 @@ type App struct {
 	keptSlots int
 
 	// The split: chunks of splitSize panes, splitChunk on screen. 0 is off.
-	splitInput textinput.Model
+	splitInput boxedInput
 	splitSize  int
 	splitChunk int
 
@@ -189,7 +196,7 @@ type App struct {
 	// everything, and which hosts matched it as of the last evaluation. The
 	// match set is a model field so a render never reads a live scrollback;
 	// see internal/ui/outputfilter.go (issue #255).
-	filterInput  textinput.Model
+	filterInput  boxedInput
 	outputFilter string
 	filterMatch  map[string]bool
 
@@ -330,12 +337,12 @@ func NewApp(cfg Config) App {
 		cfg:         cfg,
 		keys:        &keys,
 		theme:       &theme,
-		help:        h,
-		cmdInput:    command,
-		searchInput: search,
-		hostInput:   host,
-		splitInput:  split,
-		filterInput: filter,
+		help:        &h,
+		cmdInput:    boxInput(command),
+		searchInput: boxInput(search),
+		hostInput:   boxInput(host),
+		splitInput:  boxInput(split),
+		filterInput: boxInput(filter),
 		scroll:      make(map[string]int),
 		search:      &searchCache{},
 		focus:       AreaSidebar,
@@ -349,9 +356,9 @@ func NewApp(cfg Config) App {
 			keys:       &keys,
 			store:      cfg.Sessions,
 			workingSet: cfg.WorkingSet,
-			nameInput:  newLineInput("group name"),
-			hostsInput: newLineInput("host patterns, space separated"),
-			saveInput:  newLineInput("session name"),
+			nameInput:  boxInput(newLineInput("group name")),
+			hostsInput: boxInput(newLineInput("host patterns, space separated")),
+			saveInput:  boxInput(newLineInput("session name")),
 		},
 		sessions: sessionsPanel{keys: &keys, chosen: -1},
 		log:      logPanel{keys: &keys, log: cfg.CommandLog},
@@ -434,7 +441,9 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.layout = ComputeScreenLayout(msg.Width, msg.Height, a.screen, a.focus)
-		a.help.SetWidth(max(0, a.layout.Width-2))
+		h := *a.help
+		h.SetWidth(max(0, a.layout.Width-2))
+		a.help = &h
 		return a, nil
 
 	case tea.BackgroundColorMsg:
@@ -443,7 +452,9 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.cfg.Theme = opts
 		t := NewTheme(opts)
 		a.theme = &t
-		a.help.Styles = HelpStyles(a.theme)
+		h := *a.help
+		h.Styles = HelpStyles(a.theme)
+		a.help = &h
 		return a, nil
 
 	case CommandResendMsg:
@@ -879,8 +890,7 @@ func (a App) handleHostInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	var cmd tea.Cmd
-	a.hostInput, cmd = a.hostInput.Update(msg)
+	cmd := a.hostInput.Update(msg)
 	return a, cmd
 }
 
@@ -1320,7 +1330,7 @@ func (a App) renderHelpOverlay() string {
 	// A narrower copy of the help model, so the popup's content plus its
 	// border and padding always fits inside the frame without wrapping; the
 	// help bubble drops whole columns rather than garbling them.
-	h := a.help
+	h := *a.help
 	h.SetWidth(max(0, a.layout.Width-6))
 
 	content := renderHelpColumns(h, ctx.FullHelp(), ctx.Titles(), a.theme)

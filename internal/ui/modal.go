@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"charm.land/bubbles/v2/key"
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -85,7 +84,7 @@ func (a App) confirm(title, question string, notes ...string) modal {
 
 // promptModal builds a dialog around one text input: any context lines, then
 // the labelled input with the cursor in it.
-func promptModal(theme *Theme, title, label string, ti textinput.Model, hint string, above ...string) modal {
+func promptModal(theme *Theme, title, label string, ti boxedInput, hint string, above ...string) modal {
 	prefix := theme.Muted.Render(label + ": ")
 	lines := append([]string{}, above...)
 	lines = append(lines, prefix+theme.Base.Render(ti.Value()))
@@ -99,7 +98,7 @@ func promptModal(theme *Theme, title, label string, ti textinput.Model, hint str
 }
 
 // prompt builds an input dialog in the root's theme.
-func (a App) prompt(title, label string, ti textinput.Model, hint string, above ...string) modal {
+func (a App) prompt(title, label string, ti boxedInput, hint string, above ...string) modal {
 	return promptModal(a.theme, title, label, ti, hint, above...)
 }
 
