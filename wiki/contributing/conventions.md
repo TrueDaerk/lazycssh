@@ -3,7 +3,7 @@ type: guide
 title: Code conventions
 description: Formatting, error handling, documentation, testing and state rules for lazycssh Go code.
 tags: [go, conventions, style, testing]
-timestamp: 2026-07-28T00:00:00Z
+timestamp: 2026-08-10T00:00:00Z
 ---
 
 # Code conventions
@@ -53,8 +53,8 @@ review on a green percentage. There is **no coverage threshold** in this project
   never real dials.
 - The TUI cannot be verified from stdout alone. For automated checks, drive the model's
   `Update` / `View` with synthetic messages; for visual checks, run the binary in a real terminal.
-- Concurrency is tested under `-race`; `go test -race ./...` is part of CI, not an optional
-  local habit.
+- Concurrency is tested under `-race`; `go test -race ./...` runs locally before every merge —
+  there is no CI to catch it, so it is not an optional habit.
 - Security-relevant behavior gets an explicit negative test: that no credential reaches a log
   line, that a changed host key never connects silently.
 
