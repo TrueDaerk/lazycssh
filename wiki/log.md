@@ -2,6 +2,20 @@
 
 ## 2026-08-10
 
+- Screen scroll no longer copies the grid cell by cell (issue #282, the last confirmed
+  hotspot of the #274 audit chain). After #277, 64% of `BenchmarkEmulatorWrite`'s CPU sat in
+  `ultraviolet.(*Buffer).DeleteLineArea`: each line feed at the bottom margin shifted the
+  whole visible grid up one `Cell` struct at a time. Fixed upstream — full-width scroll
+  regions now rotate the row slice headers in place and recycle the rotated-out rows as the
+  new blank lines (`InsertLineArea` symmetrically), margined regions keep the cell path
+  (PR [charmbracelet/ultraviolet#154](https://github.com/charmbracelet/ultraviolet/pull/154),
+  behavior pinned there against the old implementation). Pinned here via a `go.mod`
+  `replace` to the patch rebased onto the previously pinned upstream commit
+  (`TrueDaerk/ultraviolet@a446e28`), to be dropped for a plain module bump once upstream
+  merges. Ingest: 3.8 → 11.2 MB/s per host; `DeleteLineArea` from 64% of CPU to ~2%; no
+  single emulator function dominates the profile anymore. Updated: `core/terminal.md`.
+  Version 0.10.39.
+
 - The root `App` model is under the 64 KiB implicit-heap cliff (issue #279, closing the model-size
   thread of the #274 audit). #274 left `App` at 78 KiB by value — still over the threshold above
   which Go heap-allocates every implicit copy — with the fat spread across nine `textinput.Model`s

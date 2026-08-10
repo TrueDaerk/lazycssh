@@ -4,7 +4,7 @@ title: Terminal emulation
 description: The per-session vt emulator that holds everything a pane shows — screen, retained history, cursor, modes — encodes key presses per host, and reflows on resize.
 resource: internal/term
 tags: [terminal, vt, emulation, alt-screen, scrollback, keys, resize]
-timestamp: 2026-08-10T15:00:00Z
+timestamp: 2026-08-10T18:00:00Z
 ---
 
 # Terminal emulation
@@ -51,6 +51,22 @@ strings, an O(1) eviction each. The trade: compact lines are frozen at the width
 scrolled off with (see the resize section below). `HistoryLen`/`HistoryLine`/`Text`/
 `TailText` read across the boundary transparently, and a reconnect hands the whole emulator
 — ring included — to the next session as before.
+
+**Screen scroll rotates rows (issue #282).** With retention off the profile, ingest was
+dominated by the screen scroll itself: every line feed at the bottom margin made the
+upstream `ultraviolet` buffer shift the visible grid up cell by cell — ~600 KB of `Cell`
+struct copies per scrolled line on a 120x40 grid, 64% of `BenchmarkEmulatorWrite`'s CPU in
+`Buffer.DeleteLineArea`. Fixed upstream
+([charmbracelet/ultraviolet#154](https://github.com/charmbracelet/ultraviolet/pull/154)):
+when the scroll region spans the full buffer width, the row slice headers rotate in place
+(zero allocations) and the rotated-out rows are recycled as the new blank lines; scroll
+regions with left/right margins keep the cell path their semantics require. The vt
+scrollback clones the scrolled-off top row before the rotation, so the #277 drain is
+unaffected. Until the upstream PR lands in a release, `go.mod` pins the patch rebased onto
+the previously pinned upstream commit via a `replace` to `TrueDaerk/ultraviolet`.
+Measured: `BenchmarkEmulatorWrite` 3.8 → 11.2 MB/s per host, `DeleteLineArea` down from
+64% of CPU to ~2%, and the profile top is now runtime idle/GC rather than any single
+emulator function.
 
 **`HistoryCursor` addresses the history for incremental readers (issue #278).** The
 retained history changes in exactly two cheap-to-follow ways — new lines append at the back,
