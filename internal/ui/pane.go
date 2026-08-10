@@ -183,6 +183,12 @@ func (a App) paneTerminal(id string) *term.Emulator {
 // Screen rows below both the cursor and the last content row are dropped: the
 // window anchors on what the host said, not on the bottom of a screen that
 // may (transiently, or in a test) be taller than the pane.
+//
+// It materializes the entire retained history — milliseconds and megabytes at
+// the retention cap (issue #274) — so nothing on the per-frame render path may
+// call it: the render fetches only its window through [App.paneContent], and
+// the scroll clamps use [App.virtualLineCount]. What remains on this is the
+// search, which needs every line's index.
 func (a App) virtualLines(id string) []string {
 	lines, _ := a.virtualLinesTop(id)
 	return lines
@@ -191,21 +197,44 @@ func (a App) virtualLines(id string) []string {
 // virtualLinesTop is virtualLines plus the index of the first screen row, so
 // the cursor's screen coordinates can be mapped into the shared line space.
 func (a App) virtualLinesTop(id string) ([]string, int) {
-	t := a.paneTerminal(id)
-	if t == nil || !t.HasOutput() {
+	c, ok := a.paneContent(id)
+	if !ok {
 		return nil, 0
 	}
+	lines := make([]string, c.total)
+	for i := range lines {
+		lines[i] = c.line(a, i)
+	}
+	return lines, c.screenTop
+}
 
-	var lines []string
-	if t.HistoryFull() {
-		// The marker sits where the missing output was, so a reader scrolling
-		// to the top learns the history is truncated rather than short.
-		lines = append(lines, a.theme.Muted.Render("~ older output dropped ~"))
+// paneContent is the shape of one host's virtual line space - the coordinate
+// system of virtualLines - without the lines themselves: how many there are,
+// where the screen starts, and enough to materialize any single line on
+// demand. The render works from this so that a frame costs its window, not
+// the retention cap (issue #274).
+type paneContent struct {
+	t *term.Emulator
+	// marker says line 0 is the dropped-output marker.
+	marker bool
+	// histLen is how many retained lines scrolled off the screen.
+	histLen int
+	// screen is the visible rows, trimmed of the rows below the last content.
+	screen []string
+	// screenTop is the virtual index of the first screen row.
+	screenTop int
+	// total is the number of virtual lines.
+	total int
+}
+
+// paneContent measures a host's pane content. ok is false when the host is
+// unknown or has said nothing yet.
+func (a App) paneContent(id string) (paneContent, bool) {
+	t := a.paneTerminal(id)
+	if t == nil || !t.HasOutput() {
+		return paneContent{}, false
 	}
-	for i, n := 0, t.HistoryLen(); i < n; i++ {
-		lines = append(lines, t.HistoryLine(i))
-	}
-	screenTop := len(lines)
+	c := paneContent{t: t, marker: t.HistoryFull(), histLen: t.HistoryLen()}
 
 	rows := strings.Split(t.Render(), "\n")
 	last := -1
@@ -215,7 +244,44 @@ func (a App) virtualLinesTop(id string) ([]string, int) {
 			break
 		}
 	}
-	return append(lines, rows[:last+1]...), screenTop
+	c.screen = rows[:last+1]
+	c.screenTop = c.histLen
+	if c.marker {
+		c.screenTop++
+	}
+	c.total = c.screenTop + len(c.screen)
+	return c, true
+}
+
+// line materializes one virtual line. An index past the end is the blank row
+// a cursor may sit on after a line feed.
+func (c paneContent) line(a App, i int) string {
+	if c.marker {
+		if i == 0 {
+			// The marker sits where the missing output was, so a reader
+			// scrolling to the top learns the history is truncated rather
+			// than short.
+			return a.theme.Muted.Render("~ older output dropped ~")
+		}
+		i--
+	}
+	if i < c.histLen {
+		return c.t.HistoryLine(i)
+	}
+	if j := i - c.histLen; j < len(c.screen) {
+		return c.screen[j]
+	}
+	return ""
+}
+
+// virtualLineCount is how many lines virtualLines would return, without
+// building them - what the scroll clamps need.
+func (a App) virtualLineCount(id string) int {
+	c, ok := a.paneContent(id)
+	if !ok {
+		return 0
+	}
+	return c.total
 }
 
 // paneBody renders one host's terminal into an area of width columns and
@@ -236,35 +302,24 @@ func (a App) paneBody(id string, width, height int) string {
 	if t.IsAltScreen() {
 		return a.terminalGrid(t, width, height)
 	}
-	lines, screenTop := a.virtualLinesTop(id)
-	if len(lines) == 0 {
+	c, ok := a.paneContent(id)
+	if !ok || c.total == 0 {
 		return ""
 	}
+	screenTop := c.screenTop
 
 	// The cursor may sit on the blank row below the last content — right
 	// after a line feed. That row must exist to be drawn on, but only while
 	// the pane follows the tail and could show a cursor at all.
 	cx, cy := t.CursorPosition()
 	cursorIdx := screenTop + cy
-	if a.scrollOffset(id) == 0 && a.state(id) == ssh.StateConnected {
-		for len(lines) <= cursorIdx {
-			lines = append(lines, "")
-		}
+	total := c.total
+	if a.scrollOffset(id) == 0 && a.state(id) == ssh.StateConnected && total <= cursorIdx {
+		total = cursorIdx + 1
 	}
 
-	// The open auth question's answer is typed inline at the cursor, the way
-	// a terminal takes it (issue #180). The echo carries its own cursor block,
-	// so the remote cursor is not drawn on top of it.
-	echoing := false
-	if echo, ok := a.inlineAnswerEcho(id); ok {
-		if cursorIdx >= 0 && cursorIdx < len(lines) {
-			lines[cursorIdx] = spliceAt(lines[cursorIdx], cx) + echo
-			echoing = true
-		}
-	}
-
-	offset := clamp(a.scrollOffset(id), 0, max(0, len(lines)-height))
-	end := len(lines) - offset
+	offset := clamp(a.scrollOffset(id), 0, max(0, total-height))
+	end := total - offset
 	start := max(0, end-height)
 	if offset == 0 {
 		// Following the tail shows the screen, exactly like a real terminal:
@@ -272,7 +327,27 @@ func (a App) paneBody(id string, width, height int) string {
 		// still there — scrolling up reaches it.
 		start = max(start, screenTop)
 	}
-	window := append([]string(nil), lines[start:end]...)
+	// Only the window is materialized: everything above it — the whole
+	// retained history, at the cap — stays untouched cells in the emulator
+	// (issue #274).
+	window := make([]string, end-start)
+	for i := range window {
+		window[i] = c.line(a, start+i)
+	}
+
+	// The open auth question's answer is typed inline at the cursor, the way
+	// a terminal takes it (issue #180). The echo carries its own cursor block,
+	// so the remote cursor is not drawn on top of it.
+	echoing := false
+	if echo, ok := a.inlineAnswerEcho(id); ok {
+		if cursorIdx >= 0 && cursorIdx < total {
+			if i := cursorIdx - start; i >= 0 && i < len(window) {
+				window[i] = spliceAt(window[i], cx) + echo
+			}
+			echoing = true
+		}
+	}
+
 	for i := range window {
 		window[i] = ansi.Truncate(window[i], width, "")
 	}

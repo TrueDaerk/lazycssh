@@ -573,14 +573,14 @@ func Areas() []Area {
 //
 // This is what makes the help context sensitive. What the overlay lists while a
 // pane is focused is exactly what the pane handles.
-func (k KeyMap) For(area Area) help.KeyMap {
+func (k *KeyMap) For(area Area) help.KeyMap {
 	return contextHelp{keys: k, area: area}
 }
 
 // contextHelp adapts a [KeyMap] and an [Area] to the interface the help bubble
 // wants.
 type contextHelp struct {
-	keys KeyMap
+	keys *KeyMap
 	area Area
 }
 
@@ -636,7 +636,7 @@ func (c contextHelp) Titles() []string {
 
 // HelpStyles builds the help bubble's styles from the theme, so the overlay
 // cannot drift from the rest of the interface.
-func HelpStyles(t Theme) help.Styles {
+func HelpStyles(t *Theme) help.Styles {
 	return help.Styles{
 		ShortKey:       t.Key,
 		ShortDesc:      t.Desc,

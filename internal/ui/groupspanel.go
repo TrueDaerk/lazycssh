@@ -156,7 +156,7 @@ type SaveResultMsg struct {
 // the root reduces into this panel.
 type groupsPanel struct {
 	ctx  panelContext
-	keys KeyMap
+	keys *KeyMap
 
 	// store is the on-disk group store, nil when the run has none.
 	store SessionStore

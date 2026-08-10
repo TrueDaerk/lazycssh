@@ -62,7 +62,7 @@ func (a App) panelPreview(panel Panel, width, height int) (string, string) {
 // fitLines renders lines into the height it was dealt, wrapping each at the
 // width and replacing the tail that does not fit with a counter. A preview
 // that silently drops rows tells the user a short list is the whole list.
-func fitLines(theme Theme, width, height int, lines []string) string {
+func fitLines(theme *Theme, width, height int, lines []string) string {
 	avail := max(1, height)
 
 	blocks := make([]string, 0, len(lines))

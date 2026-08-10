@@ -151,11 +151,9 @@ func (a App) filterWindow(id string) string {
 	if t == nil || !t.HasOutput() {
 		return ""
 	}
-	lines := strings.Split(t.Text(), "\n")
-	if len(lines) > filterScanLines {
-		lines = lines[len(lines)-filterScanLines:]
-	}
-	return strings.Join(lines, "\n")
+	// TailText, not Text: this runs per output event for every host, and the
+	// full text costs the whole retention cap per call (issue #274).
+	return t.TailText(filterScanLines)
 }
 
 // outputFiltered drops the hosts whose output does not match, and the holes:

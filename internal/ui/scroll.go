@@ -93,7 +93,7 @@ func (a App) paneExtentAt(index int) (width, height int) {
 // maxScroll is the furthest back the focused pane can go at its current size.
 func (a App) maxScroll(id string) int {
 	_, h := a.paneExtent()
-	return max(0, len(a.virtualLines(id))-h)
+	return max(0, a.virtualLineCount(id)-h)
 }
 
 // scrollHostBy moves the pane at index by delta lines, whichever pane
@@ -111,7 +111,7 @@ func (a App) scrollHostBy(index, delta int) App {
 		a.scroll = make(map[string]int)
 	}
 	_, h := a.paneExtentAt(index)
-	limit := max(0, len(a.virtualLines(id))-h)
+	limit := max(0, a.virtualLineCount(id)-h)
 	next := clamp(a.scroll[id]+delta, 0, limit)
 	if next == 0 {
 		delete(a.scroll, id)
@@ -302,7 +302,7 @@ func (a App) gotoMatch(line int) App {
 		return a
 	}
 	_, h := a.paneExtent()
-	total := len(a.virtualLines(id))
+	total := a.virtualLineCount(id)
 	if a.scroll == nil {
 		a.scroll = make(map[string]int)
 	}

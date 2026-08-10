@@ -167,7 +167,8 @@ func TestPromptAreaIsInTheHelp(t *testing.T) {
 	}
 
 	model := help.New()
-	model.Styles = HelpStyles(NewTheme(Options{Dark: true}))
+	th := NewTheme(Options{Dark: true})
+	model.Styles = HelpStyles(&th)
 	model.SetWidth(400)
 	rendered := model.FullHelpView(k.For(AreaSidebar).FullHelp())
 	for _, b := range k.Bindings(AreaPrompt) {
@@ -207,7 +208,7 @@ func TestPromptHintComesFromTheBindings(t *testing.T) {
 		t.Fatalf("a rebound key did not move its hint: %q, want %q", got, want)
 	}
 	k.ConfirmNo = key.NewBinding(key.WithKeys("ctrl+g"), key.WithHelp("ctrl+g", "no"))
-	if got, want := confirmHint(k), "enter/y confirms · ctrl+g cancels"; got != want {
+	if got, want := confirmHint(&k), "enter/y confirms · ctrl+g cancels"; got != want {
 		t.Fatalf("confirmHint() = %q, want %q", got, want)
 	}
 }
@@ -321,7 +322,8 @@ func TestShortHelpIsNotEmptyAnywhere(t *testing.T) {
 func TestRenderedHelpContainsTheAreaBindings(t *testing.T) {
 	k := DefaultKeyMap()
 	model := help.New()
-	model.Styles = HelpStyles(NewTheme(Options{Dark: true}))
+	th := NewTheme(Options{Dark: true})
+	model.Styles = HelpStyles(&th)
 	model.SetWidth(200)
 
 	rendered := model.FullHelpView(k.For(AreaGrid).FullHelp())
@@ -374,7 +376,7 @@ func TestBindingsFallsBackToGlobal(t *testing.T) {
 
 func TestHelpStylesComeFromTheTheme(t *testing.T) {
 	th := NewTheme(Options{Dark: true})
-	styles := HelpStyles(th)
+	styles := HelpStyles(&th)
 
 	if styles.FullKey.Render("x") != th.Key.Render("x") {
 		t.Fatal("the help key style does not come from the theme")

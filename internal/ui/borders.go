@@ -17,7 +17,7 @@ import (
 // from the border's character set and the body supplies the other three sides.
 // A box shorter than three rows degrades honestly: two rows draw the title
 // line and the bottom edge, one row draws the bare title, zero draws nothing.
-func titledBox(t Theme, focused bool, width, height int, title, content string) string {
+func titledBox(t *Theme, focused bool, width, height int, title, content string) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}

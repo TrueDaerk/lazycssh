@@ -203,7 +203,8 @@ func TestPrefixIsIndicatedInTheStatusBar(t *testing.T) {
 func TestHelpOverlayDocumentsTheChord(t *testing.T) {
 	k := DefaultKeyMap()
 	model := help.New()
-	model.Styles = HelpStyles(NewTheme(Options{Dark: true}))
+	th := NewTheme(Options{Dark: true})
+	model.Styles = HelpStyles(&th)
 	model.SetWidth(400)
 
 	rendered := model.FullHelpView(k.For(AreaChord).FullHelp())

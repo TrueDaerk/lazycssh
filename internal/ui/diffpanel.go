@@ -37,7 +37,7 @@ type DiffSelectMsg struct {
 // diffPanel is the Output diff child model: the cursor over the variants.
 type diffPanel struct {
 	ctx  panelContext
-	keys KeyMap
+	keys *KeyMap
 
 	// command is the command under comparison, empty before the first send.
 	command string
@@ -216,7 +216,7 @@ func (a App) scrollbackLen(id string) int {
 	if t == nil || !t.HasOutput() {
 		return 0
 	}
-	return len(strings.Split(t.Text(), "\n"))
+	return t.TextLineCount()
 }
 
 // diffTail is a host's output past its watermark. A watermark past the end
@@ -228,11 +228,13 @@ func (a App) diffTail(id string, mark int) string {
 	if t == nil || !t.HasOutput() {
 		return ""
 	}
-	lines := strings.Split(t.Text(), "\n")
-	if mark >= len(lines) {
+	// The tail is fetched by length rather than slicing the full text: this
+	// runs per output event while a filter watches a send (issue #274).
+	total := t.TextLineCount()
+	if mark >= total {
 		return ""
 	}
-	return strings.Join(lines[mark:], "\n")
+	return t.TailText(total - mark)
 }
 
 // computeDiffVariants groups the marked hosts by their tails. It re-reads the

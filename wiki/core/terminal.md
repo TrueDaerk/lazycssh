@@ -4,7 +4,7 @@ title: Terminal emulation
 description: The per-session vt emulator that holds everything a pane shows — screen, retained history, cursor, modes — encodes key presses per host, and reflows on resize.
 resource: internal/term
 tags: [terminal, vt, emulation, alt-screen, scrollback, keys, resize]
-timestamp: 2026-08-01T00:00:00Z
+timestamp: 2026-08-10T12:00:00Z
 ---
 
 # Terminal emulation
@@ -25,6 +25,8 @@ are handled by a real VT implementation instead of case-by-case emulation.
 | `HistoryLen` / `HistoryLine(i)` | the retained lines that scrolled off the screen, oldest first |
 | `HistoryFull` | the retention cap was reached — older output has been dropped |
 | `Text` | history + screen as plain text: what a user would read, for tests and the clipboard |
+| `TextLineCount` | how many lines `Text` would return, without building them |
+| `TailText(n)` | the last n lines of `Text`, without materializing the rest |
 | `IsAltScreen` | a full-screen app (vim, htop) owns the pane |
 | `CursorPosition` / `CursorVisible` | where the remote cursor is and whether the app wants it drawn |
 | `HasOutput` | has this session said anything yet — decides whether injected text needs a leading line break |
@@ -33,6 +35,15 @@ The history is bounded (the vt default of 10k lines, `SetHistorySize` to change)
 overflows, the oldest lines are dropped and the writer never blocks — the backpressure rule
 survives the redesign unchanged. Trailing blank cells are not retained, so a prompt's
 trailing space does not survive into `Text` — terminals lose it too.
+
+**`Text` is expensive; per-event readers use the bounded calls.** Rendering the retained
+history costs milliseconds and megabytes per call at the cap — the performance audit (issue
+#274) measured ~15 ms and ~4 MB of allocations for one full `Text` — so anything that runs
+per frame or per output event asks for what it actually needs: `TextLineCount` for a
+watermark, `TailText(n)` for a bounded window. `Text` itself remains for the real
+whole-content consumers: the clipboard, the export, tests. The retention itself is also
+heavy — the vt scrollback stores one styled cell per rune, ~75 MB per host at the cap for
+plain text — which is a storage-design follow-up tracked in issue #277.
 
 **Clear keeps the history.** `ED 2` pushes the visible rows into the retention before
 clearing (the xterm behaviour), so a remote `clear` empties the pane while scrolling up still

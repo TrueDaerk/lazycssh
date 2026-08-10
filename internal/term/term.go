@@ -268,25 +268,92 @@ func (e *Emulator) HasOutput() bool {
 // one line per row, ANSI stripped and trailing blank rows trimmed. It is the
 // whole pane content as a user would read it — primarily for tests and
 // clipboard use, not for rendering.
+//
+// It materializes the entire retained history. Anything that runs per frame
+// or per output event must use [Emulator.TailText] or
+// [Emulator.TextLineCount] instead: rendering 10k retained lines costs
+// milliseconds and megabytes per call (issue #274).
 func (e *Emulator) Text() string {
 	e.gridMu.Lock()
 	defer e.gridMu.Unlock()
+	return e.tailTextLocked(e.textLineCountLocked())
+}
 
-	var lines []string
+// TextLineCount is how many lines [Emulator.Text] would return, without
+// building them: the retained history plus the screen rows, with the trailing
+// blank rows trimmed. Zero means Text would be empty.
+func (e *Emulator) TextLineCount() int {
+	e.gridMu.Lock()
+	defer e.gridMu.Unlock()
+	return e.textLineCountLocked()
+}
+
+// TailText is the last n lines of [Emulator.Text], built without
+// materializing the rest. It is what the per-event readers - the output
+// filter, the diff panel's tails - use, so their cost is bounded by their
+// window rather than by the retention cap.
+func (e *Emulator) TailText(n int) string {
+	e.gridMu.Lock()
+	defer e.gridMu.Unlock()
+	if n <= 0 {
+		return ""
+	}
+	return e.tailTextLocked(min(n, e.textLineCountLocked()))
+}
+
+// textLineCountLocked counts Text's lines: history plus screen, minus the
+// trailing blank run. It walks from the bottom and stops at the first
+// non-blank line, so its cost is the trailing blanks, not the retention.
+// The caller holds gridMu.
+func (e *Emulator) textLineCountLocked() int {
+	hist := 0
 	if !e.vt.IsAltScreen() {
-		sb := e.vt.Scrollback()
-		for i := 0; i < sb.Len(); i++ {
-			lines = append(lines, ansi.Strip(sb.Line(i).Render()))
+		hist = e.vt.ScrollbackLen()
+	}
+	screen := strings.Split(e.vt.Render(), "\n")
+	for i := len(screen) - 1; i >= 0; i-- {
+		if strings.TrimRight(ansi.Strip(screen[i]), " ") != "" {
+			return hist + i + 1
 		}
 	}
-	for _, row := range strings.Split(e.vt.Render(), "\n") {
-		lines = append(lines, ansi.Strip(row))
+	if e.vt.IsAltScreen() {
+		return 0
 	}
-	for len(lines) > 0 && strings.TrimRight(lines[len(lines)-1], " ") == "" {
-		lines = lines[:len(lines)-1]
+	sb := e.vt.Scrollback()
+	for i := hist - 1; i >= 0; i-- {
+		if strings.TrimRight(ansi.Strip(sb.Line(i).Render()), " ") != "" {
+			return i + 1
+		}
 	}
-	for i, l := range lines {
-		lines[i] = strings.TrimRight(l, " ")
+	return 0
+}
+
+// tailTextLocked builds the last n of Text's lines, n at most the line count.
+// The caller holds gridMu and passes a count consistent with the current
+// grid state.
+func (e *Emulator) tailTextLocked(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	count := n
+	hist := 0
+	if !e.vt.IsAltScreen() {
+		hist = e.vt.ScrollbackLen()
+	}
+	total := e.textLineCountLocked()
+	start := total - count
+
+	var screen []string
+	lines := make([]string, 0, count)
+	for i := start; i < total; i++ {
+		if i < hist {
+			lines = append(lines, strings.TrimRight(ansi.Strip(e.vt.Scrollback().Line(i).Render()), " "))
+			continue
+		}
+		if screen == nil {
+			screen = strings.Split(e.vt.Render(), "\n")
+		}
+		lines = append(lines, strings.TrimRight(ansi.Strip(screen[i-hist]), " "))
 	}
 	return strings.Join(lines, "\n")
 }
