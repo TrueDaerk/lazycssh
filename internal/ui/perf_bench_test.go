@@ -70,6 +70,39 @@ func BenchmarkAppViewQuietFleet(b *testing.B) {
 	}
 }
 
+// BenchmarkAppViewLiveSearch is the chatty-fleet frame with a live search
+// term: the status bar counts the focused pane's matches every frame. The
+// acceptance criterion of issue #278 is that this costs the same order as
+// BenchmarkAppViewChattyFleet, not the full-scrollback walk it used to.
+// The term is sparse — a dozen hits in the 10k lines — like a real hunt for
+// an error; a term matching every visible line measures the highlight
+// restyle, which is window-bounded and predates the cache.
+func BenchmarkAppViewLiveSearch(b *testing.B) {
+	a, _, names := benchFleet(b, 12, 10000)
+	a.searchTerm = "line 999"
+	_ = a.matchLines(names[0]) // the first walk, paid once at the term keystroke
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = a.View()
+	}
+}
+
+// BenchmarkAppViewLiveSearchChattyFocus adds output arriving on the focused
+// pane between frames — every line shifts the whole match space at the cap,
+// which is the case the incremental cache exists for.
+func BenchmarkAppViewLiveSearchChattyFocus(b *testing.B) {
+	a, fleet, names := benchFleet(b, 12, 10000)
+	a.searchTerm = "line 999"
+	_ = a.matchLines(names[0])
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		fleet.sessions[names[0]].Emit("one more quick brown fox\r\n")
+		_ = a.View()
+	}
+}
+
 // BenchmarkOutputMsgUnderFilter is one output redraw hint while an output
 // filter is active: the filter re-reads every host's recent output on every
 // hint (issue #255), which under load happens once per event batch.

@@ -47,6 +47,11 @@ type stringRing struct {
 	head int // index of the oldest line; 0 until the ring first fills
 	n    int
 	max  int
+	// dropped counts every line ever evicted, monotonically: with the ring
+	// active it is the absolute stream index of the oldest retained line,
+	// which is what lets an incremental reader (the UI's search match cache,
+	// issue #278) shift its state instead of rescanning.
+	dropped uint64
 }
 
 func (r *stringRing) len() int { return r.n }
@@ -83,6 +88,7 @@ func (r *stringRing) evictOldest() {
 		return
 	}
 	r.buf[r.head] = "" // release the string to the GC
+	r.dropped++
 	r.head++
 	if r.head == len(r.buf) {
 		r.head = 0
@@ -99,6 +105,7 @@ func (r *stringRing) setMax(m int) {
 		return
 	}
 	drop := max(r.n-m, 0)
+	r.dropped += uint64(drop)
 	buf := make([]string, 0, r.n-drop)
 	for i := drop; i < r.n; i++ {
 		buf = append(buf, r.at(i))
@@ -114,6 +121,9 @@ func (r *stringRing) setMax(m int) {
 // working depth disable the ring entirely and behave like the plain vt
 // scrollback. The caller holds gridMu.
 func (e *Emulator) setRetentionLocked(n int) {
+	// A retention change can move lines between the vt scrollback and the
+	// ring and drop across both; incremental readers start over.
+	e.histGen++
 	e.capTotal = n
 	e.vtDepth = min(compactWorkingDepth, n)
 	e.hist.setMax(n - e.vtDepth)

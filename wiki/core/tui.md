@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-10T12:00:00Z
+timestamp: 2026-08-10T15:00:00Z
 ---
 
 # TUI shell
@@ -111,7 +111,17 @@ scrollback. `paneBody` materializes only the visible lines through `paneContent`
 clamps count lines without building them (`virtualLineCount`), and the per-event readers — the
 output filter, the diff panel's tails — use the emulator's bounded calls
 (`TailText`/`TextLineCount`, see [Terminal emulation](./terminal.md)) instead of `Text`. The
-one full-scrollback walk left on the render path is a live search term (issue #278).
+last full-scrollback walk — a live search term recounting the focused pane's matches every
+frame — is gone too (issue #278): the history's matches live in an incremental cache
+(`searchcache.go`) keyed to the emulator's `HistoryCursor`, which says how many lines
+appended and how many the cap dropped since the last look, so a frame rescans only the
+appended tail plus the screen rows. The cache validates itself against the cursor on every
+read — resize reflows and retention changes move its generation and force a rescan — so
+there is no invalidation hook to forget, and a mismatch can only cost a rescan, never a
+wrong index. Match *cursor* state (`matchAt`, `searchAnchor`) stays in the model; the cache
+is a memo behind a shared pointer, filled wherever `matchLines` runs. What still scales with
+the match count is the highlight itself: restyled lines carry ANSI that makes the border
+render costlier, but that is bounded by the window, not the scrollback.
 
 Two structural rules keep it that way. First, `View` plants a **one-frame memo** on its value
 copy of the model (`framememo.go`): the visible host list and the tiled grid are computed once

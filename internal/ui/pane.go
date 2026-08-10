@@ -87,6 +87,10 @@ func (a App) paneHeader(host, width int, focused bool) string {
 // one, and the border colour still carries the focus.
 const minHeaderName = 6
 
+// droppedMarkerText is the dropped-output marker's text, a constant so the
+// search can test it against the term without rendering the line.
+const droppedMarkerText = "~ older output dropped ~"
+
 // truncateLeft shortens s to at most width runes by cutting from the left,
 // marking the cut with "…". The suffix survives because it is the part that
 // distinguishes host-01 from host-40.
@@ -261,7 +265,7 @@ func (c paneContent) line(a App, i int) string {
 			// The marker sits where the missing output was, so a reader
 			// scrolling to the top learns the history is truncated rather
 			// than short.
-			return a.theme.Muted.Render("~ older output dropped ~")
+			return a.theme.Muted.Render(droppedMarkerText)
 		}
 		i--
 	}

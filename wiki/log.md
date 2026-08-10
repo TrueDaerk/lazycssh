@@ -2,6 +2,22 @@
 
 ## 2026-08-10
 
+- Live search no longer walks the full scrollback every frame (issue #278, the last render-path
+  walk the #274 audit left open). The status bar's match counter materialized the focused
+  pane's whole virtual line space per frame, and every n/N step walked it again — ~20 ms and
+  ~9 MB per frame at the 10k-line cap on the benchmark fleet. The history's matches now live
+  in an incremental cache (`internal/ui/searchcache.go`) keyed to a new emulator snapshot,
+  `HistoryCursor` — absolute start of the retained history (drops counted monotonically by the
+  compact ring), length, a generation for in-place rewrites, and an exactness flag for
+  within-working-depth caps — so a frame rescans only the appended tail plus the screen rows
+  and the dropped-output marker. Self-validating against the cursor on every read: no
+  invalidation hook to forget, a mismatch costs a rescan, never a wrong index. Match semantics
+  pinned unchanged against the old full walk across cap drops, term changes, resizes, tiny
+  caps and the marker line. Benchmarked (`BenchmarkAppViewLiveSearch*`): a live-term frame
+  20.4 ms → 7.3 ms; with a term matching nothing, 3.3 ms against the 3.1 ms no-term baseline —
+  the remaining sparse-match delta is the window-bounded highlight restyle, which predates the
+  cache. Updated: `core/tui.md`, `core/terminal.md`. Version 0.10.37.
+
 - Compact scrollback retention (issue #277, the storage follow-up from the #274 audit).
   Scrolled-off lines were kept as styled cell grids (~128 B per rune), ~75 MB per host at
   the 10k-line cap; a host running `yes` spent most of its ingest in the allocator, largely

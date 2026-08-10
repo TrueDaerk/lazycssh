@@ -247,6 +247,11 @@ type App struct {
 	matchAt      map[string]int
 	searchAnchor map[string]int
 
+	// search is the incremental match cache behind the live term — a memo
+	// shared by every model copy, self-validating against the emulator's
+	// history cursor; see internal/ui/searchcache.go (issue #278).
+	search *searchCache
+
 	cmdHistory    []string
 	cmdHistoryPos int
 	lastDelivery  string
@@ -332,6 +337,7 @@ func NewApp(cfg Config) App {
 		splitInput:  split,
 		filterInput: filter,
 		scroll:      make(map[string]int),
+		search:      &searchCache{},
 		focus:       AreaSidebar,
 		panel:       PanelStatus,
 		now:         time.Now,

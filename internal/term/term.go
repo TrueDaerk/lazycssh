@@ -89,6 +89,11 @@ type Emulator struct {
 	vtDepth  int
 	capTotal int
 
+	// histGen increments whenever retained lines may have changed in place
+	// rather than only appended or dropped — a resize reflow, a retention
+	// change. Guarded by gridMu; see [Emulator.HistoryCursor].
+	histGen uint64
+
 	mu           sync.Mutex
 	onReply      func([]byte)
 	cursorHidden bool
@@ -246,6 +251,42 @@ func (e *Emulator) HistoryLine(i int) string {
 	e.gridMu.Lock()
 	defer e.gridMu.Unlock()
 	return e.histLineLocked(i)
+}
+
+// HistoryCursor locates the retained history inside the host's whole output
+// stream, for callers that keep incremental state over it — the UI's search
+// match cache (issue #278). One lock, so the fields are a consistent snapshot.
+type HistoryCursor struct {
+	// Start is the absolute stream index of the oldest retained line: how
+	// many lines the retention cap has dropped so far.
+	Start uint64
+	// Len is the retained line count — [Emulator.HistoryLen], including its
+	// zero while the alternate screen is active.
+	Len int
+	// Gen changes when already-retained lines may have been rewritten in
+	// place (a resize reflow, a retention change). Indices from another Gen
+	// point at different lines.
+	Gen uint64
+	// Exact reports whether Start is reliable. With the retention at or
+	// below the compact working depth the vt scrollback evicts on its own,
+	// uncounted; an incremental caller must rescan — cheap, since the whole
+	// retention then fits the working depth.
+	Exact bool
+}
+
+// HistoryCursor snapshots where the retained history stands; see the type.
+func (e *Emulator) HistoryCursor() HistoryCursor {
+	e.gridMu.Lock()
+	defer e.gridMu.Unlock()
+	c := HistoryCursor{
+		Start: e.hist.dropped,
+		Gen:   e.histGen,
+		Exact: e.capTotal > e.vtDepth,
+	}
+	if !e.vt.IsAltScreen() {
+		c.Len = e.histLenLocked()
+	}
+	return c
 }
 
 // CursorVisible reports whether the remote app wants the cursor drawn.

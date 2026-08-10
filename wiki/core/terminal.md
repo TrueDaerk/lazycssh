@@ -4,7 +4,7 @@ title: Terminal emulation
 description: The per-session vt emulator that holds everything a pane shows — screen, retained history, cursor, modes — encodes key presses per host, and reflows on resize.
 resource: internal/term
 tags: [terminal, vt, emulation, alt-screen, scrollback, keys, resize]
-timestamp: 2026-08-10T14:00:00Z
+timestamp: 2026-08-10T15:00:00Z
 ---
 
 # Terminal emulation
@@ -27,6 +27,7 @@ are handled by a real VT implementation instead of case-by-case emulation.
 | `Text` | history + screen as plain text: what a user would read, for tests and the clipboard |
 | `TextLineCount` | how many lines `Text` would return, without building them |
 | `TailText(n)` | the last n lines of `Text`, without materializing the rest |
+| `HistoryCursor` | where the retained history stands in the whole output stream, for incremental readers |
 | `IsAltScreen` | a full-screen app (vim, htop) owns the pane |
 | `CursorPosition` / `CursorVisible` | where the remote cursor is and whether the app wants it drawn |
 | `HasOutput` | has this session said anything yet — decides whether injected text needs a leading line break |
@@ -50,6 +51,18 @@ strings, an O(1) eviction each. The trade: compact lines are frozen at the width
 scrolled off with (see the resize section below). `HistoryLen`/`HistoryLine`/`Text`/
 `TailText` read across the boundary transparently, and a reconnect hands the whole emulator
 — ring included — to the next session as before.
+
+**`HistoryCursor` addresses the history for incremental readers (issue #278).** The
+retained history changes in exactly two cheap-to-follow ways — new lines append at the back,
+the cap drops from the front — plus rare in-place rewrites (a width reflow, a retention
+change). `HistoryCursor` snapshots all of it under one lock: `Start` is the absolute stream
+index of the oldest retained line (the ring counts every eviction, monotonically), `Len` the
+retained count, `Gen` a generation that moves on the in-place rewrites, and `Exact` is false
+at caps within the working depth, where the vt scrollback evicts on its own, uncounted. A
+reader that keeps per-line state — the UI's search match cache — shifts it by the `Start`
+delta and scans only the appended tail, instead of rescanning the cap; a `Gen` change or
+`Exact` false means start over. The invariant is pinned by test: while `Gen` holds,
+`Start + i` addresses the same line across drops.
 
 **`Text` is expensive; per-event readers use the bounded calls.** Rendering the retained
 history costs milliseconds and megabytes per call at the cap — the performance audit (issue
