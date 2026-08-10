@@ -4,7 +4,7 @@ title: Command line interface
 description: Flags, arguments and exit codes of the lazycssh binary.
 resource: cmd/lazycssh/main.go
 tags: [cli, flags, exit-codes]
-timestamp: 2026-08-09T00:00:00Z
+timestamp: 2026-08-10T12:00:00Z
 ---
 
 # Command line interface
@@ -47,6 +47,7 @@ that is not saved is an error listing the sessions that are.
 | `--list-sessions` | List the saved sessions with their host counts and exit. |
 | `--sessions-dir <dir>` | Read sessions from this directory instead of `$XDG_CONFIG_HOME/lazycssh/sessions`. |
 | `--log-dir <dir>` | Write every host's session output to files in a new run directory under `<dir>`. Off by default — see [Session logging](./session-logging.md). An unwritable directory fails before the TUI starts; a clean exit prints the run directory to stdout. |
+| `--pprof <addr>` | Serve `net/http/pprof` on `<addr>` for profiling a live run (issue #274). Development only, off by default. The bound address is announced on stderr before the TUI starts — `:0` picks a free port — and a bad address fails there instead of dying silently behind the interface. The handlers live on a private mux, so nothing else can publish itself alongside the profiles. |
 
 ## Exit codes
 

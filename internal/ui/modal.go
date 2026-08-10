@@ -43,7 +43,7 @@ const (
 
 // confirmHint is the footer of every yes/no dialog: the keys that answer it,
 // inside the box that asks, named by the bindings that answer it.
-func confirmHint(k KeyMap) string {
+func confirmHint(k *KeyMap) string {
 	return promptHint(does(k.ConfirmYes, "confirms"), does(k.ConfirmNo, "cancels"))
 }
 
@@ -68,7 +68,7 @@ type modal struct {
 
 // confirmModal builds a yes/no dialog: the question, then any notes that
 // change what answering yes means.
-func confirmModal(theme Theme, keys KeyMap, title, question string, notes ...string) modal {
+func confirmModal(theme *Theme, keys *KeyMap, title, question string, notes ...string) modal {
 	// The warning style is the status bar's, which pads itself for a bar it
 	// is not in here; inside a box the padding only widens it.
 	lines := []string{theme.StatusWarning.Padding(0).Render(question)}
@@ -85,7 +85,7 @@ func (a App) confirm(title, question string, notes ...string) modal {
 
 // promptModal builds a dialog around one text input: any context lines, then
 // the labelled input with the cursor in it.
-func promptModal(theme Theme, title, label string, ti textinput.Model, hint string, above ...string) modal {
+func promptModal(theme *Theme, title, label string, ti textinput.Model, hint string, above ...string) modal {
 	prefix := theme.Muted.Render(label + ": ")
 	lines := append([]string{}, above...)
 	lines = append(lines, prefix+theme.Base.Render(ti.Value()))
@@ -220,7 +220,7 @@ const (
 // generated from. Everything else is ignored - these dialogs guard a file
 // delete and a fleet-wide ctrl+c, and a stray keystroke must not be able to
 // answer either one.
-func readConfirm(keys KeyMap, msg tea.KeyPressMsg) confirmAnswer {
+func readConfirm(keys *KeyMap, msg tea.KeyPressMsg) confirmAnswer {
 	switch {
 	case key.Matches(msg, keys.ConfirmYes):
 		return answerYes

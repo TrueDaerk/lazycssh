@@ -299,7 +299,7 @@ func NewTheme(opts Options) Theme {
 }
 
 // State returns the style for a host's connection state.
-func (t Theme) State(state ssh.State) lipgloss.Style {
+func (t *Theme) State(state ssh.State) lipgloss.Style {
 	switch state {
 	case ssh.StatePending:
 		return t.StatePending
@@ -319,7 +319,7 @@ func (t Theme) State(state ssh.State) lipgloss.Style {
 }
 
 // PanelFrame returns the frame for a panel, focused or not.
-func (t Theme) PanelFrame(focused bool) lipgloss.Style {
+func (t *Theme) PanelFrame(focused bool) lipgloss.Style {
 	if focused {
 		return t.PanelFocused
 	}
@@ -329,7 +329,7 @@ func (t Theme) PanelFrame(focused bool) lipgloss.Style {
 // ListCursor returns the style for a list panel's cursor row: the strong
 // background highlight when the panel is both selected and holds the
 // sidebar's focus, the muted style otherwise.
-func (t Theme) ListCursor(focused bool) lipgloss.Style {
+func (t *Theme) ListCursor(focused bool) lipgloss.Style {
 	if focused {
 		return t.Cursor
 	}
@@ -340,7 +340,7 @@ func (t Theme) ListCursor(focused bool) lipgloss.Style {
 // the danger colour so it reads at a glance across a 20-pane grid; the header
 // carries the exit code in text as well, because colour alone is not allowed
 // to carry meaning.
-func (t Theme) PaneFrame(focused, failed bool) lipgloss.Style {
+func (t *Theme) PaneFrame(focused, failed bool) lipgloss.Style {
 	switch {
 	case focused && failed:
 		return t.PaneFocusedFailed
@@ -355,7 +355,7 @@ func (t Theme) PaneFrame(focused, failed bool) lipgloss.Style {
 
 // PanelBodyFrame returns the three-sided frame of a titled panel box, focused
 // or not. The missing top edge is the hand-drawn title line.
-func (t Theme) PanelBodyFrame(focused bool) lipgloss.Style {
+func (t *Theme) PanelBodyFrame(focused bool) lipgloss.Style {
 	if focused {
 		return t.PanelBodyFocused
 	}
@@ -366,7 +366,7 @@ func (t Theme) PanelBodyFrame(focused bool) lipgloss.Style {
 // not, for the hand-drawn title line of a titled box. Focus is a colour change
 // at the same weight, lazygit style; only without colour does the focused set
 // thicken instead.
-func (t Theme) PanelBorderChars(focused bool) lipgloss.Border {
+func (t *Theme) PanelBorderChars(focused bool) lipgloss.Border {
 	if focused && t.NoColor {
 		return lipgloss.ThickBorder()
 	}
@@ -374,7 +374,7 @@ func (t Theme) PanelBorderChars(focused bool) lipgloss.Border {
 }
 
 // PanelBorderText returns the style for hand-drawn border characters.
-func (t Theme) PanelBorderText(focused bool) lipgloss.Style {
+func (t *Theme) PanelBorderText(focused bool) lipgloss.Style {
 	if focused {
 		return t.BorderTextFocused
 	}
@@ -382,7 +382,7 @@ func (t Theme) PanelBorderText(focused bool) lipgloss.Style {
 }
 
 // PanelTitle returns the heading style for a panel, focused or not.
-func (t Theme) PanelTitle(focused bool) lipgloss.Style {
+func (t *Theme) PanelTitle(focused bool) lipgloss.Style {
 	if focused {
 		return t.TitleFocused
 	}
@@ -391,7 +391,7 @@ func (t Theme) PanelTitle(focused bool) lipgloss.Style {
 
 // ExitStatus returns the style for a command's exit status: a non-zero status
 // is a failure, and failures are never rendered quietly.
-func (t Theme) ExitStatus(code int) lipgloss.Style {
+func (t *Theme) ExitStatus(code int) lipgloss.Style {
 	if code == 0 {
 		return t.ExitOK
 	}

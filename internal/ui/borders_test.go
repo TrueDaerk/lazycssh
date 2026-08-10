@@ -7,7 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-func boxTheme() Theme { return NewTheme(Options{Dark: true}) }
+func boxTheme() *Theme { t := NewTheme(Options{Dark: true}); return &t }
 
 // The title sits inside the top border line, lazygit style.
 func TestTitledBoxEmbedsTheTitle(t *testing.T) {
@@ -33,7 +33,8 @@ func TestTitledBoxEmbedsTheTitle(t *testing.T) {
 
 // The focused box uses the thick border set, so focus survives NoColor.
 func TestTitledBoxFocusIsThick(t *testing.T) {
-	box := plain(titledBox(NewTheme(Options{NoColor: true}), true, 24, 5, "Hosts [2]", ""))
+	th := NewTheme(Options{NoColor: true})
+	box := plain(titledBox(&th, true, 24, 5, "Hosts [2]", ""))
 	if !strings.HasPrefix(box, "┏") {
 		t.Fatalf("the focused box does not use the thick border:\n%s", box)
 	}

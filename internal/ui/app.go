@@ -151,10 +151,15 @@ type Config struct {
 // writes a host; the transport reports through messages.
 type App struct {
 	cfg    Config
-	keys   KeyMap
-	theme  Theme
+	keys   *KeyMap
+	theme  *Theme
 	help   help.Model
 	layout Layout
+
+	// memo is the one-frame render cache. Nil outside View; View plants one
+	// on its value copy of the model, so it can never leak into Update. See
+	// framememo.go.
+	memo *frameMemo
 
 	// panels are the sidebar's child models; see internal/ui/sidepanel.go.
 	panels panelSet
@@ -308,7 +313,7 @@ func NewApp(cfg Config) App {
 
 	theme := NewTheme(cfg.Theme)
 	h := help.New()
-	h.Styles = HelpStyles(theme)
+	h.Styles = HelpStyles(&theme)
 
 	command := newLineInput("command")
 	search := newLineInput("search")
@@ -318,8 +323,8 @@ func NewApp(cfg Config) App {
 
 	a := App{
 		cfg:         cfg,
-		keys:        keys,
-		theme:       theme,
+		keys:        &keys,
+		theme:       &theme,
 		help:        h,
 		cmdInput:    command,
 		searchInput: search,
@@ -335,16 +340,16 @@ func NewApp(cfg Config) App {
 	a.panels = panelSet{
 		status: statusPanel{targets: cfg.Targets, workingSet: cfg.WorkingSet},
 		groups: groupsPanel{
-			keys:       keys,
+			keys:       &keys,
 			store:      cfg.Sessions,
 			workingSet: cfg.WorkingSet,
 			nameInput:  newLineInput("group name"),
 			hostsInput: newLineInput("host patterns, space separated"),
 			saveInput:  newLineInput("session name"),
 		},
-		sessions: sessionsPanel{keys: keys, chosen: -1},
-		log:      logPanel{keys: keys, log: cfg.CommandLog},
-		diff:     diffPanel{keys: keys},
+		sessions: sessionsPanel{keys: &keys, chosen: -1},
+		log:      logPanel{keys: &keys, log: cfg.CommandLog},
+		diff:     diffPanel{keys: &keys},
 	}
 	// A run that starts with hosts starts with a session holding them: the
 	// CLI arguments are a workspace like any opened group.
@@ -396,7 +401,7 @@ func (a App) Layout() Layout { return a.layout }
 
 // Theme is the current styles, rebuilt when the terminal reports its
 // background.
-func (a App) Theme() Theme { return a.theme }
+func (a App) Theme() Theme { return *a.theme }
 
 // HelpVisible reports whether the overlay is open.
 func (a App) HelpVisible() bool { return a.showHelp }
@@ -430,7 +435,8 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		opts := a.cfg.Theme
 		opts.Dark = msg.IsDark()
 		a.cfg.Theme = opts
-		a.theme = NewTheme(opts)
+		t := NewTheme(opts)
+		a.theme = &t
 		a.help.Styles = HelpStyles(a.theme)
 		return a, nil
 
@@ -919,7 +925,10 @@ func (a App) closeOrRemove(id string) tea.Cmd {
 // grid is the current tiling of the main area, minus the overflow footer's
 // line when it is drawn. It tiles for the kept slot count, which is the host
 // count unless a departure left an empty cell behind.
-func (a App) grid() Grid { return TileGridCapped(a.gridArea(), a.gridSlots(), a.gridPaneCap()) }
+func (a App) grid() Grid { return a.memoGrid() }
+
+// tileGrid computes the grid without the frame memo; grid() is the reader.
+func (a App) tileGrid() Grid { return TileGridCapped(a.gridArea(), a.gridSlots(), a.gridPaneCap()) }
 
 // Grid returns the tiling the view is drawing, which is what the tests and the
 // paging logic ask about.
@@ -965,6 +974,9 @@ func (a App) cycleFocus(step int) App {
 
 // View renders the whole frame.
 func (a App) View() tea.View {
+	// The memo goes on View's value copy of the model: every render helper
+	// below shares it, and it dies with the copy when the frame is returned.
+	a.memo = &frameMemo{}
 	if a.layout.TooSmall {
 		// Even the apology has to fit: a terminal three columns wide gets three
 		// columns of it rather than a line that wraps into the scrollback.
@@ -1318,7 +1330,7 @@ func (a App) renderHelpOverlay() string {
 // width - but heads each column with the area name from Titles(), so the
 // overlay says what a column is for rather than leaving it to the box title
 // to name the one area that happens to be focused.
-func renderHelpColumns(h help.Model, groups [][]key.Binding, titles []string, t Theme) string {
+func renderHelpColumns(h help.Model, groups [][]key.Binding, titles []string, t *Theme) string {
 	sep := h.Styles.FullSeparator.Inline(true).Render(h.FullSeparator)
 	heading := t.Muted.Bold(true)
 

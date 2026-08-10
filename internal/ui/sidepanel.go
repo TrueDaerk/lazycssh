@@ -66,7 +66,7 @@ type sidePanel interface {
 type panelContext struct {
 	// theme is the current palette, rebuilt when the terminal reports its
 	// background.
-	theme Theme
+	theme *Theme
 	// focus is the area that receives key presses, which is what the Status
 	// panel's "keys go to" line is about.
 	focus Area
@@ -198,7 +198,7 @@ func (a App) syncPanels() App {
 // activeFlags renders every state that weakens a default, in the warning
 // style. It feeds both the status bar and the Status panel, so the two cannot
 // drift.
-func activeFlags(theme Theme, insecure, logging bool, targets Targeter) []string {
+func activeFlags(theme *Theme, insecure, logging bool, targets Targeter) []string {
 	var flags []string
 	if insecure {
 		flags = append(flags, theme.StatusInsecure.Render("HOST KEYS UNVERIFIED"))
@@ -213,6 +213,6 @@ func activeFlags(theme Theme, insecure, logging bool, targets Targeter) []string
 }
 
 // field renders a labelled value.
-func field(theme Theme, label, value string) string {
+func field(theme *Theme, label, value string) string {
 	return theme.Muted.Render(label+": ") + theme.Base.Render(value)
 }

@@ -226,7 +226,7 @@ func (a App) fleetIDs() []string {
 // agrees (issue #135, #136). Callers that index into the result should still
 // fetch it once and use that one slice.
 func (a App) hostIDs() []string {
-	return a.visibleHosts()
+	return a.memoHostIDs()
 }
 
 // counts summarises the fleet for the status panel, from the snapshot. Without

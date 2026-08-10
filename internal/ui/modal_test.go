@@ -152,7 +152,8 @@ func TestReadConfirm(t *testing.T) {
 		{tea.KeyPressMsg{Code: 'q', Text: "q"}, answerNone},
 		{tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}, answerNone},
 	}
-	app := App{keys: DefaultKeyMap()}
+	keys := DefaultKeyMap()
+	app := App{keys: &keys}
 	for _, c := range cases {
 		if got := readConfirm(app.keys, c.key); got != c.want {
 			t.Fatalf("readConfirm(%q) = %v, want %v", c.key.String(), got, c.want)

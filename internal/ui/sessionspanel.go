@@ -42,7 +42,7 @@ type SessionsChangedMsg struct{}
 // after routing the key.
 type sessionsPanel struct {
 	ctx  panelContext
-	keys KeyMap
+	keys *KeyMap
 
 	// cursor is the selected row.
 	cursor int

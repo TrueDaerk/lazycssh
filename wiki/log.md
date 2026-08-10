@@ -1,5 +1,25 @@
 # Log
 
+## 2026-08-10
+
+- Performance audit (issue #274): measured, fixed the confirmed hotspots, filed the rest.
+  The CPU profile under a chatty 12-host fleet was >80% allocator/GC — the CPU and memory
+  complaints were one complaint. Four contained fixes: panes render their visible window
+  instead of materializing the whole scrollback (`paneContent`/`virtualLineCount`); the
+  output filter and diff panel read bounded tails through the emulator's new
+  `TailText`/`TextLineCount` instead of full `Text`; `View` computes the visible host list
+  and grid once per frame through a one-frame memo; and the root model shed 70% of its
+  by-value weight (255 KiB → 78 KiB) by holding the immutable `Theme` and `KeyMap` by
+  pointer — Go heap-allocates implicit copies above 64 KiB, so every method call was paying
+  for the fat. A frame at the 10k-line retention cap went from 89 ms / 76 MB of allocations
+  to 3.1 ms / 1.4 MB; an output event under an active filter from 188 ms to 4.8 ms. A new
+  hidden `--pprof <addr>` flag serves `net/http/pprof` for profiling live runs. Goroutine
+  audit found no leaks (reconnect cycles: delta zero; regression test added). Follow-ups:
+  #277 (scrollback stores a styled cell per rune — ~75 MB per host at the cap and the
+  ingest throttle), #278 (live search still walks the full scrollback per frame), #279
+  (App is still above the 64 KiB copy cliff). Updated: `core/cli.md`, `core/terminal.md`,
+  `core/tui.md`.
+
 ## 2026-08-12
 
 - `ctrl+a` is a GNU-screen-style prefix chord everywhere, as the portable way to page between

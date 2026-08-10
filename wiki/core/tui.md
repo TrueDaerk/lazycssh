@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-12T09:00:00Z
+timestamp: 2026-08-10T12:00:00Z
 ---
 
 # TUI shell
@@ -103,6 +103,24 @@ footer say what is hidden and which key reaches it. The frame is recomputed afte
 (`syncLayout`), because the geometry now depends on focus as well as on the terminal size, and
 the program re-sizes the remote PTYs whenever the pane size actually moved — a mode or focus
 change resizes them just like a window resize does (issue #219).
+
+### What a frame is allowed to cost
+
+The render path is budgeted (issue #274): a pane draws its **window**, never its whole
+scrollback. `paneBody` materializes only the visible lines through `paneContent`, the scroll
+clamps count lines without building them (`virtualLineCount`), and the per-event readers — the
+output filter, the diff panel's tails — use the emulator's bounded calls
+(`TailText`/`TextLineCount`, see [Terminal emulation](./terminal.md)) instead of `Text`. The
+one full-scrollback walk left on the render path is a live search term (issue #278).
+
+Two structural rules keep it that way. First, `View` plants a **one-frame memo** on its value
+copy of the model (`framememo.go`): the visible host list and the tiled grid are computed once
+per frame however often the renderers ask, and the memo dies with the copy — it can never leak
+state into `Update`. Second, the root model must stay **cheap to copy**: it travels by value
+through every method call, and Go heap-allocates implicit copies above 64 KiB, so the fat
+singletons (`Theme`, `KeyMap`) are held by pointer — both are immutable after construction —
+and `TestAppStaysCheapToCopy` pins the size budget. A new field that is big or grows must go
+behind a pointer.
 
 ## The main area
 

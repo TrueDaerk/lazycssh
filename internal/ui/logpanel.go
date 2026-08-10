@@ -58,7 +58,7 @@ type CommandLog interface {
 // write.
 type logPanel struct {
 	ctx  panelContext
-	keys KeyMap
+	keys *KeyMap
 
 	// log is the run's command history, nil when the run has none.
 	log CommandLog

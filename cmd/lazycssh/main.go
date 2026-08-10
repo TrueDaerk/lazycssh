@@ -90,6 +90,8 @@ func run(args []string, stdout, stderr io.Writer, launch func(program.Config) er
 		"directory holding saved sessions (default $XDG_CONFIG_HOME/lazycssh/sessions)")
 	logDir := fs.String("log-dir", "",
 		"write every host's session output to files in a new run directory under DIR (off by default)")
+	pprofAddr := fs.String("pprof", "",
+		"serve net/http/pprof on ADDR for profiling a live run (development only, off by default)")
 
 	if err := fs.Parse(args); err != nil {
 		// flag already reported the error and printed the usage.
@@ -109,6 +111,17 @@ func run(args []string, stdout, stderr io.Writer, launch func(program.Config) er
 
 	if *listSessions {
 		return printSessions(store, stdout, stderr)
+	}
+
+	if *pprofAddr != "" {
+		addr, err := startPprof(*pprofAddr)
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return exitError
+		}
+		// The address is announced because :0 picks a free port; without the
+		// line there would be nothing to point `go tool pprof` at.
+		fmt.Fprintf(stderr, "pprof: http://%s/debug/pprof/\n", addr)
 	}
 
 	// No host arguments is not an error: the TUI opens on the saved sessions,
