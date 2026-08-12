@@ -18,9 +18,10 @@ func (a App) handleClick(x, y int) (tea.Model, tea.Cmd) {
 	switch a.layout.regionAt(x, y) {
 	case RegionMain:
 		if _, showing := a.mainPreview(); showing {
-			// The main area is a sidebar preview, not the grid (issue #218):
-			// the click brings the grid back rather than closing or typing
-			// into a pane that is not on screen.
+			// The main area is a sidebar preview, not the grid (issue #218,
+			// #290: only an empty grid gives it up): the click takes the
+			// keyboard back to the grid rather than closing or typing into a
+			// pane that is not on screen.
 			return a.enterPane(), nil
 		}
 		index, ok := a.paneUnder(x, y)

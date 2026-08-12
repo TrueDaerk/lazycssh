@@ -15,7 +15,30 @@
   put a host's cursor in a column its pane never draws, and a pane's content is measured once
   per frame through the render memo, so the body and the caret read one snapshot. Updated:
   `core/tui.md` (new "The caret"), `core/terminal.md`, `core/program.md`,
-  `userdocs/guides/broadcasting.md`, `userdocs/guides/full-screen-apps.md`. Version 0.10.41.
+  `userdocs/guides/broadcasting.md`, `userdocs/guides/full-screen-apps.md`. Version 0.10.42.
+
+- The docs site has a manual publish path again (issue #295). Removing the GitHub Actions
+  workflows in #287 dropped the only thing that deployed `userdocs/` to GitHub Pages, leaving
+  https://truedaerk.github.io/lazycssh/ stale with no way to update it. Added `make docs`
+  (`mkdocs build --strict` into the git-ignored `site/`) and `make docs-deploy` (`mkdocs
+  gh-deploy --strict`, which builds and force-pushes to `gh-pages`); both guard on `mkdocs`
+  being installed and point at `pip install mkdocs-material` when it is not. The repository's
+  Pages configuration now deploys from the `gh-pages` branch root instead of `build_type:
+  workflow`, so pushing that branch is the whole publish step. Updated:
+  `contributing/documentation.md`.
+
+- The host grid no longer disappears when another panel is focused (issue #290). Since
+  issue #218 a focused list panel took the whole main area for a preview of its cursor row,
+  so navigating Sessions or Groups blanked every connected host's output even though the
+  sessions were alive. The grid now **outranks every preview**: `mainPreview()` yields the
+  main area only while there is no pane to draw (holes do not count), so a pane leaves the
+  screen when its session ends and at no other time. The preview did not disappear with it —
+  the output diff panel's whole-variant view exists nowhere else, and it is a panel one only
+  opens with hosts connected — it moved onto a key: `p` floats the focused panel's preview
+  over the frame (`previewOverlay()`), centred in `Layout.Main` with grid showing around it,
+  any key closes it, the `?` overlay's contract. The empty grid still previews in place, and
+  the no-hosts empty state is unchanged. Updated: `core/tui.md`, `core/keys.md`,
+  `core/output-diff.md`, `core/command-log.md`. Version 0.10.41.
 
 ## 2026-08-10
 

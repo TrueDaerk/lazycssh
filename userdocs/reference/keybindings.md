@@ -45,11 +45,12 @@ not typing into a pane, not in the broadcast bar's edit mode, not in a prompt.
 | ++left++ / ++right++ | previous / next panel, stopping at Status / Output diff |
 | ++enter++ / ++space++ | choose the row: open a group, foreground a session, resend a log entry |
 | ++w++ | save the run as a group |
+| ++p++ | preview the row under the cursor — the group's patterns, a session's hosts and states, a log entry whole, a diff variant whole — as a popup **over** the panes. Any key closes it. The host grid never gives its area up while there are panes in it |
 | ++bracket-left++ / ++bracket-right++ | previous / next chunk of hosts |
 | ++n++ | *(Groups panel)* new group |
 | ++d++ | *(Groups panel)* delete the group under the cursor, after a confirm |
 | ++x++ | *(Sessions panel)* end the session under the cursor, after a confirm |
-| ++m++ | *(Command log panel)* resend the entry under the cursor to the hosts that **missed** it — the ones up now that were not among its targets. The preview names them and counts them first; with nothing missing it says `all hosts already received this` and sends nothing |
+| ++m++ | *(Command log panel)* resend the entry under the cursor to the hosts that **missed** it — the ones up now that were not among its targets. ++p++ names them and counts them first; with nothing missing it says `all hosts already received this` and sends nothing |
 
 The Groups panel's ++n++ and ++d++ deliberately shadow their global meanings
 while it has focus — lazygit-style panel keys.

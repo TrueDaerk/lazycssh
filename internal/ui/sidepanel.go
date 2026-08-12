@@ -51,9 +51,9 @@ type sidePanel interface {
 	MoveCursor(delta int)
 	// SetCursorRow puts the list cursor on a clicked visible body row.
 	SetCursorRow(row int)
-	// Preview renders the panel's main-area preview of its cursor row
-	// (issue #218). ok false means the panel has none and the grid keeps
-	// the main area.
+	// Preview renders the panel's preview of its cursor row (issue #218),
+	// which the main area shows while the grid is empty (issue #290). ok
+	// false means the panel has none.
 	Preview(width, height int) (title, body string, ok bool)
 }
 

@@ -4,7 +4,7 @@ title: Documentation layers
 description: The three places lazycssh documents itself — wiki, userdocs site, repo root files — and which change belongs where.
 resource: userdocs/
 tags: [documentation, mkdocs, wiki, process]
-timestamp: 2026-08-10T00:00:00Z
+timestamp: 2026-08-12T00:00:00Z
 ---
 
 # Documentation layers
@@ -30,15 +30,23 @@ MkDocs Material, sources in `userdocs/`, configuration in `mkdocs.yml` at the re
 
 ```sh
 pip install -r userdocs/requirements.txt
-mkdocs serve                 # preview on http://127.0.0.1:8000
-mkdocs build --strict        # run before merging a docs change
+make docs                    # mkdocs build --strict, output in ./site
+make docs-deploy             # build and publish to GitHub Pages
 ```
 
 The site is built and published manually; there is no CI workflow (the GitHub Actions
-workflows were removed in issue #287). Run `mkdocs build --strict` locally before merging a
-change that touches `userdocs/` or `mkdocs.yml` — `--strict` turns broken links and warnings
-into build failures, so a page that is not reachable from the `nav` in `mkdocs.yml` fails the
-build rather than being published as an orphan.
+workflows were removed in issue #287). `make docs` runs `mkdocs build --strict` — run it
+locally before merging a change that touches `userdocs/` or `mkdocs.yml`, since `--strict`
+turns broken links and warnings into build failures, so a page that is not reachable from the
+`nav` in `mkdocs.yml` fails the build rather than being published as an orphan. Both targets
+guard on `mkdocs` being on `PATH` and print an actionable error (`pip install mkdocs-material`)
+instead of a bare command-not-found.
+
+`make docs-deploy` runs `mkdocs gh-deploy --strict`, which builds the site and force-pushes the
+result to the `gh-pages` branch — `mkdocs` owns the git plumbing, nothing here hand-rolls it.
+GitHub Pages is configured (issue #295) to deploy from that branch's root rather than from a
+workflow, so pushing `gh-pages` is the entire publish step; there is no build to trigger on the
+GitHub side.
 
 `site/` is build output and is git-ignored.
 
