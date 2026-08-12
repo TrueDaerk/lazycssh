@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-10T18:00:00Z
+timestamp: 2026-08-12T12:00:00Z
 ---
 
 # TUI shell
@@ -140,11 +140,16 @@ on it must clone first — never write through the shared pointer.
 
 ## The main area
 
-The main area is lazygit's detail view: it shows the selection of whatever side panel has the
-keyboard (issue #218). The pane grid is the fleet's detail view, so it keeps the area whenever
-the **grid** or the **Status** panel — the panel that describes the run as a whole — has focus.
-The list panels replace it with a read-only **preview** of their cursor row, so moving the
-cursor says what `enter` would act on before it is pressed:
+The main area is lazygit's detail view, with one lazycssh-specific rule on top: **the grid
+outranks every preview** (issue #290). A host's output is live, so a pane leaves the screen when
+its session ends — never because the user walked the cursor through another panel. Whatever has
+the keyboard, the main area draws the pane grid as long as there is a pane to draw.
+
+The read-only **preview** of a list panel's cursor row (issue #218) — what `enter` would act on
+before it is pressed — is therefore the *empty* grid's tenant: it takes the main area only when
+the grid has no host to show, which is the argumentless start the preview is most useful in. With
+hosts on screen the sidebar keeps answering the same question: the selected panel expands to its
+full body, the others [preview inline](#layout) (issue #186). The panels that preview:
 
 | Panel | Preview |
 |-------|---------|
@@ -160,9 +165,29 @@ disagree with the frame it is drawn in. A preview taller than the area says how 
 (`+7 more`) rather than clipping silently, and it is drawn with `titledBox` into `Layout.Main`,
 so it degrades with the box at every size and the too-small guard still wins.
 
-While a preview is showing, the main area is not a grid: a click there brings the grid back
-instead of closing or typing into a pane that is not on screen, and the wheel over it scrolls
-nothing.
+While a preview is showing, the main area is not a grid: a click there does not close or type
+into a pane that is not on screen — it only takes the keyboard back to the grid, which is a
+no-op while there is no pane to enter — and the wheel over it scrolls nothing. The switch is
+`mainPreview()`, read once by `renderMain` and by both mouse handlers, so the frame and the
+hit-testing cannot disagree about what the main area holds.
+
+Empty grid does *not* mean empty session: a slot whose host left the fleet is a hole, and a grid
+of nothing but holes has no output to protect, so it hands the area to the preview like an
+empty one. With no hosts and no previewing panel focused, the main area is the **empty state** —
+what to press to get hosts — as it always was.
+
+### The row preview on demand
+
+Dropping the full-area preview would have cost one panel more than the others: the
+[output diff](./output-diff.md) shows the variant under the cursor *whole* only in the preview,
+and it is a panel one only uses with hosts connected. So the preview did not disappear with
+hosts on screen, it moved onto a key: **`p`** floats the focused panel's preview over the frame
+as a popup (`previewOverlay()`), centred inside `Layout.Main` with a margin of grid showing
+around it, and any key closes it again — the `?` overlay's contract, guard and all, so nothing
+drives the fleet while it is being read. `p` on a panel without a preview (Status) does nothing.
+
+That is the whole trade of issue #290: the grid is never taken away, and the detail is one key
+away instead of one focus change away.
 
 ## Pane grid
 

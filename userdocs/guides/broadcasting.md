@@ -123,7 +123,7 @@ would send a command to machines you have since paged away from.
 A host that reconnects after the fleet already ran a command missed it, and
 resending to everybody would run it twice on the machines that did not. In the
 command log, ++m++ on an entry sends it to the hosts that are up **now** and
-were **not** among its targets — and to nobody else. The panel preview names
+were **not** among its targets — and to nobody else. ++p++ previews the entry and names
 them and counts them (`missing → 2 hosts`) before you press the key; with
 nothing missing it says `all hosts already received this` and sends nothing.
 

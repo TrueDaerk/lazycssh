@@ -70,8 +70,9 @@ which is accurate — the command really has not finished.
 
 After sending a command with ++colon++, press ++6++: the Output diff panel
 groups the hosts by the output they produced since that send, largest group
-first — the consensus leads, the outliers follow in the warning colour. The
-preview shows the answer under the cursor whole, with the hosts that gave it.
+first — the consensus leads, the outliers follow in the warning colour. ++p++
+previews the answer under the cursor whole, with the hosts that gave it, in a
+popup over the panes — your hosts stay on screen whatever panel you are in.
 
 The comparison ignores everything printed before the send, trims trailing
 whitespace, and treats a host's own name — the prompt, a `hostname` echo — as

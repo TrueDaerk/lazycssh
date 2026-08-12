@@ -1,5 +1,20 @@
 # Log
 
+## 2026-08-12
+
+- The host grid no longer disappears when another panel is focused (issue #290). Since
+  issue #218 a focused list panel took the whole main area for a preview of its cursor row,
+  so navigating Sessions or Groups blanked every connected host's output even though the
+  sessions were alive. The grid now **outranks every preview**: `mainPreview()` yields the
+  main area only while there is no pane to draw (holes do not count), so a pane leaves the
+  screen when its session ends and at no other time. The preview did not disappear with it —
+  the output diff panel's whole-variant view exists nowhere else, and it is a panel one only
+  opens with hosts connected — it moved onto a key: `p` floats the focused panel's preview
+  over the frame (`previewOverlay()`), centred in `Layout.Main` with grid showing around it,
+  any key closes it, the `?` overlay's contract. The empty grid still previews in place, and
+  the no-hosts empty state is unchanged. Updated: `core/tui.md`, `core/keys.md`,
+  `core/output-diff.md`, `core/command-log.md`. Version 0.10.41.
+
 ## 2026-08-10
 
 - Removed the GitHub Actions workflows (`ci.yml`, `docs.yml`; issue #287) — CI and the

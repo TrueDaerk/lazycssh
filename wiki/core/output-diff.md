@@ -4,7 +4,7 @@ title: Cross-host output diff
 description: The Output diff panel groups hosts by the output the last command produced, so the machines that disagree stand out instead of hiding among forty panes.
 resource: internal/outdiff
 tags: [diff, broadcast, ui]
-timestamp: 2026-08-09T00:00:00Z
+timestamp: 2026-08-12T12:00:00Z
 ---
 
 # Cross-host output diff
@@ -57,9 +57,11 @@ The panel is a numbered sidebar panel like any other, on `6` — `5` has meant t
 since the bar existed, and the diff view is not worth renumbering it. One row per variant:
 how many hosts gave the answer and its first line, largest group first, every group after the
 first in the warning style — everything past the consensus is a disagreement, which is what
-the panel exists to surface. The main-area preview shows the variant under the cursor whole:
-the command, which hosts gave this answer, and the output as the first of them printed it —
-real hostnames, not placeholders.
+the panel exists to surface. `p` previews the variant under the cursor whole — the command,
+which hosts gave this answer, and the output as the first of them printed it, real hostnames,
+not placeholders — as a popup over the grid, which keeps the main area while there are panes
+in it (issue #290, see [The main area](./tui.md#the-main-area)). With nothing connected the
+same preview is simply what the main area shows.
 
 `enter` on a variant makes its hosts the selection, so "these three disagree" turns into a
 target set: `B` then broadcasts the fix to exactly the machines that need it.
