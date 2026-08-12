@@ -289,6 +289,32 @@ func (e *Emulator) HistoryCursor() HistoryCursor {
 	return c
 }
 
+// ChangeMark identifies the emulator's content state for cross-frame caches:
+// it changes whenever a write, a resize or a retention change may have
+// altered what a render would return, and two equal marks mean the renders
+// are equal too. The UI's pane frame cache keys on it so an unchanged pane's
+// frame is not re-rendered on every keystroke (issue #291).
+//
+// The fields are deliberately opaque: a mark is compared, never read.
+type ChangeMark struct {
+	written int
+	gen     uint64
+}
+
+// Change returns the current mark; see [ChangeMark]. A caller caching a
+// render must take the mark *before* rendering: a write landing in between
+// then makes the next mark differ, so the cache re-renders rather than
+// serving the older content forever.
+func (e *Emulator) Change() ChangeMark {
+	e.gridMu.Lock()
+	gen := e.histGen
+	e.gridMu.Unlock()
+	e.mu.Lock()
+	written := e.written
+	e.mu.Unlock()
+	return ChangeMark{written: written, gen: gen}
+}
+
 // CursorVisible reports whether the remote app wants the cursor drawn.
 // Full-screen apps hide it while repainting (CSI ?25l) and show it again when
 // they settle.

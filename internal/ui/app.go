@@ -166,6 +166,12 @@ type App struct {
 	// framememo.go.
 	memo *frameMemo
 
+	// paneFrames is the cross-frame pane render cache: an unchanged pane's
+	// finished frame is reused instead of re-rendered, which is what keeps a
+	// keystroke's cost at the one pane it changed (issue #291). See
+	// paneframes.go.
+	paneFrames *paneFrameCache
+
 	// panels are the sidebar's child models; see internal/ui/sidepanel.go.
 	panels panelSet
 
@@ -350,6 +356,7 @@ func NewApp(cfg Config) App {
 		filterInput: boxInput(filter),
 		scroll:      make(map[string]int),
 		search:      &searchCache{},
+		paneFrames:  &paneFrameCache{frames: make(map[string]paneFrame)},
 		focus:       AreaSidebar,
 		panel:       PanelStatus,
 		now:         time.Now,
@@ -434,6 +441,19 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	app, ok := next.(App)
 	if !ok {
 		return next, cmd
+	}
+	if _, isOutput := msg.(SessionOutputMsg); isOutput &&
+		app.outputFilter == "" && app.panel != PanelDiff {
+		// A redraw hint changes nothing the resyncs below read: no layout, no
+		// visible set, no panel context. Skipping them matters because these
+		// hints arrive once per host per batch — a broadcast keystroke into a
+		// 100-host fleet is 100 of them, and the O(fleet) resync per hint was
+		// most of that keystroke's Update cost (issue #291). Two states keep
+		// the full path, because for them new output is exactly what changes
+		// the frame's shape: a live output filter re-decides which panes
+		// match, and a selected Output diff panel regroups on what the hosts
+		// said.
+		return app, cmd
 	}
 	// The broadcast limit is a statement about what is on screen, and almost
 	// every message can move that: a resize repages the grid, an arrow key
@@ -1254,21 +1274,71 @@ func (a App) renderMain() string {
 			cells = append(cells, a.renderPane(host, g.Cells[slot], focused))
 		}
 		if len(cells) > 0 {
-			rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, cells...))
+			rows = append(rows, zipJoinRow(cells))
 		}
 	}
 
 	if a.overflowFooterVisible() {
 		// Hidden panes are announced in the grid itself, not only in the
 		// status bar: what is on screen must never read as the whole run.
-		rows = append(rows, a.overflowFooter())
+		// Padded to the grid's width here, since the rows are joined without
+		// re-measuring below.
+		rows = append(rows, padLine(a.overflowFooter(), r.Width))
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+	// A plain join, not lipgloss.JoinVertical: every row is already exactly
+	// the area's width, and the general join would re-measure every line of
+	// every pane per frame — width measurement was a fifth of a frame at
+	// fleet scale (issue #291).
+	return strings.Join(rows, "\n")
+}
+
+// zipJoinRow joins one grid row's pane frames side by side. It is
+// lipgloss.JoinHorizontal for the one shape the grid guarantees — every cell
+// rendered by [App.frame] to its exact rectangle, so all heights match and no
+// line needs padding — without the per-line width measurement the general
+// join pays (issue #291). Cells that break the shape fall back to the honest
+// join rather than shearing the frame.
+func zipJoinRow(cells []string) string {
+	if len(cells) == 1 {
+		return cells[0]
+	}
+	split := make([][]string, len(cells))
+	size := 0
+	for i, cell := range cells {
+		split[i] = strings.Split(cell, "\n")
+		if len(split[i]) != len(split[0]) {
+			return lipgloss.JoinHorizontal(lipgloss.Top, cells...)
+		}
+		size += len(cell) + 1
+	}
+	var b strings.Builder
+	b.Grow(size)
+	for y := range split[0] {
+		if y > 0 {
+			b.WriteByte('\n')
+		}
+		for i := range split {
+			b.WriteString(split[i][y])
+		}
+	}
+	return b.String()
+}
+
+// padLine pads one line with spaces to the given visible width, the way the
+// general joins would have; a line already there is returned unchanged.
+func padLine(line string, width int) string {
+	if pad := width - lipgloss.Width(line); pad > 0 {
+		return line + strings.Repeat(" ", pad)
+	}
+	return line
 }
 
 // renderPane draws one host's pane: a one-line header naming the host, then
-// the session's scrollback following its tail.
+// the session's scrollback following its tail. The finished frame is cached
+// across View calls and reused while every input it was rendered from is
+// unchanged, so a keystroke re-renders the panes it touched, not the grid
+// (issue #291); see paneframes.go.
 func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 	ids := a.hostIDs()
 	if host < 0 || host >= len(ids) || ids[host] == "" {
@@ -1278,6 +1348,25 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 	}
 	id := ids[host]
 
+	key, cacheable := a.paneFrameKey(host, id, cell, gridFocused)
+	if cacheable {
+		if hit, ok := a.paneFrames.frames[id]; ok && hit.key == key {
+			return hit.frame
+		}
+	}
+	frame := a.renderPaneUncached(host, id, cell, gridFocused)
+	if cacheable {
+		a.paneFrames.frames[id] = paneFrame{key: key, frame: frame}
+	} else if a.paneFrames != nil {
+		// An uncacheable render (auth echo, live selection) must not leave an
+		// older frame behind that would hit again once the state clears.
+		delete(a.paneFrames.frames, id)
+	}
+	return frame
+}
+
+// renderPaneUncached is the honest render behind [App.renderPane].
+func (a App) renderPaneUncached(host int, id string, cell Rect, gridFocused bool) string {
 	focused := gridFocused && host == a.paneIndex
 
 	// The border eats two columns and rows, the header the top line of what

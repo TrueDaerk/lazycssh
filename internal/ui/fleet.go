@@ -203,7 +203,7 @@ func (a App) snapshotFleet() App {
 	}
 	// A question whose session failed or left was withdrawn on the program
 	// side; its answer buffer must not keep swallowing keystrokes.
-	return a.pruneAuth()
+	return a.pruneAuth().prunePaneFrames()
 }
 
 // fleetIDs returns every host in the run: the snapshot's when there is a

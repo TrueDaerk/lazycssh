@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-12T18:00:00Z
+timestamp: 2026-08-12T22:00:00Z
 ---
 
 # TUI shell
@@ -122,6 +122,28 @@ wrong index. Match *cursor* state (`matchAt`, `searchAnchor`) stays in the model
 is a memo behind a shared pointer, filled wherever `matchLines` runs. What still scales with
 the match count is the highlight itself: restyled lines carry ANSI that makes the border
 render costlier, but that is bounded by the window, not the scrollback.
+
+A keystroke costs the panes it changed, not the grid (issue #291). The one-frame memo below
+dies with its frame, so every `View` used to re-render every visible pane — measure, style,
+border, pad — although a keystroke into one host changes exactly one of them; at fleet scale
+that invariant work was the whole keystroke-to-echo latency. A pane's finished frame is
+therefore cached **across** frames (`paneframes.go`): the key holds every model input
+`renderPane` reads — cell, focus and selection styling, theme identity, snapshot state,
+scroll, live search — plus the emulator's `Change` mark, which moves on every write, resize
+and retention change (see [Terminal emulation](./terminal.md)), so there is no invalidation
+hook to forget. Two transient states opt out and render honestly, because their input is not
+in the key: an open auth question (the typed answer echoes into the body) and a live text
+selection on that pane. A nil cache means every pane renders honestly, which is what the
+equivalence test pins the cached frame against. Downstream of the cache, the grid rows are
+joined by a plain zip (`zipJoinRow`) instead of `lipgloss.JoinHorizontal`: every cell is
+rendered by `frame` to its exact rectangle, so the general join's per-line width measurement
+— a fifth of a frame — buys nothing there. On the update side, a `SessionOutputMsg` without
+an output filter skips the per-message resyncs (`syncLayout`/`syncBroadcastLimit`/
+`syncPanels`): a redraw hint changes nothing they read, and the hints arrive once per host
+per batch — a broadcast keystroke into a 100-host fleet is 100 of them. A live output filter
+and a selected Output diff panel keep the full path; for them, new output is exactly what
+changes the frame. The keystroke path is pinned by `BenchmarkKeystrokeFleet100` and
+`BenchmarkKeystrokeBroadcast100` in `perf_bench_test.go`.
 
 Two structural rules keep it that way. First, `View` plants a **one-frame memo** on its value
 copy of the model (`framememo.go`): the visible host list and the tiled grid are computed once

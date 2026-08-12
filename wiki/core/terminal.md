@@ -4,7 +4,7 @@ title: Terminal emulation
 description: The per-session vt emulator that holds everything a pane shows — screen, retained history, cursor, modes — encodes key presses per host, and reflows on resize.
 resource: internal/term
 tags: [terminal, vt, emulation, alt-screen, scrollback, keys, resize]
-timestamp: 2026-08-12T12:00:00Z
+timestamp: 2026-08-12T22:00:00Z
 ---
 
 # Terminal emulation
@@ -28,6 +28,7 @@ are handled by a real VT implementation instead of case-by-case emulation.
 | `TextLineCount` | how many lines `Text` would return, without building them |
 | `TailText(n)` | the last n lines of `Text`, without materializing the rest |
 | `HistoryCursor` | where the retained history stands in the whole output stream, for incremental readers |
+| `Change` | an opaque mark that moves on every write, resize and retention change — equal marks mean equal renders, for cross-frame render caches |
 | `IsAltScreen` | a full-screen app (vim, htop) owns the pane |
 | `CursorPosition` / `CursorVisible` | where the remote cursor is and whether the app wants it drawn |
 | `HasOutput` | has this session said anything yet — decides whether injected text needs a leading line break |
@@ -79,6 +80,17 @@ reader that keeps per-line state — the UI's search match cache — shifts it b
 delta and scans only the appended tail, instead of rescanning the cap; a `Gen` change or
 `Exact` false means start over. The invariant is pinned by test: while `Gen` holds,
 `Start + i` addresses the same line across drops.
+
+**`Change` is the render-equality mark for cross-frame caches (issue #291).** The UI caches
+each pane's finished frame across `View` calls and needs one cheap question answered: could
+this emulator render differently than it did last frame? `Change` returns an opaque,
+comparable mark built from the write counter and the history generation — every mutation
+path moves at least one of them: writes bump the counter (cursor moves, mode flips and
+alt-screen switches all arrive as writes), resizes and retention changes bump the
+generation. Equal marks therefore promise equal renders; the reverse is deliberately not
+promised — a same-content rewrite moves the mark and costs one redundant render, never a
+stale one. A caller must take the mark *before* rendering: a write landing in between makes
+the next mark differ, so staleness lasts one redraw hint at most.
 
 **`Text` is expensive; per-event readers use the bounded calls.** Rendering the retained
 history costs milliseconds and megabytes per call at the cap — the performance audit (issue
