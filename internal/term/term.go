@@ -94,6 +94,11 @@ type Emulator struct {
 	// change. Guarded by gridMu; see [Emulator.HistoryCursor].
 	histGen uint64
 
+	// seq increments on everything that can change what a render of this
+	// emulator would show: a write, a resize, a retention change. Guarded by
+	// gridMu; see [Emulator.Seq].
+	seq uint64
+
 	mu           sync.Mutex
 	onReply      func([]byte)
 	cursorHidden bool
@@ -149,6 +154,7 @@ func (e *Emulator) Write(p []byte) (int, error) {
 	defer e.trimLocked()
 
 	n := len(p)
+	e.seq++
 	e.mu.Lock()
 	e.written += n
 	e.mu.Unlock()
@@ -221,7 +227,22 @@ func (e *Emulator) SetHistorySize(n int) {
 	}
 	e.gridMu.Lock()
 	defer e.gridMu.Unlock()
+	e.seq++
 	e.setRetentionLocked(n)
+}
+
+// Seq is a change counter over everything a render reads: it increments on
+// every write, resize and retention change, under the same lock the mutation
+// holds for its whole critical section. A reader that measured the emulator
+// under one Seq value and reads the same value later knows the measurement
+// still describes the current state — which is what lets the UI keep a pane's
+// rendered frame across redraws instead of rebuilding it (issue #293). The
+// counter is deliberately coarse: a write that changes nothing visible still
+// bumps it, costing at most one spare re-render, never a stale one.
+func (e *Emulator) Seq() uint64 {
+	e.gridMu.Lock()
+	defer e.gridMu.Unlock()
+	return e.seq
 }
 
 // HistoryLen is the number of lines that have scrolled off the screen and are
@@ -287,32 +308,6 @@ func (e *Emulator) HistoryCursor() HistoryCursor {
 		c.Len = e.histLenLocked()
 	}
 	return c
-}
-
-// ChangeMark identifies the emulator's content state for cross-frame caches:
-// it changes whenever a write, a resize or a retention change may have
-// altered what a render would return, and two equal marks mean the renders
-// are equal too. The UI's pane frame cache keys on it so an unchanged pane's
-// frame is not re-rendered on every keystroke (issue #291).
-//
-// The fields are deliberately opaque: a mark is compared, never read.
-type ChangeMark struct {
-	written int
-	gen     uint64
-}
-
-// Change returns the current mark; see [ChangeMark]. A caller caching a
-// render must take the mark *before* rendering: a write landing in between
-// then makes the next mark differ, so the cache re-renders rather than
-// serving the older content forever.
-func (e *Emulator) Change() ChangeMark {
-	e.gridMu.Lock()
-	gen := e.histGen
-	e.gridMu.Unlock()
-	e.mu.Lock()
-	written := e.written
-	e.mu.Unlock()
-	return ChangeMark{written: written, gen: gen}
 }
 
 // CursorVisible reports whether the remote app wants the cursor drawn.

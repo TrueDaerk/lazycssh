@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // ansiPattern matches the styling escape sequences, so assertions can be made
@@ -578,5 +579,25 @@ func TestEmptyRunQuitsCleanly(t *testing.T) {
 	}
 	if msg := cmd(); msg != tea.Quit() {
 		t.Fatalf("ctrl+q produced %v, want tea.Quit", msg)
+	}
+}
+
+// zipJoinRow is JoinHorizontal for the grid's exact-rectangle frames (issue
+// #291): byte-identical on the shape frame guarantees, and falling back to
+// the honest join on anything else.
+func TestZipJoinRowMatchesLipgloss(t *testing.T) {
+	a, _ := cacheApp(t, "web-01", "web-02", "web-03")
+	g := a.Grid()
+	var cells []string
+	for i := range g.Cells {
+		cells = append(cells, a.renderPane(i, g.Cells[i], false))
+	}
+	if got, want := zipJoinRow(cells), lipgloss.JoinHorizontal(lipgloss.Top, cells...); got != want {
+		t.Fatalf("zipJoinRow differs from JoinHorizontal:\n%q\n%q", got, want)
+	}
+
+	ragged := []string{"a\nb\nc", "x\ny"}
+	if got, want := zipJoinRow(ragged), lipgloss.JoinHorizontal(lipgloss.Top, ragged...); got != want {
+		t.Fatalf("ragged fallback differs from JoinHorizontal:\n%q\n%q", got, want)
 	}
 }

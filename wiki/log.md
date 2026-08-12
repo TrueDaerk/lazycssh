@@ -2,25 +2,44 @@
 
 ## 2026-08-12
 
-- Keystroke latency no longer scales with the fleet (issue #291). Profiling a 100-host fake
-  fleet showed the transport innocent — the stdin queues never block — and two render-path
-  costs dominant: every `View` re-rendered every visible pane although a keystroke changes one,
-  and every `SessionOutputMsg` (one per host per event batch; a broadcast keystroke into 100
-  hosts is 100 of them) ran the O(fleet) `syncLayout`/`syncBroadcastLimit`/`syncPanels` resync.
-  Now a pane's finished frame is cached across frames (`internal/ui/paneframes.go`), keyed on
-  every input `renderPane` reads plus the emulator's new `Change` mark — an opaque comparable
-  that moves on every write, resize and retention change, so there is no invalidation hook to
-  forget; open auth questions and live text selections opt out and render honestly, and an
-  equivalence test pins cached frames against the nil-cache render. Redraw hints without an
-  output filter skip the per-message resyncs (a live filter and a selected Output diff panel
-  keep the full path — for them output is what changes the frame), and the grid's rows are
-  joined by a plain zip instead of `lipgloss.JoinHorizontal`, whose per-line width measurement
-  bought nothing over cells `frame` already renders to exact rectangles. Measured by the new
-  `BenchmarkKeystrokeFleet100` / `BenchmarkKeystrokeBroadcast100`: a focused-pane keystroke to
-  the echo frame 2.64 ms → 1.26 ms and 1.07 MB → 0.57 MB garbage; a broadcast keystroke to 100
-  hosts 5.69 ms → 2.30 ms and 9.7 MB → 1.7 MB. Backpressure semantics untouched — the stdin
-  queue and ring-buffer tests pass unchanged. Updated: `core/tui.md`, `core/terminal.md`.
-  Version 0.11.1.
+- Keystroke updates stop scaling with the fleet (issue #291). Profiling the typing path on a
+  100-host fake fleet showed the transport innocent — the stdin queues never block — and, with
+  the #293 render cache already carrying the pane frames, two per-keystroke costs left: every
+  `SessionOutputMsg` (one per host per event batch; a broadcast keystroke into 100 hosts is 100
+  of them) ran the O(fleet) `syncLayout`/`syncBroadcastLimit`/`syncPanels` resync, and the
+  grid's joins re-measured every line's width per frame. Redraw hints without an output filter
+  now skip the per-message resyncs — a live filter and a selected Output diff panel keep the
+  full path, because for them new output is exactly what changes the frame — and the grid's
+  rows are joined by a plain zip (`zipJoinRow`) instead of `lipgloss.JoinHorizontal`, whose
+  per-line width measurement bought nothing over cells `frame` already renders to exact
+  rectangles. The keystroke-to-echo path is pinned by the new `BenchmarkKeystrokeFleet12`/
+  `BenchmarkKeystrokeFleet100`/`BenchmarkKeystrokeBroadcast100`: on an M4, a focused-pane
+  keystroke to its echo frame went 1.65 ms and 0.70 MB of garbage to 1.19 ms and 0.56 MB
+  (2.64 ms before the render cache), and a broadcast keystroke fanned to 100 hosts went
+  5.73 ms and 9.7 MB to 2.32 ms and 1.7 MB.
+  Backpressure semantics untouched — the stdin queue and ring-buffer tests pass unchanged.
+  Updated: `core/tui.md`, `core/terminal.md`. Version 0.11.2.
+
+- Panes render across frames through a cache now, full screen first (issue #293). Every redraw
+  used to rebuild every visible pane — measure the emulator, materialize the window, style the
+  header, draw the border — even when the output that forced the frame landed on one host, or on
+  a host not on screen at all. The cross-frame render cache (`internal/ui/rendercache.go`) keeps
+  each host's measured content snapshot and its fully framed pane string behind a pointer shared
+  by every model copy, the shape the search cache set: self-validating on every read, no
+  invalidation hook to forget. The emulator grew `Seq`, a change counter bumped with every
+  write, resize and retention change under the mutation's own lock; the rest of a pane's inputs
+  — geometry, focus, scroll, search, selection, theme — live in a comparable `paneKey`, and any
+  mismatch re-renders. The one-frame memo stays the per-frame pin that keeps body and caret on
+  one snapshot; the cache is what lets that snapshot survive into the next frame, which the
+  value-copy model semantics forbid the memo itself. Pinned by test: a frame moved by one pane's
+  output re-renders only that pane, hidden-pane output in full screen leaves the visible pane's
+  render count untouched, and a cached frame is byte-identical to a fresh render. New
+  benchmarks: full-screen chatty host, full-screen hidden output, 100-host fleet with one chatty
+  host. Measured on an M4: the 12-pane chatty-fleet frame 2.60 → 1.63 ms and 15.9k → 4.1k
+  allocations, the 100-host frame 2.61 → 1.83 ms and 15.5k → 5.5k allocations, the full-screen
+  hidden-output frame 1.52 → 1.08 ms and 6.7k → 3.7k allocations, the live-search frame
+  7.0 → 3.1 ms. Updated: `core/tui.md` ("What a frame is allowed to cost"), `core/terminal.md`
+  (`Seq`). Version 0.11.1.
 
 - Keybindings are user-configurable, and `ctrl+a` is the command prefix inside the broadcast
   bar (issue #289). An optional `$XDG_CONFIG_HOME/lazycssh/keys.yaml` — a mapping of action to

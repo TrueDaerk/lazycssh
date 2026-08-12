@@ -192,3 +192,20 @@ func TestDiffUnselectedPanelKeepsTheLastGroups(t *testing.T) {
 		t.Fatalf("unselected panel recomputed anyway: %d variants", len(got))
 	}
 }
+
+// The redraw-hint fast path in Update (issue #291) must not skip the one
+// panel whose content is the output: while the diff panel is selected, every
+// hint regroups.
+func TestDiffPanelSelectedRegroupsOnOutputHint(t *testing.T) {
+	a, fleet := diffApp(t, "uptime", "web-01", "web-02")
+	a = selectDiffPanel(t, a)
+
+	fleet.sessions["web-01"].Emit("answer A\r\n")
+	model, _ := a.Update(SessionOutputMsg{ID: "web-01"})
+	a = model.(App)
+
+	body := plain(a.panelBody(PanelDiff, 60, 10, true))
+	if !strings.Contains(body, "answer A") {
+		t.Fatalf("the diff panel missed output that arrived while selected:\n%s", body)
+	}
+}

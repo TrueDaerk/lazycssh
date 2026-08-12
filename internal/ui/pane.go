@@ -215,14 +215,17 @@ type paneContent struct {
 // Going through the memo is not only cheaper: the body and the cursor then
 // read the same screen, and a reader goroutine writing between the two would
 // otherwise be able to put the caret a row away from the text it belongs to.
+// The memo's miss path goes through the cross-frame cache (rendercache.go),
+// so a host that has said nothing since the last frame is not re-measured;
+// the memo stays the per-frame pin that keeps one View on one snapshot.
 func (a App) paneContent(id string) (paneContent, bool) {
 	if a.memo == nil {
-		return a.measurePaneContent(id)
+		return a.cachedPaneContent(id)
 	}
 	if hit, ok := a.memo.content[id]; ok {
 		return hit.c, hit.ok
 	}
-	c, ok := a.measurePaneContent(id)
+	c, ok := a.cachedPaneContent(id)
 	if a.memo.content == nil {
 		a.memo.content = make(map[string]memoPaneContent, 1)
 	}

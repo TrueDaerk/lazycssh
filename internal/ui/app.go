@@ -166,12 +166,6 @@ type App struct {
 	// framememo.go.
 	memo *frameMemo
 
-	// paneFrames is the cross-frame pane render cache: an unchanged pane's
-	// finished frame is reused instead of re-rendered, which is what keeps a
-	// keystroke's cost at the one pane it changed (issue #291). See
-	// paneframes.go.
-	paneFrames *paneFrameCache
-
 	// panels are the sidebar's child models; see internal/ui/sidepanel.go.
 	panels panelSet
 
@@ -265,6 +259,12 @@ type App struct {
 	// history cursor; see internal/ui/searchcache.go (issue #278).
 	search *searchCache
 
+	// render is the cross-frame pane render cache — the same shared-pointer
+	// shape as search, self-validating against the emulator's sequence
+	// counter, so a pane that did not change since the last frame is not
+	// re-rendered; see internal/ui/rendercache.go (issue #293).
+	render *renderCache
+
 	cmdHistory    []string
 	cmdHistoryPos int
 	lastDelivery  string
@@ -356,7 +356,7 @@ func NewApp(cfg Config) App {
 		filterInput: boxInput(filter),
 		scroll:      make(map[string]int),
 		search:      &searchCache{},
-		paneFrames:  &paneFrameCache{frames: make(map[string]paneFrame)},
+		render:      &renderCache{},
 		focus:       AreaSidebar,
 		panel:       PanelStatus,
 		now:         time.Now,
@@ -1334,11 +1334,11 @@ func padLine(line string, width int) string {
 	return line
 }
 
-// renderPane draws one host's pane: a one-line header naming the host, then
-// the session's scrollback following its tail. The finished frame is cached
-// across View calls and reused while every input it was rendered from is
-// unchanged, so a keystroke re-renders the panes it touched, not the grid
-// (issue #291); see paneframes.go.
+// renderPane draws one host's pane through the cross-frame cache: while the
+// emulator's sequence and every model input in [paneKey] are what they were
+// when the cached frame was rendered, that frame is the frame — a pane whose
+// host said nothing since the last redraw costs a key comparison, not a
+// render (issue #293). Anything else falls through to renderPaneFresh.
 func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 	ids := a.hostIDs()
 	if host < 0 || host >= len(ids) || ids[host] == "" {
@@ -1347,28 +1347,28 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 		return a.frame(a.theme.Pane, cell, "")
 	}
 	id := ids[host]
+	focused := gridFocused && host == a.paneIndex
+	if a.render == nil {
+		return a.renderPaneFresh(host, id, cell, focused)
+	}
 
-	key, cacheable := a.paneFrameKey(host, id, cell, gridFocused)
-	if cacheable {
-		if hit, ok := a.paneFrames.frames[id]; ok && hit.key == key {
-			return hit.frame
-		}
+	// Pin the content snapshot first: the key's sequence must name the
+	// snapshot the body below would actually be built from.
+	a.paneContent(id)
+	e := a.render.entry(id)
+	key := a.paneKeyFor(e, host, id, cell, focused)
+	if e.framed && e.key == key {
+		return e.pane
 	}
-	frame := a.renderPaneUncached(host, id, cell, gridFocused)
-	if cacheable {
-		a.paneFrames.frames[id] = paneFrame{key: key, frame: frame}
-	} else if a.paneFrames != nil {
-		// An uncacheable render (auth echo, live selection) must not leave an
-		// older frame behind that would hit again once the state clears.
-		delete(a.paneFrames.frames, id)
-	}
-	return frame
+	s := a.renderPaneFresh(host, id, cell, focused)
+	e.key, e.pane, e.framed = key, s, true
+	e.renders++
+	return s
 }
 
-// renderPaneUncached is the honest render behind [App.renderPane].
-func (a App) renderPaneUncached(host int, id string, cell Rect, gridFocused bool) string {
-	focused := gridFocused && host == a.paneIndex
-
+// renderPaneFresh draws one host's pane: a one-line header naming the host,
+// then the session's scrollback following its tail.
+func (a App) renderPaneFresh(host int, id string, cell Rect, focused bool) string {
 	// The border eats two columns and rows, the header the top line of what
 	// remains.
 	content := a.paneHeader(host, cell.Width-2, focused)

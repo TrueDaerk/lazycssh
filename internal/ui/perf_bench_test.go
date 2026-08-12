@@ -106,6 +106,53 @@ func BenchmarkAppViewLiveSearchChattyFocus(b *testing.B) {
 	}
 }
 
+// BenchmarkAppViewFullScreenChatty is full-screen mode's worst case: one pane
+// fills the whole main area and new output lands on it between frames, so
+// every frame re-renders the largest possible pane content (issue #293).
+func BenchmarkAppViewFullScreenChatty(b *testing.B) {
+	a, fleet, names := benchFleet(b, 12, 10000)
+	a.screen = ScreenFull
+	a.focus = AreaGrid
+	a = a.syncLayout()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		fleet.sessions[names[0]].Emit("one more quick brown fox\r\n")
+		_ = a.View()
+	}
+}
+
+// BenchmarkAppViewFullScreenHiddenOutput is the frame issue #293 exists for:
+// full-screen mode, and the output that forced the redraw landed on a pane
+// that is not even on screen. The visible pane did not change, so with the
+// cross-frame cache this frame must not pay for re-rendering it.
+func BenchmarkAppViewFullScreenHiddenOutput(b *testing.B) {
+	a, fleet, names := benchFleet(b, 12, 10000)
+	a.screen = ScreenFull
+	a.focus = AreaGrid
+	a = a.syncLayout()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		fleet.sessions[names[1]].Emit("hidden host output\r\n")
+		_ = a.View()
+	}
+}
+
+// BenchmarkAppViewLargeFleetOneChatty is the fleet-scale redraw: 100 hosts,
+// output arriving on exactly one of them between frames. The frame's honest
+// cost is that one pane; every other pane's content is unchanged and, with
+// the cross-frame cache, unpaid for (issue #293).
+func BenchmarkAppViewLargeFleetOneChatty(b *testing.B) {
+	a, fleet, names := benchFleet(b, 100, 2000)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		fleet.sessions[names[0]].Emit("one more quick brown fox\r\n")
+		_ = a.View()
+	}
+}
+
 // BenchmarkOutputMsgUnderFilter is one output redraw hint while an output
 // filter is active: the filter re-reads every host's recent output on every
 // hint (issue #255), which under load happens once per event batch.

@@ -28,7 +28,7 @@ are handled by a real VT implementation instead of case-by-case emulation.
 | `TextLineCount` | how many lines `Text` would return, without building them |
 | `TailText(n)` | the last n lines of `Text`, without materializing the rest |
 | `HistoryCursor` | where the retained history stands in the whole output stream, for incremental readers |
-| `Change` | an opaque mark that moves on every write, resize and retention change — equal marks mean equal renders, for cross-frame render caches |
+| `Seq` | a change counter over everything a render reads — has anything changed since I last looked |
 | `IsAltScreen` | a full-screen app (vim, htop) owns the pane |
 | `CursorPosition` / `CursorVisible` | where the remote cursor is and whether the app wants it drawn |
 | `HasOutput` | has this session said anything yet — decides whether injected text needs a leading line break |
@@ -81,16 +81,13 @@ delta and scans only the appended tail, instead of rescanning the cap; a `Gen` c
 `Exact` false means start over. The invariant is pinned by test: while `Gen` holds,
 `Start + i` addresses the same line across drops.
 
-**`Change` is the render-equality mark for cross-frame caches (issue #291).** The UI caches
-each pane's finished frame across `View` calls and needs one cheap question answered: could
-this emulator render differently than it did last frame? `Change` returns an opaque,
-comparable mark built from the write counter and the history generation — every mutation
-path moves at least one of them: writes bump the counter (cursor moves, mode flips and
-alt-screen switches all arrive as writes), resizes and retention changes bump the
-generation. Equal marks therefore promise equal renders; the reverse is deliberately not
-promised — a same-content rewrite moves the mark and costs one redundant render, never a
-stale one. A caller must take the mark *before* rendering: a write landing in between makes
-the next mark differ, so staleness lasts one redraw hint at most.
+**`Seq` says whether a cached render is still current (issue #293).** It increments on every
+write, resize and retention change, inside the same lock the mutation holds for its whole
+critical section, so a reader that measured the emulator under one `Seq` value and reads the
+same value later knows the measurement still describes the current state. It is deliberately
+coarse — a write that changes nothing visible still bumps it — because the failure mode of
+coarseness is one spare re-render, never a stale one. The UI's cross-frame render cache (see
+[The TUI](./tui.md)) keys each pane's cached frame on it.
 
 **`Text` is expensive; per-event readers use the bounded calls.** Rendering the retained
 history costs milliseconds and megabytes per call at the cap — the performance audit (issue

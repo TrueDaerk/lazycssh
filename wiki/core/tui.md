@@ -123,26 +123,32 @@ is a memo behind a shared pointer, filled wherever `matchLines` runs. What still
 the match count is the highlight itself: restyled lines carry ANSI that makes the border
 render costlier, but that is bounded by the window, not the scrollback.
 
-A keystroke costs the panes it changed, not the grid (issue #291). The one-frame memo below
-dies with its frame, so every `View` used to re-render every visible pane — measure, style,
-border, pad — although a keystroke into one host changes exactly one of them; at fleet scale
-that invariant work was the whole keystroke-to-echo latency. A pane's finished frame is
-therefore cached **across** frames (`paneframes.go`): the key holds every model input
-`renderPane` reads — cell, focus and selection styling, theme identity, snapshot state,
-scroll, live search — plus the emulator's `Change` mark, which moves on every write, resize
-and retention change (see [Terminal emulation](./terminal.md)), so there is no invalidation
-hook to forget. Two transient states opt out and render honestly, because their input is not
-in the key: an open auth question (the typed answer echoes into the body) and a live text
-selection on that pane. A nil cache means every pane renders honestly, which is what the
-equivalence test pins the cached frame against. Downstream of the cache, the grid rows are
-joined by a plain zip (`zipJoinRow`) instead of `lipgloss.JoinHorizontal`: every cell is
-rendered by `frame` to its exact rectangle, so the general join's per-line width measurement
-— a fifth of a frame — buys nothing there. On the update side, a `SessionOutputMsg` without
-an output filter skips the per-message resyncs (`syncLayout`/`syncBroadcastLimit`/
-`syncPanels`): a redraw hint changes nothing they read, and the hints arrive once per host
-per batch — a broadcast keystroke into a 100-host fleet is 100 of them. A live output filter
-and a selected Output diff panel keep the full path; for them, new output is exactly what
-changes the frame. The keystroke path is pinned by `BenchmarkKeystrokeFleet100` and
+A pane that did not change since the last frame is not re-rendered at all (issue #293). Every
+redraw used to rebuild every visible pane — measure the emulator, materialize the window, style
+the header, draw the border — even when the output that forced the frame landed on one host, or,
+in full-screen mode, on a host that is not even on screen. The **cross-frame render cache**
+(`rendercache.go`) keeps each host's measured content snapshot and its fully framed pane string
+across frames, in the same shape as the search cache: a pointer shared by every model copy,
+self-validating on every read, no invalidation hook to forget. The validity signal is the
+emulator's `Seq` counter (see [Terminal emulation](./terminal.md)), which moves with every
+write, resize and retention change; everything else a pane's rendering depends on — geometry,
+focus, scroll, search, selection, theme — is captured in a comparable `paneKey`, and any
+mismatch re-renders. Forgetting a dependency in that key is the only way to serve a stale
+frame, so a new input to the pane render path must be added there. The frame memo below stays
+the per-frame pin that keeps one `View` on one snapshot; the cache is what lets that snapshot
+survive into the next frame.
+
+A keystroke's update cost stops scaling with the fleet (issue #291). Two costs sat on the
+typing path beyond the render itself. First, every `SessionOutputMsg` — one per host per
+event batch, so a broadcast keystroke into a 100-host fleet is 100 of them — ran the
+O(fleet) per-message resyncs (`syncLayout`/`syncBroadcastLimit`/`syncPanels`); a redraw
+hint without an output filter changes nothing those resyncs read, so it now skips them. A
+live output filter and a selected Output diff panel keep the full path — for those two, new
+output is exactly what changes the frame. Second, the grid's rows are joined by a plain zip
+(`zipJoinRow`) instead of `lipgloss.JoinHorizontal`: every cell is rendered by `frame` to
+its exact rectangle, so the general join's per-line width measurement — a fifth of a frame
+— bought nothing there; cells that break the shape fall back to the honest join. The
+keystroke-to-echo path is pinned by `BenchmarkKeystrokeFleet100` and
 `BenchmarkKeystrokeBroadcast100` in `perf_bench_test.go`.
 
 Two structural rules keep it that way. First, `View` plants a **one-frame memo** on its value
