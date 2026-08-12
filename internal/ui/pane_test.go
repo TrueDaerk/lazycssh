@@ -266,26 +266,24 @@ func TestAltScreenGridIsClippedToThePane(t *testing.T) {
 	}
 }
 
-// The remote app's cursor is drawn in the grid, and hidden when the app hides
-// it (CSI ?25l) — vim hides the cursor while repainting.
-func TestAltScreenGridShowsCursor(t *testing.T) {
+// The grid is the remote app's screen and nothing else: the cursor rides on
+// the frame, so a pane nobody is typing into - here one that never even
+// connected - paints no caret over the app's own output (issue #292).
+func TestAltScreenGridPaintsNoCursor(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01")
 	fleet.sessions["web-01"].Resize(40, 5)
 	fleet.sessions["web-01"].Emit("\x1b[?1049h\x1b[1;1Hab")
 
-	withCursor := a.paneBody("web-01", 40, 5)
-	fleet.sessions["web-01"].Emit("\x1b[?25l")
-	withoutCursor := a.paneBody("web-01", 40, 5)
-
-	if withCursor == withoutCursor {
-		t.Fatal("hiding the cursor changed nothing; it is not being drawn")
+	body := a.paneBody("web-01", 40, 5)
+	if body != plain(body) {
+		t.Fatalf("the grid styles a cursor cell:\n%q", body)
 	}
-	// The cursor may pad its own cell with a styled space, so trailing
-	// whitespace is the one honest difference in the plain text.
-	got := strings.TrimRight(plain(withCursor), " \n")
-	want := strings.TrimRight(plain(withoutCursor), " \n")
-	if got != want {
-		t.Fatalf("the cursor changed the text, not just the styling:\n%q\n%q", got, want)
+	fleet.sessions["web-01"].Emit("\x1b[?25l")
+	if hidden := a.paneBody("web-01", 40, 5); hidden != body {
+		t.Fatalf("hiding the remote cursor changed the grid:\n%q\n%q", body, hidden)
+	}
+	if x, y, ok := a.paneCursor("web-01", 40, 5); ok {
+		t.Fatalf("a pane that never connected reports a cursor at (%d,%d)", x, y)
 	}
 }
 
@@ -407,20 +405,32 @@ func TestClosedPaneShowsNoError(t *testing.T) {
 	}
 }
 
-// The issue-190 behavior: a connected pane following the tail draws the
-// remote cursor where the scrollback's line discipline says it is - no
-// emulation involved.
-func TestPaneBodyDrawsTheCursor(t *testing.T) {
+// The issue-190 behavior, now reported rather than painted (issue #292): a
+// connected pane following the tail puts the cursor where the scrollback's
+// line discipline says it is.
+func TestPaneCursorAtTheEndOfThePrompt(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01")
 	fleet.connect(t, "web-01")
 	a = syncFleet(t, a)
 	fleet.sessions["web-01"].Emit("$ ")
 
-	body := a.paneBody("web-01", 40, 5)
-	lines := strings.Split(body, "\n")
-	want := overlayCursor("$ ", 2, a.theme.Cursor)
-	if got := lines[len(lines)-1]; got != want {
-		t.Fatalf("cursor not at the end of the prompt:\ngot  %q\nwant %q", got, want)
+	x, y, ok := a.paneCursor("web-01", 40, 5)
+	if !ok || x != 2 || y != 0 {
+		t.Fatalf("paneCursor() = (%d,%d,%v), want (2,0,true)", x, y, ok)
+	}
+}
+
+// The body carries no cursor of its own: the caret is the terminal's, and only
+// the focused pane gets it. A pane that painted one would show a caret in
+// every connected pane at once (issue #292).
+func TestPaneBodyPaintsNoCursor(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.connect(t, "web-01")
+	a = syncFleet(t, a)
+	fleet.sessions["web-01"].Emit("$ ")
+
+	if body := a.paneBody("web-01", 40, 5); body != plain(body) {
+		t.Fatalf("the pane body styles a cursor block:\n%q", body)
 	}
 }
 
@@ -437,12 +447,13 @@ func TestPaneCursorOnTheEmptyRowAfterALineFeed(t *testing.T) {
 	if len(lines) != 2 || plain(lines[0]) != "done" {
 		t.Fatalf("expected the output plus a cursor row:\n%q", body)
 	}
-	if want := overlayCursor("", 0, a.theme.Cursor); lines[1] != want {
-		t.Fatalf("cursor row = %q, want %q", lines[1], want)
+	x, y, ok := a.paneCursor("web-01", 40, 5)
+	if !ok || x != 0 || y != 1 {
+		t.Fatalf("paneCursor() = (%d,%d,%v), want (0,1,true)", x, y, ok)
 	}
 }
 
-// A cursor moved into the line - readline editing - is drawn there, not at
+// A cursor moved into the line - readline editing - is reported there, not at
 // the end.
 func TestPaneCursorFollowsBackspace(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01")
@@ -450,10 +461,28 @@ func TestPaneCursorFollowsBackspace(t *testing.T) {
 	a = syncFleet(t, a)
 	fleet.sessions["web-01"].Emit("$ abc\b\b")
 
-	body := a.paneBody("web-01", 40, 5)
-	lines := strings.Split(body, "\n")
-	if want := overlayCursor("$ abc", 3, a.theme.Cursor); lines[len(lines)-1] != want {
-		t.Fatalf("cursor did not follow the backspaces:\ngot  %q\nwant %q", lines[len(lines)-1], want)
+	x, y, ok := a.paneCursor("web-01", 40, 5)
+	if !ok || x != 3 || y != 0 {
+		t.Fatalf("paneCursor() = (%d,%d,%v), want (3,0,true)", x, y, ok)
+	}
+}
+
+// A cursor-movement sequence is followed wherever it lands, which is what a
+// remote full-screen editor does between keystrokes.
+func TestPaneCursorFollowsAMovementSequence(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.connect(t, "web-01")
+	a = syncFleet(t, a)
+	if err := fleet.sessions["web-01"].Resize(20, 5); err != nil {
+		t.Fatalf("Resize: %v", err)
+	}
+	// Three lines of output, then CUP to row 2, column 4 - one-based on the
+	// wire, zero-based in the pane.
+	fleet.sessions["web-01"].Emit("one\ntwo\nthree\n\x1b[2;4H")
+
+	x, y, ok := a.paneCursor("web-01", 20, 5)
+	if !ok || x != 3 || y != 1 {
+		t.Fatalf("paneCursor() = (%d,%d,%v), want (3,1,true)", x, y, ok)
 	}
 }
 
@@ -469,12 +498,12 @@ func TestPaneCursorOnAWrappedPendingLine(t *testing.T) {
 	fleet.sessions["web-01"].Emit(strings.Repeat("x", 50))
 
 	body := a.paneBody("web-01", 20, 10)
-	lines := strings.Split(body, "\n")
-	if len(lines) != 3 {
+	if lines := strings.Split(body, "\n"); len(lines) != 3 {
 		t.Fatalf("a 50-cell pending line should wrap to 3 rows:\n%q", body)
 	}
-	if want := overlayCursor(strings.Repeat("x", 10), 10, a.theme.Cursor); lines[2] != want {
-		t.Fatalf("cursor not on the last wrapped row:\ngot  %q\nwant %q", lines[2], want)
+	x, y, ok := a.paneCursor("web-01", 20, 10)
+	if !ok || x != 10 || y != 2 {
+		t.Fatalf("paneCursor() = (%d,%d,%v), want (10,2,true)", x, y, ok)
 	}
 }
 
@@ -484,11 +513,13 @@ func TestPaneCursorNeedsAConnection(t *testing.T) {
 	a, fleet, _, _ := statusApp(t, "web-01")
 	fleet.sessions["web-01"].Emit("$ ")
 
+	if x, y, ok := a.paneCursor("web-01", 40, 5); ok {
+		t.Fatalf("a disconnected pane grew a cursor at (%d,%d)", x, y)
+	}
 	// The trailing space is a blank cell like any other; the emulator does
 	// not retain it.
-	body := a.paneBody("web-01", 40, 5)
-	if body != "$" {
-		t.Fatalf("a disconnected pane grew a cursor:\n%q", body)
+	if body := a.paneBody("web-01", 40, 5); body != "$" {
+		t.Fatalf("paneBody() = %q", body)
 	}
 }
 
@@ -507,8 +538,60 @@ func TestPaneCursorHidesWhileScrolledBack(t *testing.T) {
 		t.Fatal("the pane did not scroll; the test would assert nothing")
 	}
 
-	body := a.paneBody("web-01", 40, 5)
-	if body != plain(body) {
-		t.Fatalf("a scrolled-back pane still styles a cursor:\n%q", body)
+	if x, y, ok := a.paneCursor("web-01", 40, 5); ok {
+		t.Fatalf("a scrolled-back pane reports a cursor at (%d,%d)", x, y)
+	}
+}
+
+// A remote app that hides its cursor (CSI ?25l) is taken at its word: htop
+// repainting must not blink a caret in the pane.
+func TestPaneCursorHonoursTheHiddenCursorMode(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.connect(t, "web-01")
+	a = syncFleet(t, a)
+	fleet.sessions["web-01"].Emit("$ \x1b[?25l")
+
+	if x, y, ok := a.paneCursor("web-01", 40, 5); ok {
+		t.Fatalf("a hidden remote cursor was reported at (%d,%d)", x, y)
+	}
+
+	fleet.sessions["web-01"].Emit("\x1b[?25h")
+	if _, _, ok := a.paneCursor("web-01", 40, 5); !ok {
+		t.Fatal("the cursor did not come back when the remote showed it again")
+	}
+}
+
+// A full-screen app owns the grid, so its cursor is the grid's own cell.
+func TestPaneCursorOnTheAlternateScreen(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.connect(t, "web-01")
+	a = syncFleet(t, a)
+	if err := fleet.sessions["web-01"].Resize(20, 5); err != nil {
+		t.Fatalf("Resize: %v", err)
+	}
+	fleet.sessions["web-01"].Emit("\x1b[?1049h\x1b[3;6H")
+
+	if !a.paneAltScreen("web-01") {
+		t.Fatal("setup: the session is not on the alternate screen")
+	}
+	x, y, ok := a.paneCursor("web-01", 20, 5)
+	if !ok || x != 5 || y != 2 {
+		t.Fatalf("paneCursor() = (%d,%d,%v), want (5,2,true)", x, y, ok)
+	}
+}
+
+// A cursor outside the drawn area is no cursor: a pane narrower than the
+// terminal the host believes it has must not place a caret off its own body.
+func TestPaneCursorOutsideTheBodyIsDropped(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	fleet.connect(t, "web-01")
+	a = syncFleet(t, a)
+	if err := fleet.sessions["web-01"].Resize(20, 5); err != nil {
+		t.Fatalf("Resize: %v", err)
+	}
+	fleet.sessions["web-01"].Emit(strings.Repeat("x", 15))
+
+	if x, y, ok := a.paneCursor("web-01", 10, 5); ok {
+		t.Fatalf("a cursor past the pane's last column was reported at (%d,%d)", x, y)
 	}
 }

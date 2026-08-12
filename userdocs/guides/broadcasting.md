@@ -14,6 +14,13 @@ the arrows all belong to the remote shell.
 TYPING web-01 — ctrl+] leaves · alt=app
 ```
 
+The terminal's cursor moves into that pane, onto the cell the host's own shell
+says the next character lands in — including a cursor an app moves about, so
+editing a line is as trackable as it is in a plain terminal. There is only ever
+one cursor on screen: the other panes show none, and it disappears entirely when
+no pane, prompt or dialog is taking input, when the pane is scrolled back, or
+when the host is not connected.
+
 lazycssh keeps exactly two kinds of key for itself while you type:
 
 - ++ctrl+bracket-right++ — the reserved escape. It returns you to the app level,

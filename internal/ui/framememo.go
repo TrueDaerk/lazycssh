@@ -15,6 +15,17 @@ type frameMemo struct {
 	hostIDs    []string
 	hostIDsSet bool
 	grid       *Grid
+	// content is each pane's measured content, so the body and the frame's
+	// cursor are placed from one snapshot of a screen the session's reader
+	// goroutine keeps changing (issue #292).
+	content map[string]memoPaneContent
+}
+
+// memoPaneContent is one memoized [App.paneContent] result, ok and all: a host
+// that has said nothing yet must not be re-measured on every lookup either.
+type memoPaneContent struct {
+	c  paneContent
+	ok bool
 }
 
 // memoHostIDs is hostIDs through the frame's memo when one is live.

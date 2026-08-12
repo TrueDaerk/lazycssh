@@ -4,7 +4,7 @@ title: Terminal emulation
 description: The per-session vt emulator that holds everything a pane shows — screen, retained history, cursor, modes — encodes key presses per host, and reflows on resize.
 resource: internal/term
 tags: [terminal, vt, emulation, alt-screen, scrollback, keys, resize]
-timestamp: 2026-08-10T18:00:00Z
+timestamp: 2026-08-12T12:00:00Z
 ---
 
 # Terminal emulation
@@ -164,10 +164,13 @@ notice).
 ## Grid rendering in the pane
 
 A pane whose emulator reports alt-screen renders the live grid instead of the history view:
-the emulator screen clipped to the pane body, with the remote app's cursor drawn where it
-says it is — and hidden when the app hides it (`CSI ?25l`). No tail, no scroll offset, no
-search, no text selection: the remote app owns the whole screen. Scrolling is a no-op while
-the grid is active, so the offset cannot jump when the app exits.
+the emulator screen clipped to the pane body. No tail, no scroll offset, no search, no text
+selection: the remote app owns the whole screen. Scrolling is a no-op while the grid is
+active, so the offset cannot jump when the app exits.
+
+The remote app's cursor is not painted into the grid. `CursorPosition`/`CursorVisible` are
+read by the UI and turned into the frame's own terminal cursor, for the focused pane only —
+see [The caret](./tui.md#the-caret).
 
 Leaving the alternate screen returns to the history view; what was on the primary screen
 before the app is restored by the emulator, and the history stays reachable by scrolling.

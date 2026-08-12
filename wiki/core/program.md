@@ -4,7 +4,7 @@ title: Program assembly
 description: The one place every layer meets - building the fleet, wiring the router and the UI together, and the wrapper model that acts on what the UI may only ask for.
 resource: internal/program/program.go
 tags: [program, wiring, bubbletea, transport]
-timestamp: 2026-08-11T12:00:00Z
+timestamp: 2026-08-12T12:00:00Z
 ---
 
 # Program assembly
@@ -74,6 +74,20 @@ writes the sessions that have reached connected since the last pass into the
 [recent-host list](./recent-hosts.md) — the picker's
 `rec` rows. The bookkeeping (which identifiers were already recorded) happens in `Update`; the
 file write happens in the returned `tea.Cmd`, and its failure is swallowed.
+
+## The size the remotes believe
+
+Every remote PTY is told the same size — one fleet, one window-change request — recomputed from
+the UI's own grid on every update that could have moved it (the terminal size, the screen mode,
+which area has focus), and skipped when it did not change, so typing cannot produce a
+window-change request per keystroke.
+
+That one size is the **smallest** pane on the page, not the first. The tiling spreads the columns
+and rows a division leaves over onto the leftmost and topmost cells, so panes differ by one; a
+host told it is wider than its pane wraps its lines where the pane does not and puts its cursor
+in a column the pane never draws (issue #292). A column of unused space in the roomier panes is
+the cheaper mistake. The pane's own border (one column each side) and header (one row) are never
+part of it.
 
 ## Authentication, for now
 
