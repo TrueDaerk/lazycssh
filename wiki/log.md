@@ -1,5 +1,29 @@
 # Log
 
+## 2026-08-12
+
+- Keybindings are user-configurable, and `ctrl+a` is the command prefix inside the broadcast
+  bar (issue #289). An optional `$XDG_CONFIG_HOME/lazycssh/keys.yaml` — a mapping of action to
+  key or list of keys, parsed in `internal/ui/keysconfig.go` next to the struct it fills —
+  overrides individual bindings over `DefaultKeyMap()`; `--keys-file` points elsewhere and
+  `--list-key-actions` prints the vocabulary. Nothing is guessed: an unknown action, an
+  unpressable key name or one action bound twice fails at startup naming the file, the line and
+  the entry, and the document is read in full before any binding is replaced, so a run never
+  starts half remapped. Keys are canonicalised to the string bubbletea reports for that press,
+  since `key.Matches` compares `msg.String()`; `shift+a` is rejected with the shifted character
+  named. Overrides keep the shipped description and rebuild the help label, and the status-bar
+  hints now read `App.escapeKey` / `App.prefixKey` / `App.pagingLabel` / `App.reconnectKey`
+  instead of the literal `ctrl+]`, `ctrl+a` and `alt+r` they used to print. In the broadcast bar
+  the prefix now dispatches the global command set — `ctrl+a r` re-tiles although `Retile` is
+  `ctrl+r`, because after the prefix a plain letter stands for its ctrl chord (GNU screen's
+  `ctrl+a c` ≡ `ctrl+a ctrl+c`); what no command claims is still forwarded to the targets
+  (issue #214). `Prefix` and `PrefixLiteral` are fixed: naming them in the file is an error, so
+  `ctrl+a` stays the way to a command and `ctrl+a ctrl+a` the literal a remote `screen`, `tmux`
+  or readline needs. The test helper that synthesises key presses now goes through the same
+  parser, which pins every keystroke the suite presses as one a user may write. Updated:
+  `core/keys.md`, `core/tui.md`, `core/cli.md`, `userdocs/reference/keybindings.md`,
+  `userdocs/reference/cli.md`, `README.md`. Version 0.11.0.
+
 ## 2026-08-10
 
 - Removed the GitHub Actions workflows (`ci.yml`, `docs.yml`; issue #287) — CI and the

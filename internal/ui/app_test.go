@@ -31,48 +31,19 @@ func pressKey(t *testing.T, a App, keystroke string) App {
 
 // keyMsgFor synthesises a key press from a human-readable keystroke, chords
 // like "alt+shift+left" and "ctrl+]" included.
+//
+// It goes through the keymap file's own parser (issue #289), so the presses the
+// tests drive the model with are exactly the presses a configured binding
+// describes - and every keystroke written in this suite is a keystroke a user
+// may write in keys.yaml.
 func keyMsgFor(t *testing.T, keystroke string) tea.KeyPressMsg {
 	t.Helper()
 
-	var mod tea.KeyMod
-	rest := keystroke
-	for {
-		switch {
-		case strings.HasPrefix(rest, "alt+"):
-			mod |= tea.ModAlt
-			rest = rest[len("alt+"):]
-		case strings.HasPrefix(rest, "ctrl+") && len(rest) > len("ctrl+"):
-			mod |= tea.ModCtrl
-			rest = rest[len("ctrl+"):]
-		case strings.HasPrefix(rest, "shift+") && rest != "shift+tab":
-			mod |= tea.ModShift
-			rest = rest[len("shift+"):]
-		default:
-			goto base
-		}
+	msg, err := parseKeystroke(keystroke)
+	if err != nil {
+		t.Fatalf("keyMsgFor cannot synthesise %q: %v", keystroke, err)
 	}
-base:
-	special := map[string]rune{
-		"tab": tea.KeyTab, "shift+tab": tea.KeyTab, "enter": tea.KeyEnter,
-		"esc": tea.KeyEscape, "backspace": tea.KeyBackspace,
-		"left": tea.KeyLeft, "right": tea.KeyRight,
-		"up": tea.KeyUp, "down": tea.KeyDown, "pgup": tea.KeyPgUp,
-		"pgdown": tea.KeyPgDown, "home": tea.KeyHome, "end": tea.KeyEnd,
-	}
-	if rest == "shift+tab" {
-		return tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
-	}
-	if code, ok := special[rest]; ok {
-		return tea.KeyPressMsg{Code: code, Mod: mod}
-	}
-	r := []rune(rest)
-	if len(r) != 1 {
-		t.Fatalf("keyMsgFor cannot synthesise %q", keystroke)
-	}
-	if mod == 0 {
-		return tea.KeyPressMsg{Code: r[0], Text: rest}
-	}
-	return tea.KeyPressMsg{Code: r[0], Mod: mod}
+	return msg
 }
 
 // focusGrid enters the focused pane's terminal the way a user does: an

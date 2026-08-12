@@ -4,7 +4,7 @@ title: Command line interface
 description: Flags, arguments and exit codes of the lazycssh binary.
 resource: cmd/lazycssh/main.go
 tags: [cli, flags, exit-codes]
-timestamp: 2026-08-10T12:00:00Z
+timestamp: 2026-08-12T18:00:00Z
 ---
 
 # Command line interface
@@ -45,6 +45,8 @@ that is not saved is an error listing the sessions that are.
 | `-h`, `--help` | Print usage and exit. |
 | `--insecure-ignore-host-key` | Accept any host key without checking `known_hosts`. Dangerous, prints a warning on every run — see [Host key verification](./host-keys.md). |
 | `--list-sessions` | List the saved sessions with their host counts and exit. |
+| `--list-key-actions` | List the actions a [keymap file](./keys.md#the-keymap-file) can bind — one per line: name, shipped keys, description, and a `[fixed]` marker on the two that cannot be rebound — and exit. It is the vocabulary of `keys.yaml`, printed from the keymap itself (issue #289). |
+| `--keys-file <file>` | Read the keymap from this file instead of `$XDG_CONFIG_HOME/lazycssh/keys.yaml`. A file named here must exist — a typed path that silently fell back to the defaults would be indistinguishable from a working one — while the default location stays optional. A broken keymap fails here, naming the line, rather than behind a running interface. |
 | `--sessions-dir <dir>` | Read sessions from this directory instead of `$XDG_CONFIG_HOME/lazycssh/sessions`. |
 | `--log-dir <dir>` | Write every host's session output to files in a new run directory under `<dir>`. Off by default — see [Session logging](./session-logging.md). An unwritable directory fails before the TUI starts; a clean exit prints the run directory to stdout. |
 | `--pprof <addr>` | Serve `net/http/pprof` on `<addr>` for profiling a live run (issue #274). Development only, off by default. The bound address is announced on stderr before the TUI starts — `:0` picks a free port — and a bad address fails there instead of dying silently behind the interface. The handlers live on a private mux, so nothing else can publish itself alongside the profiles. |
@@ -53,7 +55,7 @@ that is not saved is an error listing the sessions that are.
 
 | Code | Meaning |
 |------|---------|
-| `0` | Success: a clean TUI exit, `--version`, `--help` or `--list-sessions`. |
+| `0` | Success: a clean TUI exit, `--version`, `--help`, `--list-sessions` or `--list-key-actions`. |
 | `1` | A failure during the run. |
 | `2` | Usage error: an unknown flag. No host arguments is not an error; it opens the TUI. |
 

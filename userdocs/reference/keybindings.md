@@ -31,6 +31,7 @@ not typing into a pane, not in the broadcast bar's edit mode, not in a prompt.
 | ++f++ | filter the grid by pane output: only the panes whose output since the last command holds what you type stay on screen (case-insensitive; empty or ++esc++ clears). A view only — hidden panes still receive a broadcast |
 | ++ctrl+shift+right++ / ++ctrl+shift+left++ | next / previous screenful: pages, then split chunks, wrapping; works while typing too. Plain ++ctrl+right++ / ++ctrl+left++ stay word movement for the hosts |
 | ++ctrl+a++ then ++right++ / ++left++ | the same screenful step, for terminals that never send ctrl+shift+arrows (Terminal.app on macOS). Works everywhere: in a pane, in the broadcast bar, at the app level |
+| ++ctrl+a++ then a command key | run that command — the way to reach one from inside the broadcast bar. A plain letter stands for its ctrl chord, so ++ctrl+a++ ++r++ re-tiles (++ctrl+r++) and ++ctrl+a++ ++ctrl+s++ splits |
 | ++a++ | select every host |
 | ++i++ | invert the selection |
 | ++c++ | clear the selection |
@@ -105,7 +106,7 @@ so ++slash++ and ++n++ still reach the host while you are typing.
 ## The broadcast bar
 
 In **edit mode**, every keystroke goes to the target set. The bar keeps
-++ctrl+bracket-right++, the pane chords, and the ++ctrl+a++ escape prefix:
+++ctrl+bracket-right++, the pane chords, and the ++ctrl+a++ command prefix:
 
 | Key | Action |
 |---|---|
@@ -113,8 +114,12 @@ In **edit mode**, every keystroke goes to the target set. The bar keeps
 | ++ctrl+a++ ++a++ | the same literal, matching `screen`'s own ++ctrl+a++ ++a++ |
 | ++ctrl+a++ ++right++ / ++left++ | page to the next / previous screenful |
 | ++ctrl+a++ ++escape++ | switch to view mode |
-| ++ctrl+a++ *other* | forward that key to the targets as a normal keystroke |
+| ++ctrl+a++ + a command key | run that lazycssh command without leaving the line: ++ctrl+a++ ++r++ re-tiles, ++ctrl+a++ ++b++ broadcasts to the working set, ++ctrl+a++ ++question++ opens the help. A plain letter stands for its ctrl chord, `screen`'s own ++ctrl+a++ ++c++ ≡ ++ctrl+a++ ++ctrl+c++ rule |
+| ++ctrl+a++ *anything else* | forward that key to the targets as a normal keystroke |
 | ++enter++ | send a carriage return and record the assembled line |
+
+The status bar spells the choice out while the prefix is armed, so a chord
+pressed by accident is never a guess.
 
 In **view mode** every key is an app-level command instead, and nothing is sent.
 ++enter++ returns to edit mode.
@@ -154,6 +159,48 @@ Meta commands, which never reach a host:
 | `/select all\|set\|up\|down\|invert\|none\|<glob>` | build the selection |
 | `/deselect <glob>` | the reverse |
 | `/find <text>` | search every host's scrollback and report which ones match |
+
+## Remapping keys
+
+Bindings are configurable. lazycssh reads
+`$XDG_CONFIG_HOME/lazycssh/keys.yaml` (`~/.config/lazycssh/keys.yaml` when
+`XDG_CONFIG_HOME` is unset) if it exists: a mapping of action to key, or to a
+list of keys. Everything it does not name keeps the shipped binding.
+
+```yaml
+# ~/.config/lazycssh/keys.yaml
+Retile: ctrl+t
+BroadcastAll: [b, ctrl+b]
+LeaveTyping: ctrl+g
+```
+
+`lazycssh --list-key-actions` prints every action with its default keys and
+description — that listing is the vocabulary of the file. Action names are
+matched case-insensitively, so `retile` and `Retile` are the same action.
+`--keys-file <file>` reads a different file, which is the way to try one out.
+
+**Key names.** Modifiers are `ctrl`, `alt`, `shift`, `super`, `meta` and
+`hyper`, written in any order and joined with `+`: `ctrl+shift+left`,
+`alt+x`, `ctrl+]`. Named keys are `enter`, `tab`, `esc`, `space`,
+`backspace`, `delete`, `insert`, `home`, `end`, `pgup`, `pgdown`, the arrows
+and `f1`–`f24`; anything else is one character. A shifted character is written
+as the character itself — `A`, not `shift+a` — because that is what a terminal
+reports.
+
+**Errors are loud.** An unknown action, a key name no terminal can produce, or
+one action bound twice stops the run before it dials, naming the file, the line
+and the entry. A rejected file changes nothing: lazycssh never starts half
+remapped.
+
+**Two bindings are fixed.** ++ctrl+a++ is always the command prefix and
+++ctrl+a++ ++ctrl+a++ always sends one literal ++ctrl+a++ to the hosts. They
+are how you leave a mode and how a remote `screen`, `tmux` or readline stays
+reachable, so a keymap file may not move them — naming them is an error rather
+than a silent no-op.
+
+The ++question++ overlay, the help line and the status-bar hints are generated
+from the effective keymap, so a remapped key shows up everywhere it is
+promised.
 
 ## Mouse
 

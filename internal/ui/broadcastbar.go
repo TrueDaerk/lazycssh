@@ -19,8 +19,9 @@ import (
 // exactly like a focused pane, plus the csshx-style ctrl+a prefix: ctrl+a esc
 // switches the bar to view mode, where keys are commands rather than
 // keystrokes, ctrl+a ctrl+a and ctrl+a a send the literal ctrl+a a remote
-// screen or tmux needs, and anything else after the prefix is forwarded to the
-// targets unchanged.
+// screen or tmux needs, ctrl+a and a command key runs that command (issue
+// #289), and anything else after the prefix is forwarded to the targets
+// unchanged.
 func (a App) handleBroadcastKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// A held paste owns the keyboard until it is answered: enter and esc are
 	// the only keys that mean anything, so a stray keystroke aimed at the
@@ -166,19 +167,27 @@ func (a App) handleBroadcastViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return a.handleAppKey(msg)
 }
 
-// resolveBroadcastEscape is the key after ctrl+a. The prefix exists for the
-// remote multiplexer, so it forwards by default (issue #214): only the keys
-// listed below are kept by lazycssh and everything else reaches the targets as
-// the keystroke it is.
+// resolveBroadcastEscape is the key after ctrl+a in the broadcast bar. The
+// prefix is the lazycssh command prefix here (issue #289): while the bar has
+// the keyboard every plain key belongs to the hosts, and the chord is the one
+// way to run a command without leaving the line.
 //
 //   - ctrl+a — one literal ctrl+a, the GNU-screen double press; ctrl+a ctrl+a c
 //     opens a screen window on every host.
-//   - a — the same literal, matching screen's own ctrl+a a.
+//   - a — the same literal, matching screen's own ctrl+a a. Neither this nor
+//     the double press can be rebound: a remote multiplexer, and readline's
+//     beginning-of-line, must stay reachable whatever the keymap says.
 //   - →/← — page to the next/previous screenful, the portable alternative to
 //     ctrl+shift+arrows that macOS Terminal.app never sends (issue #273).
-//   - esc — switch the bar to view mode, which is now the only way to run an
-//     app command from inside the bar; it supersedes the one-shot dispatch of
-//     issue #148.
+//   - esc — switch the bar to view mode, where every key is a command until
+//     enter returns to typing.
+//   - any app-level command — ctrl+a r re-tiles, ctrl+a b switches the
+//     broadcast scope, and so on for the whole global set; a plain letter
+//     stands for its ctrl chord, so the commands a host would otherwise eat
+//     are reachable too. See [App.chordCommandKey].
+//   - everything else still reaches the targets as the keystroke it is, which
+//     is what issue #214 asked of the prefix and what keeps a stray chord from
+//     being swallowed.
 //
 // The prefix is cleared before the second key is handled, so it cannot chain.
 // Forwarded keys take the same send path as plain typing but stay out of the
@@ -194,6 +203,9 @@ func (a App) resolveBroadcastEscape(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case key.Matches(msg, a.keys.PrefixLiteral):
 		return a.sendBroadcastRaw([]byte{literalPrefixByte})
+	}
+	if command := a.chordCommandKey(msg); a.keys.isCommand(command) {
+		return a.handleAppKey(command)
 	}
 	return a.forwardBroadcastKey(msg)
 }
@@ -300,7 +312,7 @@ func (a App) renderBroadcastBar() string {
 		// No cursor: nothing typed here is going anywhere.
 		line = a.theme.Muted.Render("view mode — keys are commands · enter returns to typing")
 	case focused && a.prefixArmed:
-		line = "▏" + a.theme.Muted.Render(" ctrl+a…")
+		line = "▏" + a.theme.Muted.Render(" "+a.prefixKey()+"…")
 	case focused:
 		line = "▏" + a.theme.Muted.Render(" keys go to the targets live — the panes echo")
 	default:

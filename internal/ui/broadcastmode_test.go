@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -60,15 +61,15 @@ func TestBroadcastBarCtrlAASendsTheLiteral(t *testing.T) {
 	}
 }
 
-// Issue #214: the prefix forwards by default. A key that is neither the
-// literal nor esc reaches the targets as the keystroke it is, runs no lazycssh
-// command, and stays out of the assembled line.
+// Issue #214: a key the command set does not claim still forwards. It reaches
+// the targets as the keystroke it is and stays out of the assembled line, so a
+// stray chord costs the user the prefix and nothing else.
 func TestBroadcastBarPrefixForwardsOtherKeys(t *testing.T) {
 	a, sender := barApp(t, "web-01")
 
 	a = pressKey(t, a, "ctrl+a")
-	a = pressKey(t, a, "c")
-	if got := strings.Join(sender.sent, ","); got != "<c>" {
+	a = pressKey(t, a, "x")
+	if got := strings.Join(sender.sent, ","); got != "<x>" {
 		t.Fatalf("sent = %q, want the prefixed key forwarded", got)
 	}
 	if a.prefixArmed || a.broadcastView {
@@ -79,39 +80,90 @@ func TestBroadcastBarPrefixForwardsOtherKeys(t *testing.T) {
 	}
 
 	a = pressKey(t, a, "l")
-	if got := strings.Join(sender.sent, ","); got != "<c>,<l>" {
+	if got := strings.Join(sender.sent, ","); got != "<x>,<l>" {
 		t.Fatalf("sent = %q, want edit mode to resume after the prefix", got)
 	}
 }
 
-// A prefixed app chord is a keystroke too: ctrl+a ? forwards the question mark
-// instead of opening the help, because the prefix no longer dispatches
-// commands (superseding issue #148).
-func TestBroadcastBarPrefixDoesNotRunAppCommands(t *testing.T) {
+// Issue #289: in the bar the prefix is the command prefix. ctrl+a ? opens the
+// help instead of reaching a host, and nothing is sent.
+func TestBroadcastBarPrefixRunsAppCommands(t *testing.T) {
 	a, sender := barApp(t, "web-01", "web-02")
 
 	a = pressKey(t, a, "ctrl+a")
 	a = pressKey(t, a, "?")
-	if a.HelpVisible() {
-		t.Fatal("ctrl+a ? still ran the help command")
+	if !a.HelpVisible() {
+		t.Fatal("ctrl+a ? did not run the help command")
 	}
-	if got := strings.Join(sender.sent, ","); got != "<?>" {
-		t.Fatalf("sent = %q, want the chord forwarded to the hosts", got)
+	if len(sender.sent) != 0 {
+		t.Fatalf("the command was forwarded to the hosts: %q", sender.sent)
 	}
 	if a.prefixArmed {
 		t.Fatal("the prefix survived its second key")
 	}
 }
 
-// Non-text keys forward through the same encoding as plain typing. The arrows
-// are the exception since issue #273 - they page - so tab stands in for the
-// rest of the passthrough.
+// The acceptance criterion of issue #289: ctrl+a r re-tiles, although Retile is
+// bound to ctrl+r. After the prefix a plain letter stands for its ctrl chord,
+// which is how the commands a host would otherwise eat are reachable from
+// inside the broadcast line.
+func TestBroadcastBarPrefixRetiles(t *testing.T) {
+	a, sender := barApp(t, "web-01", "web-02")
+	a = resize(t, a, 120, 40)
+	// A kept shape wider than the fleet is what re-tiling drops.
+	a.keptSlots = 12
+
+	a = pressKey(t, a, "ctrl+a")
+	model, cmd := a.Update(keyMsgFor(t, "r"))
+	a = model.(App)
+
+	if got, want := a.keptSlots, len(a.hostIDs()); got != want {
+		t.Fatalf("keptSlots = %d, want ctrl+a r to have re-tiled to %d", got, want)
+	}
+	if cmd == nil {
+		t.Fatal("ctrl+a r produced no command; the PTYs would keep the old size")
+	}
+	if _, ok := cmd().(GridChangedMsg); !ok {
+		t.Fatalf("ctrl+a r produced a %T, want the re-tile", cmd())
+	}
+	if len(sender.sent) != 0 {
+		t.Fatalf("the command reached the hosts: %q", sender.sent)
+	}
+	if a.Focus() != AreaBroadcast || a.broadcastView || a.prefixArmed {
+		t.Fatal("running a chord command left the bar or its mode")
+	}
+}
+
+// The chord follows the keymap, not a table of its own: a rebound Retile moves
+// which letter re-tiles after the prefix with it.
+func TestBroadcastBarPrefixCommandFollowsARebinding(t *testing.T) {
+	a, _ := barApp(t, "web-01", "web-02")
+	a = resize(t, a, 120, 40)
+	a.keys.Retile = key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "re-tile"))
+	a.keptSlots = 12
+
+	a = pressKey(t, a, "ctrl+a")
+	a = pressKey(t, a, "r")
+	if a.keptSlots != 12 {
+		t.Fatal("ctrl+a r still re-tiled although Retile moved to ctrl+t")
+	}
+
+	a = pressKey(t, a, "ctrl+a")
+	a = pressKey(t, a, "t")
+	if got, want := a.keptSlots, len(a.hostIDs()); got != want {
+		t.Fatalf("keptSlots = %d, want the rebound chord to re-tile to %d", got, want)
+	}
+}
+
+// Non-text keys the command set does not claim forward through the same
+// encoding as plain typing. The arrows are the exception since issue #273 -
+// they page - so backspace stands in for the rest of the passthrough.
 func TestBroadcastBarPrefixForwardsNonTextKeys(t *testing.T) {
 	a, sender := barApp(t, "web-01")
 
 	a = pressKey(t, a, "ctrl+a")
-	press(t, a, tea.KeyPressMsg{Code: tea.KeyTab})
-	if got := strings.Join(sender.sent, ","); got != "<tab>" {
+	press(t, a, tea.KeyPressMsg{Code: tea.KeyBackspace})
+	if got := strings.Join(sender.sent, ","); got != "<backspace>" {
 		t.Fatalf("sent = %q, want the key forwarded", got)
 	}
 }

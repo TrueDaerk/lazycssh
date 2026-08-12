@@ -84,6 +84,9 @@ func TestRun(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// A run reads the user's keymap and session store; the tests read
+			// an empty directory instead of whatever this machine has.
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 			var stdout, stderr bytes.Buffer
 
 			var launched program.Config
@@ -115,6 +118,7 @@ func TestRun(t *testing.T) {
 // readable output never mixes with diagnostics: anything a user might pipe goes
 // to stdout, everything else to stderr.
 func TestRunLaunchesTheTUIWithTheResolvedPlan(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	var stdout, stderr bytes.Buffer
 	var launched program.Config
 	code := run([]string{"--insecure-ignore-host-key", "a.example.com", "b.example.com"},
@@ -135,6 +139,7 @@ func TestRunLaunchesTheTUIWithTheResolvedPlan(t *testing.T) {
 }
 
 func TestRunWithoutArgumentsLaunchesAnEmptyRun(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	var stdout, stderr bytes.Buffer
 	var launched program.Config
 	code := run(nil, &stdout, &stderr, captureLaunch(&launched))
@@ -151,6 +156,7 @@ func TestRunWithoutArgumentsLaunchesAnEmptyRun(t *testing.T) {
 }
 
 func TestRunReportsALaunchFailure(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	var stdout, stderr bytes.Buffer
 	code := run([]string{"a.example.com"}, &stdout, &stderr,
 		func(program.Config) error { return errors.New("the terminal went away") })

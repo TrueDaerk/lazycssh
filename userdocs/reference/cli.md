@@ -29,6 +29,8 @@ No arguments is not an error: it opens the TUI on an empty run.
 | `-h`, `--help` | Print usage and exit. |
 | `--insecure-ignore-host-key` | Accept any host key without checking `known_hosts`. Dangerous: prints a warning naming machine-in-the-middle attacks on every run, and the status bar carries `HOST KEYS UNVERIFIED` for the whole session. |
 | `--list-sessions` | List the saved sessions with their host counts and exit. |
+| `--list-key-actions` | List the actions a [keymap file](keybindings.md#remapping-keys) can bind — one per line, with the shipped keys and the description the `?` overlay shows — and exit. The two fixed actions are marked. |
+| `--keys-file <file>` | Read the keymap from this file instead of `$XDG_CONFIG_HOME/lazycssh/keys.yaml`. A file named here must exist; the default location is optional. |
 | `--sessions-dir <dir>` | Read sessions from this directory instead of `$XDG_CONFIG_HOME/lazycssh/sessions`. |
 | `--log-dir <dir>` | Write every host's session output to files in a new run directory under `<dir>` — one file per host, rotated at 8 MiB. Off by default; while it is on, the status bar carries `SESSION LOGGING ON` for the whole run, and a clean exit prints where the logs went. |
 
@@ -36,7 +38,7 @@ No arguments is not an error: it opens the TUI on an empty run.
 
 | Code | Meaning |
 |---|---|
-| `0` | Success: a clean TUI exit, `--version`, `--help` or `--list-sessions`. |
+| `0` | Success: a clean TUI exit, `--version`, `--help`, `--list-sessions` or `--list-key-actions`. |
 | `1` | A failure during the run. |
 | `2` | Usage error: an unknown flag. |
 
@@ -67,5 +69,6 @@ present in `go build` output and absent in a build from a source tarball.
 | `~/.ssh/known_hosts`, `~/.ssh/known_hosts2` | host key verification |
 | `$SSH_AUTH_SOCK` | ssh-agent authentication |
 | `$XDG_CONFIG_HOME/lazycssh/sessions/*.yaml` | saved groups (`~/.config/...` when `XDG_CONFIG_HOME` is unset) |
+| `$XDG_CONFIG_HOME/lazycssh/keys.yaml` | optional [keymap overrides](keybindings.md#remapping-keys) (`~/.config/...` when unset) |
 | `$XDG_CONFIG_HOME/lazycssh/history` | command line history, one command per line, newest last (`~/.config/...` when unset) |
 | `$XDG_CONFIG_HOME/lazycssh/recent` | recently connected hosts, one per line, newest first, capped at 200 (`~/.config/...` when unset) |

@@ -3,8 +3,8 @@ type: concept
 title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
-tags: [ui, keys, help, bindings]
-timestamp: 2026-08-12T09:00:00Z
+tags: [ui, keys, help, bindings, config]
+timestamp: 2026-08-12T18:00:00Z
 ---
 
 # Keymap and help
@@ -12,6 +12,10 @@ timestamp: 2026-08-12T09:00:00Z
 Every binding is declared once, in `KeyMap`. The help line and the `?` overlay are generated
 from that struct, so documentation cannot drift from behaviour: a binding that is not declared
 is not shown, and a declared binding that is not shown fails a test.
+
+`DefaultKeyMap()` is the shipped set and the fallback for everything a user did not move: an
+optional [keymap file](#the-keymap-file) overrides individual bindings, and the generated help
+follows the effective keymap rather than the defaults (issue #289).
 
 ## Areas
 
@@ -21,7 +25,7 @@ A key press is dispatched by focus. Each binding belongs to one area:
 |------|----------------|
 | `AreaGlobal` | works wherever focus is: help, quit, panel numbers, broadcast mode, the command line |
 | `AreaSidebar` | the numbered panels down the left |
-| `AreaBroadcast` | the broadcast bar under the grid — a terminal for the whole target set; kept for itself: `ctrl+]`, the pane chords, and the csshx-style `ctrl+a` escape prefix (declared in `AreaChord`, live everywhere since issue #273). In the bar's **view mode** every key is an app-level command instead — see [TUI shell](./tui.md#edit-and-view-mode) |
+| `AreaBroadcast` | the broadcast bar under the grid — a terminal for the whole target set; kept for itself: `ctrl+]`, the pane chords, and the csshx-style `ctrl+a` command prefix (declared in `AreaChord`, live everywhere since issue #273; it runs app commands since issue #289). In the bar's **view mode** every key is an app-level command instead — see [TUI shell](./tui.md#edit-and-view-mode) |
 | `AreaGrid` | the host panes on the right — a focused pane is a terminal, so its bindings are all `alt`/`shift` chords plus the reserved `ctrl+]`; every plain key is forwarded to the host (a test enforces the chord rule) |
 | `AreaPrompt` | the dialogs and inline prompts. **Not a focus target**: a prompt takes the keyboard from whatever had it, is resolved before any area binding is consulted, and hands it back when it closes |
 | `AreaChord` | the GNU-screen-style `ctrl+a` prefix and the keys that resolve it (issue #273). **Not a focus target** but a mode, and the shortest one there is: it lasts exactly one key press, wherever focus is. Its keys are plain arrows and a plain letter on purpose — the whole point of the chord is that nothing about it can be swallowed by a terminal or a window manager — and they are only consulted while the prefix is armed, so they collide with nothing |
@@ -70,7 +74,8 @@ live at the same time.
 | `ctrl+a` `→` / `ctrl+a` `←` | chord (everywhere: panes, broadcast bar, app level) | the same screenful step, down the same `stepView` path — the portable alternative for the terminals that never deliver `ctrl+shift+arrows` (issue #273) |
 | `ctrl+a` `a` / `ctrl+a` `ctrl+a` | chord (panes, broadcast bar) | send one literal `ctrl+a` to the focused host or to the broadcast targets — `screen`'s convention, because `ctrl+a` is readline's beginning-of-line and typing must not lose it. At the app level there is no terminal to send it to, and the status line says so |
 | `ctrl+a` `esc` | chord | cancel the armed prefix; inside the broadcast bar it switches to view mode instead |
-| `ctrl+a` *anything else* | chord | cancel the prefix and handle that key as though it had been pressed alone — a swallowed keystroke is worse than an unhandled one |
+| `ctrl+a` *command key* | chord (everywhere) | run that app-level command — the whole `AreaGlobal` set, which is what makes a command reachable from inside the broadcast bar without leaving the line (issue #289). A plain letter stands for its ctrl chord, GNU screen's `ctrl+a c` ≡ `ctrl+a ctrl+c`, so `ctrl+a r` re-tiles although `Retile` is `ctrl+r`. The dispatch reads the effective keymap, so a rebound command moves its chord with it |
+| `ctrl+a` *anything else* | chord | cancel the prefix and handle that key as though it had been pressed alone — in a pane and in the broadcast bar that means the key reaches the host, because a swallowed keystroke is worse than an unhandled one |
 | `a` | global (app level) | select every host |
 | `i` | global (app level) | invert the selection |
 | `c` | global (app level) | clear the selection |
@@ -91,7 +96,7 @@ live at the same time.
 | `alt+backspace` / `alt+delete` | panes | kill the previous / next word: `ESC DEL` / `ESC d` (opt+backspace, opt+forward-delete) |
 | `super+backspace` | panes | kill to line start: `ctrl+u` (cmd+backspace) |
 | `alt+<char>` | panes (unbound chords) | meta: `ESC` + character, so `alt+b`/`alt+f`/`alt+.` reach readline |
-| `ctrl+a` | global (panes, broadcast bar, app level) | the escape prefix: the next key is a chord command (`Prefix`). Inside the bar it still forwards by default (issue #214) — everything that is not a chord key reaches the targets as the keystroke it is |
+| `ctrl+a` | global (panes, broadcast bar, app level) | the command prefix: the next key is a chord command (`Prefix`). Inside the bar a command key runs its command and everything else still reaches the targets as the keystroke it is (issues #214, #289). In a **pane** nothing but the chord's own keys is claimed: a pane is one host's terminal, and its commands are the `alt` chords, so a prefixed key that is not a chord key is forwarded |
 | `enter` | broadcast bar (view mode) | back to edit mode |
 | `ctrl+]` | panes | stop typing: back to the app level, on the Status panel |
 | `alt+space` | panes (and app level) | toggle the focused pane's host in the selection |
@@ -129,6 +134,55 @@ The fleet broadcast mode is `ctrl+alt+b` on purpose. It is the one mode that ign
 set, so it is not a single letter and not reachable by cycling through the others — see
 [Broadcast scope](./broadcast-scope.md). A test asserts both the chord and that its help text
 says `EVERY`.
+
+## The keymap file
+
+`$XDG_CONFIG_HOME/lazycssh/keys.yaml`, `~/.config/lazycssh/keys.yaml` without the variable —
+the location the sessions, the history and the recent hosts already use. Optional: no file is
+the normal case, and `DefaultKeyMap()` answers. `--keys-file` points at another one, and a file
+named there must exist, because a typed path that silently fell back to the defaults would be
+indistinguishable from a working one.
+
+```yaml
+Retile: ctrl+t
+BroadcastAll: [b, ctrl+b]
+```
+
+The document is a mapping of **action** — a `KeyMap` field name, matched case-insensitively —
+to one key or a list of keys. Parsing lives in `internal/ui/keysconfig.go`, next to the struct
+it fills, so the vocabulary is the struct and cannot drift from it; `KeyMapActions()` lists it
+for `lazycssh --list-key-actions`, because a configuration surface nobody can enumerate is one
+nobody can write.
+
+Rules that make it safe to hand a user:
+
+- **Nothing is guessed.** An unknown action, a key name no terminal can produce, one action
+  bound twice, a document that is not a mapping — each is an error naming the file, the line and
+  the entry, before anything dials.
+- **All or nothing.** The whole document is read before any binding is replaced, so a typo on
+  the last line leaves the shipped keymap untouched rather than starting half remapped.
+- **Keys are canonicalised** to the string bubbletea reports for that press — `key.Matches`
+  compares `msg.String()`, so a binding written `shift+alt+x` is stored as `alt+shift+x` and a
+  binding that could never fire is rejected instead of accepted. `shift+a` is an error naming
+  `A`: a terminal reports the shifted character, not the chord. `TestEveryDefaultKeyCanBeWrittenInAFile`
+  pins the other direction — every key the shipped keymap uses is writable in a file
+  and round-trips unchanged, the two deliberate space spellings aside.
+- **Help follows the file.** An override keeps the shipped description and rebuilds the key
+  label from the new keys, so the `?` overlay, the short line and the box footers show what is
+  bound now. The chord bindings keep their `ctrl+a …` shape in the label.
+- **The status-bar hints read the bindings**, not constants: `App.escapeKey`, `App.prefixKey`,
+  `App.pagingLabel` and `App.reconnectKey` replace what used to be literal `ctrl+]`, `ctrl+a` and
+  `alt+r` in the labels.
+
+**Two bindings are fixed** and naming them is an error: `Prefix` (`ctrl+a`) and `PrefixLiteral`
+(`ctrl+a ctrl+a`, `ctrl+a a`). The prefix is how a command is reached from inside a terminal-like
+input, and the literal is how a remote `screen`, `tmux` or readline stays reachable — neither is
+a preference. Everything else the chord dispatches follows the effective keymap.
+
+Collisions between overrides are not rejected. The invariant tests
+(`TestNoAmbiguousBindingsWithinAnArea`, `TestGlobalBindingsDoNotCollideWithAnyArea`) hold for the
+shipped keymap; a user who binds two actions to one key gets the first one the router matches,
+which is their choice to make and not a reason to refuse to start.
 
 ## Help
 

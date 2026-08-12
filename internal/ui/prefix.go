@@ -16,7 +16,7 @@ const literalPrefixByte = 0x01
 // the binding cannot drift apart.
 var prefixKeystroke = DefaultKeyMap().Prefix.Help().Key
 
-// The ctrl+a chord (issue #273).
+// The ctrl+a chord (issues #273, #289).
 //
 // Paging between screenfuls is ctrl+shift+arrows, and in several common
 // environments that chord never arrives: macOS Terminal.app does not transmit
@@ -26,13 +26,24 @@ var prefixKeystroke = DefaultKeyMap().Prefix.Help().Key
 //
 // It follows GNU screen rather than inventing a dialect:
 //
-//   - ctrl+a arms the prefix; the next key press is a command.
+//   - ctrl+a arms the prefix; the next key press is a lazycssh command.
 //   - → / ← page, exactly like ctrl+shift+right / ctrl+shift+left.
 //   - ctrl+a ctrl+a and ctrl+a a send one literal ctrl+a, because ctrl+a is
 //     readline's beginning-of-line and typing must not lose it.
-//   - esc cancels.
+//   - esc cancels — inside the broadcast bar it switches to view mode.
+//   - every app-level command is reachable through it, including from inside
+//     the broadcast bar, where the keys otherwise belong to the hosts (issue
+//     #289). ctrl+a r re-tiles because Retile is ctrl+r: after the prefix a
+//     plain letter stands for its ctrl chord, screen's own ctrl+a c ≡
+//     ctrl+a ctrl+c rule, so the command set does not need a second keymap.
 //   - anything else cancels the prefix and is then handled as if it had been
 //     pressed on its own: a swallowed keystroke is worse than an unhandled one.
+//
+// The prefix and its literal are the two bindings a keymap file may not move
+// (see keysconfig.go): they are how a user leaves a mode and how a remote
+// screen, tmux or readline stays reachable, not a preference. Everything else
+// the chord dispatches follows the effective keymap, so ctrl+a r follows Retile
+// wherever it was rebound to.
 //
 // The armed state is one bool on the model, mutated only in Update, and it is
 // announced in the status bar for as long as it lasts: the user must know that
@@ -95,7 +106,7 @@ func (a App) sendPaneLiteral() (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 	if !a.cfg.Panes.SendKey(id, term.KeyEvent{Code: 'a', Mod: term.ModCtrl}) {
-		a.lastDelivery = id + " is not connected — alt+r reconnects, " + escapeKeystroke + " leaves"
+		a.lastDelivery = id + " is not connected — " + a.reconnectKey() + " reconnects, " + a.escapeKey() + " leaves"
 	}
 	return a, nil
 }
@@ -116,16 +127,100 @@ func (a App) resolveAppPrefix(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, a.keys.PrefixCancel):
 		return a, nil
 	}
-	return a.handleAppKey(msg)
+	return a.handleAppKey(a.chordCommandKey(msg))
+}
+
+// chordCommandKey is the key an armed prefix hands to the command dispatch.
+//
+// A key that is a command already is passed through. A plain character that is
+// not stands for its ctrl chord, which is how ctrl+a r reaches Retile's ctrl+r
+// without a second keymap - GNU screen's ctrl+a c ≡ ctrl+a ctrl+c, and the
+// reason the commands that hide behind ctrl chords (because a host would
+// otherwise eat them) are reachable from inside a terminal-like input at all.
+// A key that is neither is returned unchanged, for the caller to resolve.
+func (a App) chordCommandKey(msg tea.KeyPressMsg) tea.KeyPressMsg {
+	if a.keys.isCommand(msg) {
+		return msg
+	}
+	if chord, ok := withCtrl(msg); ok && a.keys.isCommand(chord) {
+		return chord
+	}
+	return msg
+}
+
+// isCommand reports whether a key press runs an app-level command: the global
+// bindings are exactly the ones that are live wherever focus is, which makes
+// them the chord's command set.
+func (k KeyMap) isCommand(msg tea.KeyPressMsg) bool {
+	return key.Matches(msg, k.global()...)
+}
+
+// withCtrl is the same key press with ctrl held. Only a plain character has
+// one: a chord, an arrow or a named key either carries a modifier already or
+// has no ctrl form a terminal would report.
+func withCtrl(msg tea.KeyPressMsg) (tea.KeyPressMsg, bool) {
+	if msg.Mod != 0 || msg.Text == "" {
+		return msg, false
+	}
+	msg.Mod = tea.ModCtrl
+	// ctrl+r carries no text; leaving it would make the key stringify as the
+	// letter again and match nothing.
+	msg.Text = ""
+	return msg, true
 }
 
 // prefixLabel is the status-bar indicator of an armed prefix, empty while none
 // is. It names what the next key may do, because a user who armed a chord by
-// accident needs to read the way out.
+// accident needs to read the way out. Every key in it comes from the binding
+// that handles it, so a remapped chord key cannot leave a lie on the bar.
 func (a App) prefixLabel() string {
 	if !a.prefixArmed {
 		return ""
 	}
-	return prefixKeystroke + "… — ←/→ page · " +
-		prefixKeystroke + "/a = literal " + prefixKeystroke + " · esc cancels"
+	prefix := a.prefixKey()
+	return prefix + "… — " + a.pagingLabel() + " page · " +
+		prefix + "/a = literal " + prefix + " · " +
+		firstKey(a.keys.PrefixCancel, "esc") + " cancels"
+}
+
+// firstKey is the key a binding is written with in a hint: its first, or the
+// fallback when something disabled the binding entirely.
+func firstKey(b key.Binding, fallback string) string {
+	if keys := b.Keys(); len(keys) > 0 {
+		return keys[0]
+	}
+	return fallback
+}
+
+// prefixKey names the chord prefix as the user presses it. It comes from the
+// binding rather than a constant, so the indicator and the binding cannot drift
+// apart - the property that survives the keymap file, since the prefix is one
+// of the two bindings it may not move.
+func (a App) prefixKey() string {
+	if label := a.keys.Prefix.Help().Key; label != "" {
+		return label
+	}
+	return prefixKeystroke
+}
+
+// pagingLabel names the two keys that page after the prefix, "←/→" by default.
+func (a App) pagingLabel() string {
+	return keyArrow(firstKey(a.keys.PrefixPrev, "left")) + "/" +
+		keyArrow(firstKey(a.keys.PrefixNext, "right"))
+}
+
+// keyArrow renders the arrow keys as arrows, the way the shipped help labels
+// write them, and everything else as the name it is bound to.
+func keyArrow(pressed string) string {
+	switch pressed {
+	case "left":
+		return "←"
+	case "right":
+		return "→"
+	case "up":
+		return "↑"
+	case "down":
+		return "↓"
+	}
+	return pressed
 }
