@@ -2,6 +2,21 @@
 
 ## 2026-08-12
 
+- One caret, owned deliberately every frame (issue #292). Panes painted a styled cursor cell
+  each, so every connected pane showed a caret — one in each pane the keyboard does not reach —
+  while the terminal's own cursor was set only for a focused dialog. Now `View` decides the
+  owner from scratch on every render: an open dialog, else the status bar's command line or
+  search prompt, else the focused pane's own cursor as its emulator reports it (mapped through
+  the same window the body was drawn from, offset by the pane's cell, border and header), else
+  `nil`, which is how bubbletea hides the caret. The two status-bar prompts had no caret at all
+  before — typing into `:` was typing blind. Panes
+  paint none, on the history view or the alt-screen grid. Two knock-on fixes: the remotes are
+  now sized to the smallest pane on the page rather than the first, so an uneven tiling cannot
+  put a host's cursor in a column its pane never draws, and a pane's content is measured once
+  per frame through the render memo, so the body and the caret read one snapshot. Updated:
+  `core/tui.md` (new "The caret"), `core/terminal.md`, `core/program.md`,
+  `userdocs/guides/broadcasting.md`, `userdocs/guides/full-screen-apps.md`. Version 0.10.42.
+
 - The docs site has a manual publish path again (issue #295). Removing the GitHub Actions
   workflows in #287 dropped the only thing that deployed `userdocs/` to GitHub Pages, leaving
   https://truedaerk.github.io/lazycssh/ stale with no way to update it. Added `make docs`

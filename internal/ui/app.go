@@ -1052,12 +1052,21 @@ func (a App) View() tea.View {
 
 	content := lipgloss.JoinVertical(lipgloss.Left, body, bottom)
 
+	// The terminal's caret belongs to whatever the keyboard is aimed at, and
+	// to nothing else: a dialog while one is open, the status bar's prompt
+	// while one is, the focused pane while the grid has it, and nowhere at all
+	// otherwise - an overlay covering the frame takes it away again below
+	// (issue #292).
+	cursor := a.frameCursor()
+
 	// Dialogs and the help are popups over the frame, not replacements for
 	// it: the fleet stays visible underneath, the way lazygit's menus behave.
 	// The focused dialog's text cursor is the frame's cursor, so the terminal
 	// draws it where the typing lands; see modal.go.
-	var cursor *tea.Cursor
 	if m, ok := a.activeModal(); ok {
+		// The dialog owns the keyboard from here on, so the pane behind it
+		// gives its caret up even when the frame is too small to draw a box.
+		cursor = nil
 		if box, x, y, c := a.renderModal(m); box != "" {
 			content, cursor = composite(content, box, x, y), c
 		}
@@ -1076,6 +1085,85 @@ func (a App) View() tea.View {
 	view := tea.NewView(content)
 	view.Cursor = cursor
 	return view
+}
+
+// frameCursor is the terminal cursor of whatever owns the keyboard outside a
+// dialog: the status bar's prompt while one is open, otherwise the focused
+// pane's own cursor - the host's, in the frame's coordinates, so the caret the
+// terminal blinks sits exactly where the remote shell says the next character
+// lands.
+//
+// nil means nothing owns it: no prompt, the grid without the focus, a host
+// that is not connected, a pane scrolled back into history, a remote app that
+// hid its cursor. bubbletea hides the caret for a frame whose Cursor is nil,
+// which is what keeps a stale one from being left behind (issue #292).
+func (a App) frameCursor() *tea.Cursor {
+	// The two status-bar prompts own the keyboard wherever the focus happens
+	// to be - see the guard chain in handleKey - so they own the caret too.
+	// The order is View's own: the caret sits in the line that is drawn.
+	if a.searchInput.Focused() {
+		return a.statusPromptCursor("/", a.searchInput)
+	}
+	if a.cmdInput.Focused() {
+		return a.statusPromptCursor(":", a.cmdInput)
+	}
+
+	if a.focus != AreaGrid {
+		return nil
+	}
+	id := a.FocusedHost()
+	if id == "" {
+		return nil
+	}
+	cell, ok := a.focusedPaneRect()
+	if !ok {
+		return nil
+	}
+	// The pane's border eats a column on each side, and its header the first
+	// row inside it, exactly as renderPane draws them.
+	x, y, ok := a.paneCursor(id, cell.Width-2, cell.Height-3)
+	if !ok {
+		return nil
+	}
+	return tea.NewCursor(cell.X+1+x, cell.Y+2+y)
+}
+
+// statusPromptCursor places the caret in one of the status bar's prompts: past
+// the bar's padding, the prompt's one-column sigil and the text typed before
+// the caret, on the bar's own row. The prompts are drawn by renderCommandLine
+// and renderSearchLine, which lay their line out exactly this way.
+func (a App) statusPromptCursor(sigil string, in boxedInput) *tea.Cursor {
+	r := a.layout.StatusBar
+	if r.Empty() {
+		return nil
+	}
+	x := a.theme.StatusBar.GetPaddingLeft() + lipgloss.Width(sigil) +
+		typedWidth(in.Value(), in.Position())
+	if x >= r.Width {
+		// Typed past the edge of the bar: the terminal would put the caret on
+		// the next line, which is not where the text is.
+		return nil
+	}
+	return tea.NewCursor(r.X+x, r.Y)
+}
+
+// focusedPaneRect is the cell the focused pane is drawn in, in the frame's
+// coordinates. ok is false when it is not on screen: no hosts, no room for a
+// pane, or a page other than the one showing. It walks the same arithmetic as
+// renderMain, so the rect is where the pane really is.
+func (a App) focusedPaneRect() (Rect, bool) {
+	if len(a.hostIDs()) == 0 {
+		return Rect{}, false
+	}
+	if a.screen == ScreenFull {
+		// Full screen is one pane in the whole main area.
+		return a.layout.Main, true
+	}
+	g := a.grid()
+	if g.Empty() || g.PerPage <= 0 || g.Page(a.paneIndex) != a.clampedPage(g) {
+		return Rect{}, false
+	}
+	return g.Cell(a.paneIndex)
 }
 
 // renderSidebar draws the panel column the way lazygit does: every panel is

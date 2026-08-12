@@ -7,9 +7,9 @@ anything else that takes over the screen work in a pane.
 
 Focus a pane and run the app. When it switches to the alternate screen, the pane
 stops rendering scrollback text and renders the **live screen grid** instead:
-the emulator's screen clipped to the pane body, with the remote app's cursor
-drawn where the app says it is — and hidden when the app hides it, the way vim
-does while repainting.
+the emulator's screen clipped to the pane body. The terminal's own cursor sits
+where the app says it is, for as long as that pane has the focus — and vanishes
+when the app hides it, the way vim does while repainting.
 
 While the grid is active, the pane is entirely the remote app's:
 

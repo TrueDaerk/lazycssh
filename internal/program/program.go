@@ -717,6 +717,14 @@ func (m *Model) resizePTYsIfChanged() {
 
 // paneExtent is the pane content size the remotes should believe, 0x0 when
 // there is nothing drawn to take it from.
+//
+// Every remote is told the same size - one fleet, one window-change request -
+// so it is the *smallest* pane on the page. The tiling spreads the columns and
+// rows a division leaves over onto the leftmost and topmost cells, so the panes
+// differ by one; a host told it is wider than its pane wraps its lines where
+// the pane does not and puts its cursor in a column the pane never draws
+// (issue #292). A column of unused space in the roomier panes is the cheaper
+// mistake.
 func (m *Model) paneExtent() (width, height int) {
 	if m.width <= 0 || m.height <= 0 {
 		return 0, 0
@@ -727,10 +735,14 @@ func (m *Model) paneExtent() (width, height int) {
 	if grid.Empty() {
 		return 0, 0
 	}
-	cell := grid.Cells[0]
 	// One line of header and the border on each side never belong to the
 	// remote shell.
-	return max(1, cell.Width-2), max(1, cell.Height-3)
+	width, height = grid.Cells[0].Width-2, grid.Cells[0].Height-3
+	for _, cell := range grid.Cells[1:] {
+		width = min(width, cell.Width-2)
+		height = min(height, cell.Height-3)
+	}
+	return max(1, width), max(1, height)
 }
 
 // resizePTYs tells every remote PTY how big its pane's content is right now.

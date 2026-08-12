@@ -128,10 +128,11 @@ func (a App) altScreenTerminal(id string) *term.Emulator {
 func (a App) paneAltScreen(id string) bool { return a.altScreenTerminal(id) != nil }
 
 // terminalGrid renders the emulator's live screen into the pane body: the
-// grid clipped to the area, with the remote app's cursor drawn where it says
-// it is. No tail, no scroll offset, no search — the remote app owns the whole
-// screen, exactly as it would in a plain terminal.
-func (a App) terminalGrid(t *term.Emulator, width, height int) string {
+// grid clipped to the area. No tail, no scroll offset, no search — the remote
+// app owns the whole screen, exactly as it would in a plain terminal. The
+// cursor is not painted in here; it is the frame's terminal cursor, placed by
+// [App.paneCursor] when the pane has focus.
+func terminalGrid(t *term.Emulator, width, height int) string {
 	lines := strings.Split(t.Render(), "\n")
 	if len(lines) > height {
 		lines = lines[:height]
@@ -139,30 +140,7 @@ func (a App) terminalGrid(t *term.Emulator, width, height int) string {
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], width, "")
 	}
-
-	if t.CursorVisible() {
-		x, y := t.CursorPosition()
-		if y >= 0 && y < len(lines) && x >= 0 && x < width {
-			lines[y] = overlayCursor(lines[y], x, a.theme.Cursor)
-		}
-	}
 	return strings.Join(lines, "\n")
-}
-
-// overlayCursor draws the cursor style over column x of a rendered line,
-// keeping the surrounding ANSI colours intact.
-func overlayCursor(line string, x int, style lipgloss.Style) string {
-	if w := ansi.StringWidth(line); w <= x {
-		line += strings.Repeat(" ", x-w)
-		return line + style.Render(" ")
-	}
-	left := ansi.Cut(line, 0, x)
-	ch := ansi.Strip(ansi.Cut(line, x, x+1))
-	if ch == "" {
-		ch = " "
-	}
-	right := ansi.Cut(line, x+1, ansi.StringWidth(line))
-	return left + style.Render(ch) + right
 }
 
 // paneTerminal returns the session's emulator, or nil when the host is
@@ -231,9 +209,29 @@ type paneContent struct {
 	total int
 }
 
-// paneContent measures a host's pane content. ok is false when the host is
-// unknown or has said nothing yet.
+// paneContent measures a host's pane content, through the frame's memo when
+// one is live. ok is false when the host is unknown or has said nothing yet.
+//
+// Going through the memo is not only cheaper: the body and the cursor then
+// read the same screen, and a reader goroutine writing between the two would
+// otherwise be able to put the caret a row away from the text it belongs to.
 func (a App) paneContent(id string) (paneContent, bool) {
+	if a.memo == nil {
+		return a.measurePaneContent(id)
+	}
+	if hit, ok := a.memo.content[id]; ok {
+		return hit.c, hit.ok
+	}
+	c, ok := a.measurePaneContent(id)
+	if a.memo.content == nil {
+		a.memo.content = make(map[string]memoPaneContent, 1)
+	}
+	a.memo.content[id] = memoPaneContent{c: c, ok: ok}
+	return c, ok
+}
+
+// measurePaneContent is [App.paneContent] without the memo.
+func (a App) measurePaneContent(id string) (paneContent, bool) {
 	t := a.paneTerminal(id)
 	if t == nil || !t.HasOutput() {
 		return paneContent{}, false
@@ -288,13 +286,80 @@ func (a App) virtualLineCount(id string) int {
 	return c.total
 }
 
+// paneWindow is the slice of a host's virtual line space one pane body shows,
+// together with where the remote cursor falls in it. The render and the
+// cursor placement both work from this, so what is drawn and where the caret
+// goes cannot disagree (issue #292).
+type paneWindow struct {
+	c paneContent
+	// start and end bound the window in virtual line indexes, end exclusive.
+	start, end int
+	// total is the virtual line count the window was cut from, which may be
+	// one more than the content has: see [App.paneWindowFor].
+	total int
+	// cursorIdx is the virtual line the remote cursor stands on and cursorCol
+	// its column.
+	cursorIdx, cursorCol int
+	// cursorLive reports that the pane could show a cursor at all: a connected
+	// host, following the tail, with the remote app showing its cursor.
+	// Whether the cursor lands inside the window is [paneWindow.cursorCell].
+	cursorLive bool
+}
+
+// cursorCell locates the remote cursor inside the window, in cells counted
+// from the window's top-left. ok is false when no cursor belongs on screen.
+func (w paneWindow) cursorCell() (x, y int, ok bool) {
+	y = w.cursorIdx - w.start
+	return w.cursorCol, y, w.cursorLive && y >= 0 && y < w.end-w.start && w.cursorCol >= 0
+}
+
+// paneWindowFor computes the window a pane body of the given height shows.
+func (a App) paneWindowFor(id string, height int) (paneWindow, bool) {
+	t := a.paneTerminal(id)
+	if t == nil {
+		return paneWindow{}, false
+	}
+	c, ok := a.paneContent(id)
+	if !ok || c.total == 0 {
+		return paneWindow{}, false
+	}
+
+	cx, cy := t.CursorPosition()
+	w := paneWindow{c: c, total: c.total, cursorIdx: c.screenTop + cy, cursorCol: cx}
+
+	// The cursor may sit on the blank row below the last content — right
+	// after a line feed. That row must exist to be drawn on, but only while
+	// the pane follows the tail and could show a cursor at all.
+	connected := a.state(id) == ssh.StateConnected
+	if a.scrollOffset(id) == 0 && connected && w.total <= w.cursorIdx {
+		w.total = w.cursorIdx + 1
+	}
+
+	offset := clamp(a.scrollOffset(id), 0, max(0, w.total-height))
+	w.end = w.total - offset
+	w.start = max(0, w.end-height)
+	if offset == 0 {
+		// Following the tail shows the screen, exactly like a real terminal:
+		// after a `clear` the pane is empty even though the history above is
+		// still there — scrolling up reaches it.
+		w.start = max(w.start, c.screenTop)
+	}
+	// Scrolled back, the window is history: a cursor in it would claim input
+	// goes somewhere it does not.
+	w.cursorLive = offset == 0 && connected && t.CursorVisible()
+	return w, true
+}
+
 // paneBody renders one host's terminal into an area of width columns and
 // height rows: the live screen when following the tail, a window over
 // [history ++ screen] when scrolled back, and the lines the active search
 // matches highlighted. A pane whose remote app is on the alternate screen
-// renders the live grid alone — no scroll, no search, no selection. A
-// connected pane following the tail draws the remote cursor where the
-// emulator says it is (issue #190).
+// renders the live grid alone — no scroll, no search, no selection.
+//
+// The remote cursor is not painted into the body. It is the frame's terminal
+// cursor and only the focused pane has it, so the caret blinks in the one
+// pane the keyboard reaches instead of in every connected one (issue #292);
+// [App.paneCursor] is where it is placed.
 func (a App) paneBody(id string, width, height int) string {
 	if height <= 0 || width <= 0 {
 		return ""
@@ -304,51 +369,26 @@ func (a App) paneBody(id string, width, height int) string {
 		return ""
 	}
 	if t.IsAltScreen() {
-		return a.terminalGrid(t, width, height)
+		return terminalGrid(t, width, height)
 	}
-	c, ok := a.paneContent(id)
-	if !ok || c.total == 0 {
+	w, ok := a.paneWindowFor(id, height)
+	if !ok {
 		return ""
-	}
-	screenTop := c.screenTop
-
-	// The cursor may sit on the blank row below the last content — right
-	// after a line feed. That row must exist to be drawn on, but only while
-	// the pane follows the tail and could show a cursor at all.
-	cx, cy := t.CursorPosition()
-	cursorIdx := screenTop + cy
-	total := c.total
-	if a.scrollOffset(id) == 0 && a.state(id) == ssh.StateConnected && total <= cursorIdx {
-		total = cursorIdx + 1
-	}
-
-	offset := clamp(a.scrollOffset(id), 0, max(0, total-height))
-	end := total - offset
-	start := max(0, end-height)
-	if offset == 0 {
-		// Following the tail shows the screen, exactly like a real terminal:
-		// after a `clear` the pane is empty even though the history above is
-		// still there — scrolling up reaches it.
-		start = max(start, screenTop)
 	}
 	// Only the window is materialized: everything above it — the whole
 	// retained history, at the cap — stays untouched cells in the emulator
 	// (issue #274).
-	window := make([]string, end-start)
+	window := make([]string, w.end-w.start)
 	for i := range window {
-		window[i] = c.line(a, start+i)
+		window[i] = w.c.line(a, w.start+i)
 	}
 
 	// The open auth question's answer is typed inline at the cursor, the way
 	// a terminal takes it (issue #180). The echo carries its own cursor block,
-	// so the remote cursor is not drawn on top of it.
-	echoing := false
-	if echo, ok := a.inlineAnswerEcho(id); ok {
-		if cursorIdx >= 0 && cursorIdx < total {
-			if i := cursorIdx - start; i >= 0 && i < len(window) {
-				window[i] = spliceAt(window[i], cx) + echo
-			}
-			echoing = true
+	// because the answer is typed into the pane rather than into the remote.
+	if echo, ok := a.inlineAnswerEcho(id); ok && w.cursorIdx >= 0 && w.cursorIdx < w.total {
+		if i := w.cursorIdx - w.start; i >= 0 && i < len(window) {
+			window[i] = spliceAt(window[i], w.cursorCol) + echo
 		}
 	}
 
@@ -365,7 +405,7 @@ func (a App) paneBody(id string, width, height int) string {
 				// lose. The line the search cursor stands on takes the louder
 				// style, so 3/17 is visible on the screen too.
 				style := a.theme.Match
-				if start+i == cursor {
+				if w.start+i == cursor {
 					style = a.theme.MatchCurrent
 				}
 				window[i] = style.Render(text)
@@ -373,12 +413,48 @@ func (a App) paneBody(id string, width, height int) string {
 		}
 	}
 
-	if offset == 0 && !echoing && a.state(id) == ssh.StateConnected && t.CursorVisible() {
-		if i := cursorIdx - start; i >= 0 && i < len(window) && cx >= 0 && cx < width {
-			window[i] = overlayCursor(window[i], cx, a.theme.Cursor)
+	return strings.Join(window, "\n")
+}
+
+// paneCursor is where the host's own cursor sits inside a pane body of width
+// columns and height rows, in cells counted from the body's top-left corner.
+//
+// ok is false whenever the pane has no cursor to show: an unknown or silent
+// host, a session that is not connected, a window scrolled back into history,
+// a remote app that hid its cursor, an open auth question answering inline
+// (its echo carries its own block), or a position outside the drawn area.
+// The caller turns the cell into the frame's terminal cursor; see
+// [App.frameCursor].
+func (a App) paneCursor(id string, width, height int) (x, y int, ok bool) {
+	if width <= 0 || height <= 0 {
+		return 0, 0, false
+	}
+	t := a.paneTerminal(id)
+	if t == nil || a.state(id) != ssh.StateConnected || !t.CursorVisible() {
+		return 0, 0, false
+	}
+	if _, answering := a.inlineAnswerEcho(id); answering {
+		return 0, 0, false
+	}
+
+	if t.IsAltScreen() {
+		// The full-screen app owns the grid, so its cursor is the grid's own
+		// cell — no history, no scroll offset to map through.
+		x, y = t.CursorPosition()
+	} else {
+		w, found := a.paneWindowFor(id, height)
+		if !found {
+			return 0, 0, false
+		}
+		var live bool
+		if x, y, live = w.cursorCell(); !live {
+			return 0, 0, false
 		}
 	}
-	return strings.Join(window, "\n")
+	if x < 0 || x >= width || y < 0 || y >= height {
+		return 0, 0, false
+	}
+	return x, y, true
 }
 
 // spliceAt cuts a rendered line at column x, padding with spaces when the
