@@ -2,6 +2,16 @@
 
 ## 2026-08-12
 
+- The docs site has a manual publish path again (issue #295). Removing the GitHub Actions
+  workflows in #287 dropped the only thing that deployed `userdocs/` to GitHub Pages, leaving
+  https://truedaerk.github.io/lazycssh/ stale with no way to update it. Added `make docs`
+  (`mkdocs build --strict` into the git-ignored `site/`) and `make docs-deploy` (`mkdocs
+  gh-deploy --strict`, which builds and force-pushes to `gh-pages`); both guard on `mkdocs`
+  being installed and point at `pip install mkdocs-material` when it is not. The repository's
+  Pages configuration now deploys from the `gh-pages` branch root instead of `build_type:
+  workflow`, so pushing that branch is the whole publish step. Updated:
+  `contributing/documentation.md`.
+
 - The host grid no longer disappears when another panel is focused (issue #290). Since
   issue #218 a focused list panel took the whole main area for a preview of its cursor row,
   so navigating Sessions or Groups blanked every connected host's output even though the

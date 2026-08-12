@@ -8,13 +8,16 @@
 #   make clean
 #   make test
 #   make vet
+#   make docs                           # build the docs site strictly into ./site
+#   make docs-deploy                    # publish the docs site to the gh-pages branch
 
 BINARY  := lazycssh
 PACKAGE := ./cmd/lazycssh
 BINDIR  ?= $(HOME)/.local/bin
 GO      ?= go
+MKDOCS  ?= mkdocs
 
-.PHONY: all build install uninstall clean test vet
+.PHONY: all build install uninstall clean test vet docs docs-deploy docs-check-mkdocs
 
 all: build
 
@@ -38,3 +41,21 @@ test:
 
 vet:
 	$(GO) vet ./...
+
+# `mkdocs build --strict` renders userdocs/ into ./site (git-ignored) and fails
+# on any broken link, matching the strict: true intent in mkdocs.yml.
+docs: docs-check-mkdocs
+	$(MKDOCS) build --strict
+
+# No GitHub Actions workflow publishes the docs site (removed in #287); this
+# target is the manual replacement. `gh-deploy` builds and force-pushes the
+# rendered site to the gh-pages branch, which GitHub Pages is configured to
+# serve directly (see wiki/contributing/documentation.md).
+docs-deploy: docs-check-mkdocs
+	$(MKDOCS) gh-deploy --strict
+
+docs-check-mkdocs:
+	@command -v $(MKDOCS) >/dev/null 2>&1 || { \
+		echo "error: mkdocs not found — install it with 'pip install mkdocs-material' (see userdocs/requirements.txt)" >&2; \
+		exit 1; \
+	}
