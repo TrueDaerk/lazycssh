@@ -198,6 +198,8 @@ func (a App) snapshotFleet() App {
 	a.fleetHosts = ids
 	a.hostStates = states
 	a.fleetCounts = counts
+	// A host that left the fleet takes its cached pane frame with it.
+	a.render.prune(ids)
 	if len(ids) > 0 {
 		a.hadHosts = true
 	}

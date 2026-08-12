@@ -4,7 +4,7 @@ title: Terminal emulation
 description: The per-session vt emulator that holds everything a pane shows — screen, retained history, cursor, modes — encodes key presses per host, and reflows on resize.
 resource: internal/term
 tags: [terminal, vt, emulation, alt-screen, scrollback, keys, resize]
-timestamp: 2026-08-12T12:00:00Z
+timestamp: 2026-08-12T22:00:00Z
 ---
 
 # Terminal emulation
@@ -28,6 +28,7 @@ are handled by a real VT implementation instead of case-by-case emulation.
 | `TextLineCount` | how many lines `Text` would return, without building them |
 | `TailText(n)` | the last n lines of `Text`, without materializing the rest |
 | `HistoryCursor` | where the retained history stands in the whole output stream, for incremental readers |
+| `Seq` | a change counter over everything a render reads — has anything changed since I last looked |
 | `IsAltScreen` | a full-screen app (vim, htop) owns the pane |
 | `CursorPosition` / `CursorVisible` | where the remote cursor is and whether the app wants it drawn |
 | `HasOutput` | has this session said anything yet — decides whether injected text needs a leading line break |
@@ -79,6 +80,14 @@ reader that keeps per-line state — the UI's search match cache — shifts it b
 delta and scans only the appended tail, instead of rescanning the cap; a `Gen` change or
 `Exact` false means start over. The invariant is pinned by test: while `Gen` holds,
 `Start + i` addresses the same line across drops.
+
+**`Seq` says whether a cached render is still current (issue #293).** It increments on every
+write, resize and retention change, inside the same lock the mutation holds for its whole
+critical section, so a reader that measured the emulator under one `Seq` value and reads the
+same value later knows the measurement still describes the current state. It is deliberately
+coarse — a write that changes nothing visible still bumps it — because the failure mode of
+coarseness is one spare re-render, never a stale one. The UI's cross-frame render cache (see
+[The TUI](./tui.md)) keys each pane's cached frame on it.
 
 **`Text` is expensive; per-event readers use the bounded calls.** Rendering the retained
 history costs milliseconds and megabytes per call at the cap — the performance audit (issue

@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-12T18:00:00Z
+timestamp: 2026-08-12T22:00:00Z
 ---
 
 # TUI shell
@@ -122,6 +122,21 @@ wrong index. Match *cursor* state (`matchAt`, `searchAnchor`) stays in the model
 is a memo behind a shared pointer, filled wherever `matchLines` runs. What still scales with
 the match count is the highlight itself: restyled lines carry ANSI that makes the border
 render costlier, but that is bounded by the window, not the scrollback.
+
+A pane that did not change since the last frame is not re-rendered at all (issue #293). Every
+redraw used to rebuild every visible pane — measure the emulator, materialize the window, style
+the header, draw the border — even when the output that forced the frame landed on one host, or,
+in full-screen mode, on a host that is not even on screen. The **cross-frame render cache**
+(`rendercache.go`) keeps each host's measured content snapshot and its fully framed pane string
+across frames, in the same shape as the search cache: a pointer shared by every model copy,
+self-validating on every read, no invalidation hook to forget. The validity signal is the
+emulator's `Seq` counter (see [Terminal emulation](./terminal.md)), which moves with every
+write, resize and retention change; everything else a pane's rendering depends on — geometry,
+focus, scroll, search, selection, theme — is captured in a comparable `paneKey`, and any
+mismatch re-renders. Forgetting a dependency in that key is the only way to serve a stale
+frame, so a new input to the pane render path must be added there. The frame memo below stays
+the per-frame pin that keeps one `View` on one snapshot; the cache is what lets that snapshot
+survive into the next frame.
 
 Two structural rules keep it that way. First, `View` plants a **one-frame memo** on its value
 copy of the model (`framememo.go`): the visible host list and the tiled grid are computed once
