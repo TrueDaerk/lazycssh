@@ -285,6 +285,11 @@ type App struct {
 	page      int
 	showHelp  bool
 
+	// showPreview is the focused panel's preview as a popup over the frame.
+	// The main area belongs to the grid while there are panes (issue #290), so
+	// `p` is how the cursor row's detail is asked for; see preview.go.
+	showPreview bool
+
 	// screen is how much of the terminal the focused area gets; see screen.go.
 	screen ScreenMode
 
@@ -418,6 +423,10 @@ func (a App) Theme() Theme { return *a.theme }
 
 // HelpVisible reports whether the overlay is open.
 func (a App) HelpVisible() bool { return a.showHelp }
+
+// PreviewVisible reports whether the focused panel's row preview is floating
+// over the frame.
+func (a App) PreviewVisible() bool { return a.showPreview }
 
 // Update handles one message. It is the only place the model changes.
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -689,6 +698,17 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
+	// The row preview is the same kind of topmost overlay, and it closes the
+	// same way: it is something the user opened to read, not a mode to drive
+	// the fleet from (issue #290).
+	if a.showPreview {
+		if key.Matches(msg, a.keys.ForceQuit) {
+			return a, tea.Quit
+		}
+		a.showPreview = false
+		return a, nil
+	}
+
 	// A live mouse selection takes ctrl+c: it copies and clears, and no
 	// interrupt goes out - the status line says why (issue #149). Without a
 	// selection ctrl+c stays what it always was, a keystroke for the hosts.
@@ -906,6 +926,11 @@ func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.movePanel(-1), nil
 	case key.Matches(msg, a.keys.Right):
 		return a.movePanel(+1), nil
+	case key.Matches(msg, a.keys.RowPreview) && hasPreview(a.panel):
+		// The detail of the cursor row, floated over the grid rather than
+		// taking it (issue #290). A panel without a preview leaves p alone.
+		a.showPreview = true
+		return a, nil
 	}
 
 	cmd := a.panels.byID(a.panel).Update(msg)
@@ -1037,6 +1062,9 @@ func (a App) View() tea.View {
 			content, cursor = composite(content, box, x, y), c
 		}
 	}
+	if overlay, x, y, ok := a.previewOverlay(); ok {
+		content, cursor = composite(content, overlay, x, y), nil
+	}
 	if a.showHelp {
 		if overlay := a.renderHelpOverlay(); overlay != "" {
 			x := max(0, (a.layout.Width-lipgloss.Width(overlay))/2)
@@ -1088,8 +1116,9 @@ func (a App) renderMain() string {
 	r := a.layout.Main
 	focused := a.focus == AreaGrid
 
-	// A focused list panel takes the main area for a preview of its cursor
-	// row, lazygit style; the grid comes back with the focus (issue #218).
+	// A focused list panel previews its cursor row here, lazygit style
+	// (issue #218) - but only while there is no pane to draw: panes leave the
+	// grid when their session ends, not when focus moves (issue #290).
 	if preview, ok := a.mainPreview(); ok {
 		return preview
 	}
