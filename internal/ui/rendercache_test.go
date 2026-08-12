@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/TrueDaerk/lazycssh/internal/ssh"
 )
 
 // The cross-frame render cache (issue #293): a pane whose host said nothing
@@ -181,5 +183,93 @@ func TestCachePrunesDepartedHosts(t *testing.T) {
 
 	if _, ok := a.render.hosts["web-02"]; ok {
 		t.Fatal("the departed host's cache entry survived the fleet change")
+	}
+}
+
+// The cache must stay invisible through a whole session of interactions, not
+// only on a quiet frame: after every step below, the cached View and the
+// honest one (render nil, the documented cache-off mode) are the same frame
+// (issue #291).
+func TestCachedViewMatchesFreshRenderThroughInteractions(t *testing.T) {
+	fleet := newFakeFleet("web-01", "web-02", "web-03", "web-04")
+	for _, name := range fleet.ids {
+		fleet.sessions[name].EchoInput = true
+		fleet.connect(t, name)
+		fleet.sessions[name].Emit("hello from " + name + "\r\n")
+	}
+	a := resize(t, NewApp(Config{
+		Hosts: fleet.ids, Fleet: fleet, Panes: fleet, Theme: Options{Dark: true},
+	}), 220, 60)
+	a = syncFleet(t, a)
+
+	match := func(step string) {
+		t.Helper()
+		fresh := a
+		fresh.render = nil
+		if got, want := a.View().Content, fresh.View().Content; got != want {
+			t.Fatalf("after %s the cached View differs from the fresh one:\ncached:\n%s\nfresh:\n%s",
+				step, got, want)
+		}
+	}
+
+	match("the first frame")
+
+	fleet.sessions["web-02"].Emit("only web-02 said this\r\n")
+	model, _ := a.Update(SessionOutputMsg{ID: "web-02"})
+	a = model.(App)
+	match("output on one host")
+
+	a.focus = AreaGrid
+	a = pressKey(t, a, "x") // typed into the focused pane, echoed by the fake
+	match("a typed keystroke")
+
+	a = pressKey(t, a, "alt+right")
+	match("a focus move")
+
+	a.searchTerm = "hello"
+	match("a live search term")
+	a.searchTerm = ""
+
+	fleet.sessions["web-01"].Flood(200)
+	model, _ = a.Update(SessionOutputMsg{ID: "web-01"})
+	a = model.(App)
+	a.scroll["web-01"] = 40
+	match("a scrolled-back pane")
+	delete(a.scroll, "web-01")
+
+	fleet.sessions["web-03"].ReportExit(1)
+	a = syncFleet(t, a)
+	match("a failed command")
+
+	fleet.sessions["web-04"].Disconnect(ssh.ErrDisconnected())
+	a = syncFleet(t, a)
+	match("a dropped host")
+
+	model, _ = a.Update(tea.BackgroundColorMsg{})
+	a = model.(App)
+	match("a theme change")
+
+	a = resize(t, a, 180, 50)
+	match("a resize")
+
+	a = pressKey(t, a, "alt+z")
+	match("full screen")
+	a = pressKey(t, a, "alt+z")
+	match("leaving full screen")
+}
+
+// An open auth question echoes the typed answer into the pane body; the cache
+// must not serve the frame from before a keystroke of it.
+func TestCachedViewMatchesFreshRenderDuringAuth(t *testing.T) {
+	a, _ := authTestApp(t)
+	a = resize(t, a, 220, 60)
+	a.focus = AreaGrid
+	for _, step := range []string{"s", "3"} {
+		a = pressKey(t, a, step)
+		fresh := a
+		fresh.render = nil
+		if got, want := a.View().Content, fresh.View().Content; got != want {
+			t.Fatalf("after typing %q into the auth prompt the cached View differs from the fresh one", step)
+		}
 	}
 }

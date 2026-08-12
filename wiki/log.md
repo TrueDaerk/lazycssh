@@ -2,6 +2,24 @@
 
 ## 2026-08-12
 
+- Keystroke updates stop scaling with the fleet (issue #291). Profiling the typing path on a
+  100-host fake fleet showed the transport innocent — the stdin queues never block — and, with
+  the #293 render cache already carrying the pane frames, two per-keystroke costs left: every
+  `SessionOutputMsg` (one per host per event batch; a broadcast keystroke into 100 hosts is 100
+  of them) ran the O(fleet) `syncLayout`/`syncBroadcastLimit`/`syncPanels` resync, and the
+  grid's joins re-measured every line's width per frame. Redraw hints without an output filter
+  now skip the per-message resyncs — a live filter and a selected Output diff panel keep the
+  full path, because for them new output is exactly what changes the frame — and the grid's
+  rows are joined by a plain zip (`zipJoinRow`) instead of `lipgloss.JoinHorizontal`, whose
+  per-line width measurement bought nothing over cells `frame` already renders to exact
+  rectangles. The keystroke-to-echo path is pinned by the new `BenchmarkKeystrokeFleet12`/
+  `BenchmarkKeystrokeFleet100`/`BenchmarkKeystrokeBroadcast100`: on an M4, a focused-pane
+  keystroke to its echo frame went 1.65 ms and 0.70 MB of garbage to 1.19 ms and 0.56 MB
+  (2.64 ms before the render cache), and a broadcast keystroke fanned to 100 hosts went
+  5.73 ms and 9.7 MB to 2.32 ms and 1.7 MB.
+  Backpressure semantics untouched — the stdin queue and ring-buffer tests pass unchanged.
+  Updated: `core/tui.md`, `core/terminal.md`. Version 0.11.2.
+
 - Panes render across frames through a cache now, full screen first (issue #293). Every redraw
   used to rebuild every visible pane — measure the emulator, materialize the window, style the
   header, draw the border — even when the output that forced the frame landed on one host, or on

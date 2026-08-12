@@ -138,6 +138,19 @@ frame, so a new input to the pane render path must be added there. The frame mem
 the per-frame pin that keeps one `View` on one snapshot; the cache is what lets that snapshot
 survive into the next frame.
 
+A keystroke's update cost stops scaling with the fleet (issue #291). Two costs sat on the
+typing path beyond the render itself. First, every `SessionOutputMsg` — one per host per
+event batch, so a broadcast keystroke into a 100-host fleet is 100 of them — ran the
+O(fleet) per-message resyncs (`syncLayout`/`syncBroadcastLimit`/`syncPanels`); a redraw
+hint without an output filter changes nothing those resyncs read, so it now skips them. A
+live output filter and a selected Output diff panel keep the full path — for those two, new
+output is exactly what changes the frame. Second, the grid's rows are joined by a plain zip
+(`zipJoinRow`) instead of `lipgloss.JoinHorizontal`: every cell is rendered by `frame` to
+its exact rectangle, so the general join's per-line width measurement — a fifth of a frame
+— bought nothing there; cells that break the shape fall back to the honest join. The
+keystroke-to-echo path is pinned by `BenchmarkKeystrokeFleet100` and
+`BenchmarkKeystrokeBroadcast100` in `perf_bench_test.go`.
+
 Two structural rules keep it that way. First, `View` plants a **one-frame memo** on its value
 copy of the model (`framememo.go`): the visible host list and the tiled grid are computed once
 per frame however often the renderers ask, and the memo dies with the copy — it can never leak

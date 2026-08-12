@@ -7,6 +7,9 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/TrueDaerk/lazycssh/internal/broadcast"
+	"github.com/TrueDaerk/lazycssh/internal/workingset"
 )
 
 // The render-path benchmarks pin the cost of one frame against a fleet whose
@@ -162,6 +165,81 @@ func BenchmarkOutputMsgUnderFilter(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		model, _ := a.Update(SessionOutputMsg{ID: "host-01"})
 		a = model.(App)
+	}
+}
+
+// benchKeystroke measures one keystroke into a focused pane at fleet scale n,
+// to the frame containing the echo.
+func benchKeystroke(b *testing.B, n int) {
+	a, fleet, names := benchFleet(b, n, 1000)
+	for _, name := range names {
+		fleet.sessions[name].EchoInput = true
+	}
+	a.focus = AreaGrid
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		model, _ := a.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+		a = model.(App)
+		model, _ = a.Update(SessionOutputMsg{ID: names[0]})
+		a = model.(App)
+		_ = a.View()
+	}
+}
+
+// BenchmarkKeystrokeFleet12 is the focused-pane keystroke at the size the
+// older render benchmarks use, so the fleet-scale cost is readable as a ratio.
+func BenchmarkKeystrokeFleet12(b *testing.B) { benchKeystroke(b, 12) }
+
+// BenchmarkKeystrokeBroadcast100 is one broadcast-bar keystroke fanned out to
+// 100 connected fake sessions, then every echo's redraw hint, then the frame:
+// the worst-case typing path at fleet scale (issue #291).
+func BenchmarkKeystrokeBroadcast100(b *testing.B) {
+	a, fleet, names := benchFleet(b, 100, 1000)
+	for _, name := range names {
+		fleet.sessions[name].EchoInput = true
+	}
+	ws := workingset.New(names)
+	router, err := broadcast.NewRouter(ws)
+	if err != nil {
+		b.Fatalf("router: %v", err)
+	}
+	router.Attach(fleet)
+	a.cfg.Sender = router
+	a.cfg.Targets = router
+	a.focus = AreaBroadcast
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		model, _ := a.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+		a = model.(App)
+		for _, name := range names {
+			model, _ = a.Update(SessionOutputMsg{ID: name})
+			a = model.(App)
+		}
+		_ = a.View()
+	}
+}
+
+// BenchmarkKeystrokeFleet100 is one keystroke into a focused pane with 100
+// connected fake sessions, measured to the frame containing the echo: the key
+// press Update, the echo's redraw hint, and the View that shows it — the
+// keystroke-to-screen path issue #291 is about. The scrollbacks carry moderate
+// history so the frame is a realistic one, not an empty grid.
+func BenchmarkKeystrokeFleet100(b *testing.B) {
+	a, fleet, names := benchFleet(b, 100, 1000)
+	for _, name := range names {
+		fleet.sessions[name].EchoInput = true
+	}
+	a.focus = AreaGrid
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		model, _ := a.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+		a = model.(App)
+		model, _ = a.Update(SessionOutputMsg{ID: names[0]})
+		a = model.(App)
+		_ = a.View()
 	}
 }
 
