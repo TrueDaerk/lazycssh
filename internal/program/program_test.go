@@ -265,6 +265,9 @@ func TestCloneRequestAddsASecondSessionToTheSameHost(t *testing.T) {
 	m.Manager().Wait()
 
 	settle(t, m, ui.CloneHostMsg{ID: "srv1"})
+	// The clone dials in its own goroutine, like every other session: without
+	// waiting for it the assertion below races the dial.
+	m.Manager().Wait()
 
 	got := m.Manager().IDs()
 	if len(got) != 3 || got[0] != "srv1" || got[1] != "srv2" || got[2] != "srv1#2" {
@@ -409,6 +412,41 @@ func TestWindowSizeResizesTheRemotePTYs(t *testing.T) {
 	}
 	if w >= 120 || h >= 40 {
 		t.Errorf("the PTY got the whole terminal (%dx%d); borders and sidebar were not subtracted", w, h)
+	}
+}
+
+// No remote may believe it has more room than its pane draws: the tiling
+// gives the leftover columns and rows to the leftmost and topmost cells, so
+// the size every host is told is the smallest pane's. A host told otherwise
+// wraps where the pane does not and puts its cursor off the pane (issue #292).
+func TestRemotePTYsFitTheSmallestPane(t *testing.T) {
+	m, lookup := testModel(t, "srv1", "srv2", "srv3", "srv4")
+	m.Init()
+	m.Manager().Wait()
+
+	// An odd width and height leave a remainder for the tiling to spread.
+	drive(t, m, tea.WindowSizeMsg{Width: 201, Height: 61})
+
+	grid := m.app.Grid()
+	if len(grid.Cells) < 2 {
+		t.Fatalf("setup: the grid has %d cells", len(grid.Cells))
+	}
+	uneven := false
+	for _, cell := range grid.Cells[1:] {
+		if cell.Width != grid.Cells[0].Width || cell.Height != grid.Cells[0].Height {
+			uneven = true
+		}
+	}
+	if !uneven {
+		t.Skip("this terminal size tiles evenly; nothing to assert")
+	}
+
+	w, h := lookup("srv1").Size()
+	for _, cell := range grid.Cells {
+		if w > cell.Width-2 || h > cell.Height-3 {
+			t.Fatalf("the remotes were told %dx%d, but a pane draws %dx%d",
+				w, h, cell.Width-2, cell.Height-3)
+		}
 	}
 }
 

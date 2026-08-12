@@ -140,11 +140,16 @@ on it must clone first — never write through the shared pointer.
 
 ## The main area
 
-The main area is lazygit's detail view: it shows the selection of whatever side panel has the
-keyboard (issue #218). The pane grid is the fleet's detail view, so it keeps the area whenever
-the **grid** or the **Status** panel — the panel that describes the run as a whole — has focus.
-The list panels replace it with a read-only **preview** of their cursor row, so moving the
-cursor says what `enter` would act on before it is pressed:
+The main area is lazygit's detail view, with one lazycssh-specific rule on top: **the grid
+outranks every preview** (issue #290). A host's output is live, so a pane leaves the screen when
+its session ends — never because the user walked the cursor through another panel. Whatever has
+the keyboard, the main area draws the pane grid as long as there is a pane to draw.
+
+The read-only **preview** of a list panel's cursor row (issue #218) — what `enter` would act on
+before it is pressed — is therefore the *empty* grid's tenant: it takes the main area only when
+the grid has no host to show, which is the argumentless start the preview is most useful in. With
+hosts on screen the sidebar keeps answering the same question: the selected panel expands to its
+full body, the others [preview inline](#layout) (issue #186). The panels that preview:
 
 | Panel | Preview |
 |-------|---------|
@@ -160,9 +165,29 @@ disagree with the frame it is drawn in. A preview taller than the area says how 
 (`+7 more`) rather than clipping silently, and it is drawn with `titledBox` into `Layout.Main`,
 so it degrades with the box at every size and the too-small guard still wins.
 
-While a preview is showing, the main area is not a grid: a click there brings the grid back
-instead of closing or typing into a pane that is not on screen, and the wheel over it scrolls
-nothing.
+While a preview is showing, the main area is not a grid: a click there does not close or type
+into a pane that is not on screen — it only takes the keyboard back to the grid, which is a
+no-op while there is no pane to enter — and the wheel over it scrolls nothing. The switch is
+`mainPreview()`, read once by `renderMain` and by both mouse handlers, so the frame and the
+hit-testing cannot disagree about what the main area holds.
+
+Empty grid does *not* mean empty session: a slot whose host left the fleet is a hole, and a grid
+of nothing but holes has no output to protect, so it hands the area to the preview like an
+empty one. With no hosts and no previewing panel focused, the main area is the **empty state** —
+what to press to get hosts — as it always was.
+
+### The row preview on demand
+
+Dropping the full-area preview would have cost one panel more than the others: the
+[output diff](./output-diff.md) shows the variant under the cursor *whole* only in the preview,
+and it is a panel one only uses with hosts connected. So the preview did not disappear with
+hosts on screen, it moved onto a key: **`p`** floats the focused panel's preview over the frame
+as a popup (`previewOverlay()`), centred inside `Layout.Main` with a margin of grid showing
+around it, and any key closes it again — the `?` overlay's contract, guard and all, so nothing
+drives the fleet while it is being read. `p` on a panel without a preview (Status) does nothing.
+
+That is the whole trade of issue #290: the grid is never taken away, and the detail is one key
+away instead of one focus change away.
 
 ## Pane grid
 
@@ -532,6 +557,45 @@ keeps focus at its new index, and only when it is gone does the focus clamp to t
 that exists. A list that shifts under the cursor must never silently move the user onto a
 different machine.
 
+## The caret
+
+There is one cursor on a terminal, so exactly one thing in the frame may own it, and the frame
+decides who — every render, from scratch. `View` sets `View.Cursor` and bubbletea hides the caret
+for any frame whose `Cursor` is `nil`, which is what keeps a caret from being left wherever the
+last frame put it (issue #292).
+
+The order of ownership, in `App.frameCursor` and `View`:
+
+1. an **open dialog** — the focused input's caret, at the column the next character lands in
+   (see [Dialogs](#dialogs)). A dialog owns the keyboard, so it owns the caret even when the
+   frame is too small to draw its box,
+2. a **status-bar prompt** — the [command line](#the-command-line) and the scrollback
+   [search](#search) own the keyboard wherever the focus happens to be (the guard chain in
+   `handleKey`), so they own the caret: past the bar's padding, the prompt's sigil and the text
+   typed before the caret, on the bar's own row,
+3. the **focused pane**, when the grid has the focus and the host is connected: the host's own
+   cursor, as its [emulator](./terminal.md) reports it, mapped through the same window the body
+   was rendered from and offset by the pane's cell, border and header. Typing on the remote side
+   is then trackable the way it is in any terminal — including a cursor an app moves with an
+   escape sequence,
+4. **nobody** — the help overlay is up, the sidebar or the broadcast bar has the focus, the pane
+   is scrolled back into history, the remote app hid its cursor (`CSI ?25l`), the session is not
+   connected, or the pane is on a page that is not showing. The caret is hidden.
+
+Panes therefore paint **no** cursor cell of their own, on the history view or on the
+[alt-screen grid](./terminal.md#grid-rendering-in-the-pane): a block drawn per pane would put a
+caret in every connected pane at once, in panes the keyboard does not reach. The two carets that
+remain styled cells are per-host prompts that several panes can show at the same time — the
+inline [auth answer](./authentication.md) echo and the broadcast bar's `▏` marker — and neither
+claims the terminal cursor.
+
+The body and the caret are measured from one snapshot: the per-frame memo caches each pane's
+content, so a session's reader goroutine writing between the two reads cannot place the caret a
+row away from the text it belongs to.
+
+Because the caret must land inside the pane it belongs to, the remotes are sized to the
+**smallest** pane on the page rather than the first — see [Program](./program.md).
+
 ## Dialogs
 
 Every confirm and every single-line prompt is a **centred modal**: a titled box composited over
@@ -548,7 +612,8 @@ floats is what listens.
   in a footer (`enter/y confirms · esc cancels`),
 - **prompts** — the existing bindings are unchanged (`enter` commits, `esc` abandons, `tab`
   completes where it completed before). The focused input's caret is lifted into `View.Cursor`,
-  so the terminal draws a real cursor at the column the next character lands in,
+  so the terminal draws a real cursor at the column the next character lands in — see
+  [The caret](#the-caret) for who owns it when no dialog is open,
 - **clamping** — the box grows to its content and stops at the frame: never wider than
   `width-2`, never taller than `height-1`, body lines clipped rather than wrapped so the footer
   cannot be pushed off the bottom. Below `MinWidth`/`MinHeight` the too-small guard wins and no

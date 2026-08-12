@@ -4,7 +4,7 @@ title: Command log
 description: The in-memory audit trail of what this run sent, to how many hosts, in which mode — and what it deliberately never records.
 resource: internal/commandlog
 tags: [audit, broadcast, security, ui]
-timestamp: 2026-08-09T12:00:00Z
+timestamp: 2026-08-12T12:00:00Z
 ---
 
 # Command log
@@ -83,7 +83,8 @@ set difference, and `Router.SendTo` delivers to exactly that list — bypassing 
 working set, the selection, the visibility limit and the alt-screen exclusion, because the
 target list is already an explicit decision rather than a broadcast that might stray.
 
-The resolved list and its count are shown in the panel's preview **before** the key is pressed
+The resolved list and its count are in the panel's preview — `p` while hosts are connected,
+the main area when none are (issue #290) — **before** the key is pressed
 (`missing → 2 hosts`, then the identifiers), which is the same rule the broadcast label follows:
 the number of machines about to receive a command is never a surprise. With nothing missing the
 action is a true no-op and the status bar says `all hosts already received this`.

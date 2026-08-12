@@ -85,6 +85,7 @@ live at the same time.
 | `←`/`h`, `→`/`l` | sidebar | previous / next panel, stopping at Status / Output diff — the explicit way to switch panels, since neither key means anything else while the sidebar has focus. `h`/`l` alias `←`/`→`, lazygit style, matching `j`/`k` on `↑`/`↓`; a pane and the broadcast bar keep plain `h`/`l` as keystrokes for the hosts (issue #220) |
 | `enter` / `space` | sidebar | choose the row: open a group, foreground a session, resend a log entry |
 | `w` | sidebar | save the run as a group |
+| `p` | sidebar | preview the row under the cursor as a popup **over** the grid — the panes keep the main area while any of them exists (issue #290), so the detail is asked for rather than taken. Any key closes it, like the `?` overlay; on a panel without a preview (Status) it does nothing. See [TUI shell](./tui.md#the-main-area) |
 | `n` | Groups panel | new group (shadows the global connect while the panel has focus) |
 | `d` | Groups panel | delete the group under the cursor, after an `enter`/`y` confirm dialog (shadows the global select-down) |
 | `x` | Sessions panel | end the session under the cursor, after an `enter`/`y` confirm dialog: ctrl+c and ctrl+d to its connected hosts |

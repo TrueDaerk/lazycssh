@@ -285,6 +285,11 @@ type App struct {
 	page      int
 	showHelp  bool
 
+	// showPreview is the focused panel's preview as a popup over the frame.
+	// The main area belongs to the grid while there are panes (issue #290), so
+	// `p` is how the cursor row's detail is asked for; see preview.go.
+	showPreview bool
+
 	// screen is how much of the terminal the focused area gets; see screen.go.
 	screen ScreenMode
 
@@ -418,6 +423,10 @@ func (a App) Theme() Theme { return *a.theme }
 
 // HelpVisible reports whether the overlay is open.
 func (a App) HelpVisible() bool { return a.showHelp }
+
+// PreviewVisible reports whether the focused panel's row preview is floating
+// over the frame.
+func (a App) PreviewVisible() bool { return a.showPreview }
 
 // Update handles one message. It is the only place the model changes.
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -689,6 +698,17 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
+	// The row preview is the same kind of topmost overlay, and it closes the
+	// same way: it is something the user opened to read, not a mode to drive
+	// the fleet from (issue #290).
+	if a.showPreview {
+		if key.Matches(msg, a.keys.ForceQuit) {
+			return a, tea.Quit
+		}
+		a.showPreview = false
+		return a, nil
+	}
+
 	// A live mouse selection takes ctrl+c: it copies and clears, and no
 	// interrupt goes out - the status line says why (issue #149). Without a
 	// selection ctrl+c stays what it always was, a keystroke for the hosts.
@@ -906,6 +926,11 @@ func (a App) handleSidebarKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.movePanel(-1), nil
 	case key.Matches(msg, a.keys.Right):
 		return a.movePanel(+1), nil
+	case key.Matches(msg, a.keys.RowPreview) && hasPreview(a.panel):
+		// The detail of the cursor row, floated over the grid rather than
+		// taking it (issue #290). A panel without a preview leaves p alone.
+		a.showPreview = true
+		return a, nil
 	}
 
 	cmd := a.panels.byID(a.panel).Update(msg)
@@ -1027,15 +1052,27 @@ func (a App) View() tea.View {
 
 	content := lipgloss.JoinVertical(lipgloss.Left, body, bottom)
 
+	// The terminal's caret belongs to whatever the keyboard is aimed at, and
+	// to nothing else: a dialog while one is open, the status bar's prompt
+	// while one is, the focused pane while the grid has it, and nowhere at all
+	// otherwise - an overlay covering the frame takes it away again below
+	// (issue #292).
+	cursor := a.frameCursor()
+
 	// Dialogs and the help are popups over the frame, not replacements for
 	// it: the fleet stays visible underneath, the way lazygit's menus behave.
 	// The focused dialog's text cursor is the frame's cursor, so the terminal
 	// draws it where the typing lands; see modal.go.
-	var cursor *tea.Cursor
 	if m, ok := a.activeModal(); ok {
+		// The dialog owns the keyboard from here on, so the pane behind it
+		// gives its caret up even when the frame is too small to draw a box.
+		cursor = nil
 		if box, x, y, c := a.renderModal(m); box != "" {
 			content, cursor = composite(content, box, x, y), c
 		}
+	}
+	if overlay, x, y, ok := a.previewOverlay(); ok {
+		content, cursor = composite(content, overlay, x, y), nil
 	}
 	if a.showHelp {
 		if overlay := a.renderHelpOverlay(); overlay != "" {
@@ -1048,6 +1085,85 @@ func (a App) View() tea.View {
 	view := tea.NewView(content)
 	view.Cursor = cursor
 	return view
+}
+
+// frameCursor is the terminal cursor of whatever owns the keyboard outside a
+// dialog: the status bar's prompt while one is open, otherwise the focused
+// pane's own cursor - the host's, in the frame's coordinates, so the caret the
+// terminal blinks sits exactly where the remote shell says the next character
+// lands.
+//
+// nil means nothing owns it: no prompt, the grid without the focus, a host
+// that is not connected, a pane scrolled back into history, a remote app that
+// hid its cursor. bubbletea hides the caret for a frame whose Cursor is nil,
+// which is what keeps a stale one from being left behind (issue #292).
+func (a App) frameCursor() *tea.Cursor {
+	// The two status-bar prompts own the keyboard wherever the focus happens
+	// to be - see the guard chain in handleKey - so they own the caret too.
+	// The order is View's own: the caret sits in the line that is drawn.
+	if a.searchInput.Focused() {
+		return a.statusPromptCursor("/", a.searchInput)
+	}
+	if a.cmdInput.Focused() {
+		return a.statusPromptCursor(":", a.cmdInput)
+	}
+
+	if a.focus != AreaGrid {
+		return nil
+	}
+	id := a.FocusedHost()
+	if id == "" {
+		return nil
+	}
+	cell, ok := a.focusedPaneRect()
+	if !ok {
+		return nil
+	}
+	// The pane's border eats a column on each side, and its header the first
+	// row inside it, exactly as renderPane draws them.
+	x, y, ok := a.paneCursor(id, cell.Width-2, cell.Height-3)
+	if !ok {
+		return nil
+	}
+	return tea.NewCursor(cell.X+1+x, cell.Y+2+y)
+}
+
+// statusPromptCursor places the caret in one of the status bar's prompts: past
+// the bar's padding, the prompt's one-column sigil and the text typed before
+// the caret, on the bar's own row. The prompts are drawn by renderCommandLine
+// and renderSearchLine, which lay their line out exactly this way.
+func (a App) statusPromptCursor(sigil string, in boxedInput) *tea.Cursor {
+	r := a.layout.StatusBar
+	if r.Empty() {
+		return nil
+	}
+	x := a.theme.StatusBar.GetPaddingLeft() + lipgloss.Width(sigil) +
+		typedWidth(in.Value(), in.Position())
+	if x >= r.Width {
+		// Typed past the edge of the bar: the terminal would put the caret on
+		// the next line, which is not where the text is.
+		return nil
+	}
+	return tea.NewCursor(r.X+x, r.Y)
+}
+
+// focusedPaneRect is the cell the focused pane is drawn in, in the frame's
+// coordinates. ok is false when it is not on screen: no hosts, no room for a
+// pane, or a page other than the one showing. It walks the same arithmetic as
+// renderMain, so the rect is where the pane really is.
+func (a App) focusedPaneRect() (Rect, bool) {
+	if len(a.hostIDs()) == 0 {
+		return Rect{}, false
+	}
+	if a.screen == ScreenFull {
+		// Full screen is one pane in the whole main area.
+		return a.layout.Main, true
+	}
+	g := a.grid()
+	if g.Empty() || g.PerPage <= 0 || g.Page(a.paneIndex) != a.clampedPage(g) {
+		return Rect{}, false
+	}
+	return g.Cell(a.paneIndex)
 }
 
 // renderSidebar draws the panel column the way lazygit does: every panel is
@@ -1088,8 +1204,9 @@ func (a App) renderMain() string {
 	r := a.layout.Main
 	focused := a.focus == AreaGrid
 
-	// A focused list panel takes the main area for a preview of its cursor
-	// row, lazygit style; the grid comes back with the focus (issue #218).
+	// A focused list panel previews its cursor row here, lazygit style
+	// (issue #218) - but only while there is no pane to draw: panes leave the
+	// grid when their session ends, not when focus moves (issue #290).
 	if preview, ok := a.mainPreview(); ok {
 		return preview
 	}

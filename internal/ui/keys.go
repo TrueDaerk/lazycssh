@@ -122,6 +122,7 @@ type KeyMap struct {
 	SaveSet     key.Binding
 	NextChunk   key.Binding
 	PrevChunk   key.Binding
+	RowPreview  key.Binding
 	GroupNew    key.Binding
 	GroupDelete key.Binding
 	SessionEnd  key.Binding
@@ -288,6 +289,11 @@ func DefaultKeyMap() KeyMap {
 		SaveSet:   key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "save the run as a group")),
 		NextChunk: key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "next chunk of hosts")),
 		PrevChunk: key.NewBinding(key.WithKeys("["), key.WithHelp("[", "previous chunk of hosts")),
+		// The grid keeps the main area while there are panes (issue #290), so
+		// the cursor row's detail is asked for rather than taken: p floats it
+		// over the frame, any key closes it, exactly like the help overlay.
+		RowPreview: key.NewBinding(key.WithKeys("p"),
+			key.WithHelp("p", "preview this row over the grid")),
 		GroupNew: key.NewBinding(key.WithKeys("n"),
 			key.WithHelp("n", "new group (in the Groups panel)")),
 		GroupDelete: key.NewBinding(key.WithKeys("d"),
@@ -476,7 +482,7 @@ func (k KeyMap) global() []key.Binding {
 func (k KeyMap) sidebar() []key.Binding {
 	return []key.Binding{
 		k.Up, k.Down, k.Left, k.Right, k.Choose, k.Toggle,
-		k.SaveSet, k.NextChunk, k.PrevChunk,
+		k.SaveSet, k.NextChunk, k.PrevChunk, k.RowPreview,
 		k.GroupNew, k.GroupDelete, k.SessionEnd, k.SendMissing,
 	}
 }

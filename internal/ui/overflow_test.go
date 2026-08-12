@@ -81,8 +81,9 @@ func TestOverflowFooterNamesTheOtherSessions(t *testing.T) {
 	a, fleet := openTwo(t)
 	fleet.connect(t, "db-01")
 
-	// The footer belongs to the grid, and a focused Sessions panel takes the
-	// main area for its preview (issue #218).
+	// The footer belongs to the grid, which the fixture's Sessions focus no
+	// longer hides (issue #290); focusing it back keeps the assertion about the
+	// grid's own frame.
 	view := plain(focusGrid(t, a).View().Content)
 	if !strings.Contains(view, "2 more sessions — [3]") {
 		t.Fatalf("the grid does not name the other sessions:\n%s", view)

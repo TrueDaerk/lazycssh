@@ -24,6 +24,44 @@
   `core/keys.md`, `core/tui.md`, `core/cli.md`, `userdocs/reference/keybindings.md`,
   `userdocs/reference/cli.md`, `README.md`. Version 0.11.0.
 
+- One caret, owned deliberately every frame (issue #292). Panes painted a styled cursor cell
+  each, so every connected pane showed a caret — one in each pane the keyboard does not reach —
+  while the terminal's own cursor was set only for a focused dialog. Now `View` decides the
+  owner from scratch on every render: an open dialog, else the status bar's command line or
+  search prompt, else the focused pane's own cursor as its emulator reports it (mapped through
+  the same window the body was drawn from, offset by the pane's cell, border and header), else
+  `nil`, which is how bubbletea hides the caret. The two status-bar prompts had no caret at all
+  before — typing into `:` was typing blind. Panes
+  paint none, on the history view or the alt-screen grid. Two knock-on fixes: the remotes are
+  now sized to the smallest pane on the page rather than the first, so an uneven tiling cannot
+  put a host's cursor in a column its pane never draws, and a pane's content is measured once
+  per frame through the render memo, so the body and the caret read one snapshot. Updated:
+  `core/tui.md` (new "The caret"), `core/terminal.md`, `core/program.md`,
+  `userdocs/guides/broadcasting.md`, `userdocs/guides/full-screen-apps.md`. Version 0.10.42.
+
+- The docs site has a manual publish path again (issue #295). Removing the GitHub Actions
+  workflows in #287 dropped the only thing that deployed `userdocs/` to GitHub Pages, leaving
+  https://truedaerk.github.io/lazycssh/ stale with no way to update it. Added `make docs`
+  (`mkdocs build --strict` into the git-ignored `site/`) and `make docs-deploy` (`mkdocs
+  gh-deploy --strict`, which builds and force-pushes to `gh-pages`); both guard on `mkdocs`
+  being installed and point at `pip install mkdocs-material` when it is not. The repository's
+  Pages configuration now deploys from the `gh-pages` branch root instead of `build_type:
+  workflow`, so pushing that branch is the whole publish step. Updated:
+  `contributing/documentation.md`.
+
+- The host grid no longer disappears when another panel is focused (issue #290). Since
+  issue #218 a focused list panel took the whole main area for a preview of its cursor row,
+  so navigating Sessions or Groups blanked every connected host's output even though the
+  sessions were alive. The grid now **outranks every preview**: `mainPreview()` yields the
+  main area only while there is no pane to draw (holes do not count), so a pane leaves the
+  screen when its session ends and at no other time. The preview did not disappear with it —
+  the output diff panel's whole-variant view exists nowhere else, and it is a panel one only
+  opens with hosts connected — it moved onto a key: `p` floats the focused panel's preview
+  over the frame (`previewOverlay()`), centred in `Layout.Main` with grid showing around it,
+  any key closes it, the `?` overlay's contract. The empty grid still previews in place, and
+  the no-hosts empty state is unchanged. Updated: `core/tui.md`, `core/keys.md`,
+  `core/output-diff.md`, `core/command-log.md`. Version 0.10.41.
+
 ## 2026-08-10
 
 - Removed the GitHub Actions workflows (`ci.yml`, `docs.yml`; issue #287) — CI and the
