@@ -44,6 +44,7 @@ func (e *Emulator) Resize(width, height int) {
 	if width == oldW && height == oldH {
 		return
 	}
+	e.seq++
 	// A width reflow rewrites the vt working depth in place, and a height
 	// change moves rows between screen and history; retained indices from
 	// before this resize point at different lines after it.

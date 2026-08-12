@@ -259,6 +259,12 @@ type App struct {
 	// history cursor; see internal/ui/searchcache.go (issue #278).
 	search *searchCache
 
+	// render is the cross-frame pane render cache — the same shared-pointer
+	// shape as search, self-validating against the emulator's sequence
+	// counter, so a pane that did not change since the last frame is not
+	// re-rendered; see internal/ui/rendercache.go (issue #293).
+	render *renderCache
+
 	cmdHistory    []string
 	cmdHistoryPos int
 	lastDelivery  string
@@ -350,6 +356,7 @@ func NewApp(cfg Config) App {
 		filterInput: boxInput(filter),
 		scroll:      make(map[string]int),
 		search:      &searchCache{},
+		render:      &renderCache{},
 		focus:       AreaSidebar,
 		panel:       PanelStatus,
 		now:         time.Now,
@@ -1267,8 +1274,11 @@ func (a App) renderMain() string {
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
 
-// renderPane draws one host's pane: a one-line header naming the host, then
-// the session's scrollback following its tail.
+// renderPane draws one host's pane through the cross-frame cache: while the
+// emulator's sequence and every model input in [paneKey] are what they were
+// when the cached frame was rendered, that frame is the frame — a pane whose
+// host said nothing since the last redraw costs a key comparison, not a
+// render (issue #293). Anything else falls through to renderPaneFresh.
 func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 	ids := a.hostIDs()
 	if host < 0 || host >= len(ids) || ids[host] == "" {
@@ -1277,9 +1287,28 @@ func (a App) renderPane(host int, cell Rect, gridFocused bool) string {
 		return a.frame(a.theme.Pane, cell, "")
 	}
 	id := ids[host]
-
 	focused := gridFocused && host == a.paneIndex
+	if a.render == nil {
+		return a.renderPaneFresh(host, id, cell, focused)
+	}
 
+	// Pin the content snapshot first: the key's sequence must name the
+	// snapshot the body below would actually be built from.
+	a.paneContent(id)
+	e := a.render.entry(id)
+	key := a.paneKeyFor(e, host, id, cell, focused)
+	if e.framed && e.key == key {
+		return e.pane
+	}
+	s := a.renderPaneFresh(host, id, cell, focused)
+	e.key, e.pane, e.framed = key, s, true
+	e.renders++
+	return s
+}
+
+// renderPaneFresh draws one host's pane: a one-line header naming the host,
+// then the session's scrollback following its tail.
+func (a App) renderPaneFresh(host int, id string, cell Rect, focused bool) string {
 	// The border eats two columns and rows, the header the top line of what
 	// remains.
 	content := a.paneHeader(host, cell.Width-2, focused)

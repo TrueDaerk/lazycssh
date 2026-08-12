@@ -2,6 +2,27 @@
 
 ## 2026-08-12
 
+- Panes render across frames through a cache now, full screen first (issue #293). Every redraw
+  used to rebuild every visible pane — measure the emulator, materialize the window, style the
+  header, draw the border — even when the output that forced the frame landed on one host, or on
+  a host not on screen at all. The cross-frame render cache (`internal/ui/rendercache.go`) keeps
+  each host's measured content snapshot and its fully framed pane string behind a pointer shared
+  by every model copy, the shape the search cache set: self-validating on every read, no
+  invalidation hook to forget. The emulator grew `Seq`, a change counter bumped with every
+  write, resize and retention change under the mutation's own lock; the rest of a pane's inputs
+  — geometry, focus, scroll, search, selection, theme — live in a comparable `paneKey`, and any
+  mismatch re-renders. The one-frame memo stays the per-frame pin that keeps body and caret on
+  one snapshot; the cache is what lets that snapshot survive into the next frame, which the
+  value-copy model semantics forbid the memo itself. Pinned by test: a frame moved by one pane's
+  output re-renders only that pane, hidden-pane output in full screen leaves the visible pane's
+  render count untouched, and a cached frame is byte-identical to a fresh render. New
+  benchmarks: full-screen chatty host, full-screen hidden output, 100-host fleet with one chatty
+  host. Measured on an M4: the 12-pane chatty-fleet frame 2.60 → 1.63 ms and 15.9k → 4.1k
+  allocations, the 100-host frame 2.61 → 1.83 ms and 15.5k → 5.5k allocations, the full-screen
+  hidden-output frame 1.52 → 1.08 ms and 6.7k → 3.7k allocations, the live-search frame
+  7.0 → 3.1 ms. Updated: `core/tui.md` ("What a frame is allowed to cost"), `core/terminal.md`
+  (`Seq`). Version 0.11.1.
+
 - Keybindings are user-configurable, and `ctrl+a` is the command prefix inside the broadcast
   bar (issue #289). An optional `$XDG_CONFIG_HOME/lazycssh/keys.yaml` — a mapping of action to
   key or list of keys, parsed in `internal/ui/keysconfig.go` next to the struct it fills —

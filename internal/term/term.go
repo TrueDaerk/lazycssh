@@ -94,6 +94,11 @@ type Emulator struct {
 	// change. Guarded by gridMu; see [Emulator.HistoryCursor].
 	histGen uint64
 
+	// seq increments on everything that can change what a render of this
+	// emulator would show: a write, a resize, a retention change. Guarded by
+	// gridMu; see [Emulator.Seq].
+	seq uint64
+
 	mu           sync.Mutex
 	onReply      func([]byte)
 	cursorHidden bool
@@ -149,6 +154,7 @@ func (e *Emulator) Write(p []byte) (int, error) {
 	defer e.trimLocked()
 
 	n := len(p)
+	e.seq++
 	e.mu.Lock()
 	e.written += n
 	e.mu.Unlock()
@@ -221,7 +227,22 @@ func (e *Emulator) SetHistorySize(n int) {
 	}
 	e.gridMu.Lock()
 	defer e.gridMu.Unlock()
+	e.seq++
 	e.setRetentionLocked(n)
+}
+
+// Seq is a change counter over everything a render reads: it increments on
+// every write, resize and retention change, under the same lock the mutation
+// holds for its whole critical section. A reader that measured the emulator
+// under one Seq value and reads the same value later knows the measurement
+// still describes the current state — which is what lets the UI keep a pane's
+// rendered frame across redraws instead of rebuilding it (issue #293). The
+// counter is deliberately coarse: a write that changes nothing visible still
+// bumps it, costing at most one spare re-render, never a stale one.
+func (e *Emulator) Seq() uint64 {
+	e.gridMu.Lock()
+	defer e.gridMu.Unlock()
+	return e.seq
 }
 
 // HistoryLen is the number of lines that have scrolled off the screen and are
