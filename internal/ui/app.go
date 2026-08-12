@@ -1310,16 +1310,19 @@ func (a App) renderStatusBar() string {
 			// View mode sends nothing, so it renders in the calm typing style:
 			// the warning is for keys that reach hosts.
 			parts = append(parts, a.theme.StatusTyping.Render(
-				"BROADCAST VIEW — keys are commands · enter edits · "+escapeKeystroke+" leaves"))
+				"BROADCAST VIEW — keys are commands · enter edits · "+a.escapeKey()+" leaves"))
 		} else {
 			count := 0
 			if a.cfg.Targets != nil {
 				count = a.cfg.Targets.Count()
 			}
-			label := fmt.Sprintf("BROADCASTING EDIT → %d host%s — %s leaves", count, plural(count), escapeKeystroke)
+			label := fmt.Sprintf("BROADCASTING EDIT → %d host%s — %s leaves", count, plural(count), a.escapeKey())
 			if a.prefixArmed {
-				label = fmt.Sprintf("BROADCASTING → %d host%s — %s… ←/→ page · %s/a = literal · esc = view · any other key goes to the hosts",
-					count, plural(count), prefixKeystroke, prefixKeystroke)
+				// After the prefix a key is a lazycssh command (issue #289);
+				// only what none of them claims still reaches the hosts.
+				label = fmt.Sprintf("BROADCASTING → %d host%s — %s… %s page · %s/a = literal · %s = view · command keys run, the rest go to the hosts",
+					count, plural(count), a.prefixKey(), a.pagingLabel(), a.prefixKey(),
+					firstKey(a.keys.PrefixCancel, "esc"))
 			}
 			parts = append(parts, a.theme.StatusWarning.Render(label))
 		}
@@ -1332,7 +1335,7 @@ func (a App) renderStatusBar() string {
 			target = "no host"
 		}
 		parts = append(parts, a.theme.StatusTyping.Render(
-			"TYPING "+target+" — "+escapeKeystroke+" leaves · alt=app"))
+			"TYPING "+target+" — "+a.escapeKey()+" leaves · alt=app"))
 	}
 	if label := a.prefixLabel(); label != "" && a.focus != AreaBroadcast {
 		// An armed chord swallows the next key press, so it is announced for

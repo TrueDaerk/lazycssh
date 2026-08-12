@@ -10,7 +10,19 @@ import (
 // bar. It is the telnet escape, for the same reason telnet chose it: it is not
 // a key any shell wants, and a user who is stuck needs one sequence that
 // always means "give me my keyboard back".
+//
+// It is the default of [KeyMap.LeaveTyping]; the hints read the effective
+// binding through [App.escapeKey] rather than this constant, so a keymap file
+// that moves it moves what the status bar promises with it (issue #289).
 const escapeKeystroke = "ctrl+]"
+
+// escapeKey names the way out of a terminal input as it is actually bound, for
+// the status bar and the delivery notices that promise it.
+func (a App) escapeKey() string { return firstKey(a.keys.LeaveTyping, escapeKeystroke) }
+
+// reconnectKey names the per-pane reconnect chord as it is actually bound, for
+// the notice a dead pane shows when a keystroke had nowhere to go.
+func (a App) reconnectKey() string { return firstKey(a.keys.Reconnect, "alt+r") }
 
 // textMods are the modifiers that only transform which text a key produces;
 // a key carrying nothing beyond these is plain typed input, not a chord.

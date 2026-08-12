@@ -78,7 +78,7 @@ func (a App) handleTypingKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if !a.cfg.Panes.SendKey(id, ev) {
 			// A dead pane swallowing keystrokes silently would read as a hung
 			// host; saying so is the difference.
-			a.lastDelivery = id + " is not connected — alt+r reconnects, " + escapeKeystroke + " leaves"
+			a.lastDelivery = id + " is not connected — " + a.reconnectKey() + " reconnects, " + a.escapeKey() + " leaves"
 			return a, nil
 		}
 	}

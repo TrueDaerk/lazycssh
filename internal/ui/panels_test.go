@@ -94,6 +94,14 @@ func (f *fakeFleet) fail(t *testing.T, id string) {
 // the Status panel.
 func statusApp(t *testing.T, names ...string) (App, *fakeFleet, *broadcast.Router, *workingset.Manager) {
 	t.Helper()
+	return statusAppWithKeys(t, nil, names...)
+}
+
+// statusAppWithKeys is [statusApp] with an explicit keymap - the field the
+// program fills from the user's keys.yaml (issue #289). A nil keymap is the
+// shipped one.
+func statusAppWithKeys(t *testing.T, keys *KeyMap, names ...string) (App, *fakeFleet, *broadcast.Router, *workingset.Manager) {
+	t.Helper()
 
 	fleet := newFakeFleet(names...)
 	ws := workingset.New(fleet.IDs())
@@ -109,6 +117,7 @@ func statusApp(t *testing.T, names ...string) (App, *fakeFleet, *broadcast.Route
 		WorkingSet:  ws,
 		Panes:       fleet,
 		Theme:       Options{Dark: true},
+		Keys:        keys,
 	}), 200, 60)
 
 	return a, fleet, router, ws

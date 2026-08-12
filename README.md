@@ -103,6 +103,11 @@ receive them — `BROADCAST all (7/8 up)`, `TYPING web-01 — ctrl+] leaves`.
   for the whole run. Keystrokes are never written, and logging pauses — with a
   visible marker — while `single` mode is answering a password prompt. Off by
   default: session bytes only reach disk when this run asked for it.
+- **Configurable keys** — an optional `~/.config/lazycssh/keys.yaml` remaps any
+  action; `--list-key-actions` prints the vocabulary, an unknown action or an
+  impossible key name fails at startup rather than silently, and the `?`
+  overlay follows the effective bindings. `ctrl+a` stays the command prefix and
+  `ctrl+a ctrl+a` the literal pass-through, whatever the file says.
 - **Mouse support** — click a pane to type into it, drag to select text, wheel
   to scroll the pane under the pointer.
 

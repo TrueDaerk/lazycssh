@@ -303,12 +303,17 @@ func DefaultKeyMap() KeyMap {
 		SendMissing: key.NewBinding(key.WithKeys("m"),
 			key.WithHelp("m", "resend to the hosts that missed it")),
 
-		// ctrl+a is the csshx/GNU-screen escape prefix, everywhere: in a pane,
+		// ctrl+a is the csshx/GNU-screen command prefix, everywhere: in a pane,
 		// in the broadcast bar and at the app level. It shadows the readline
 		// start-of-line those contexts used to forward; ctrl+a ctrl+a and
 		// ctrl+a a send the literal, screen's own convention.
+		//
+		// These two are the bindings a keymap file may not move (issue #289):
+		// the prefix is how a command is reached from inside a terminal-like
+		// input, and the literal is how a remote screen, tmux or readline stays
+		// reachable. See keysconfig.go.
 		Prefix: key.NewBinding(key.WithKeys("ctrl+a"),
-			key.WithHelp("ctrl+a", "prefix: the next key is a chord command")),
+			key.WithHelp("ctrl+a", "prefix: the next key is a lazycssh command")),
 		// The chord's paging keys are plain arrows on purpose: they are the
 		// half of the chord that no terminal, IDE or window manager can eat,
 		// which is why the chord exists (issue #273).

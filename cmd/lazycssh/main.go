@@ -86,6 +86,10 @@ func run(args []string, stdout, stderr io.Writer, launch func(program.Config) er
 	insecure := fs.Bool("insecure-ignore-host-key", false,
 		"accept any host key without checking known_hosts (dangerous)")
 	listSessions := fs.Bool("list-sessions", false, "list the saved sessions and exit")
+	listKeyActions := fs.Bool("list-key-actions", false,
+		"list the actions a keymap file can bind, with their default keys, and exit")
+	keysFile := fs.String("keys-file", "",
+		"keymap file overriding individual bindings (default $XDG_CONFIG_HOME/lazycssh/keys.yaml)")
 	sessionDir := fs.String("sessions-dir", "",
 		"directory holding saved sessions (default $XDG_CONFIG_HOME/lazycssh/sessions)")
 	logDir := fs.String("log-dir", "",
@@ -101,6 +105,20 @@ func run(args []string, stdout, stderr io.Writer, launch func(program.Config) er
 	if *showVersion {
 		fmt.Fprintln(stdout, version.String())
 		return exitOK
+	}
+
+	if *listKeyActions {
+		printKeyActions(stdout)
+		return exitOK
+	}
+
+	// The keymap is resolved before anything dials: a typo in keys.yaml must be
+	// readable on the terminal that started the run, not discovered by a
+	// binding that quietly does nothing on forty machines.
+	keys, err := loadKeys(*keysFile)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return exitError
 	}
 
 	store, err := openStore(*sessionDir)
@@ -187,6 +205,7 @@ func run(args []string, stdout, stderr io.Writer, launch func(program.Config) er
 		Logs:        logs,
 		History:     histStore,
 		Recent:      recentStore,
+		Keys:        &keys,
 	}); err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitError

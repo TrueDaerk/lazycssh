@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-12T12:00:00Z
+timestamp: 2026-08-12T18:00:00Z
 ---
 
 # TUI shell
@@ -889,19 +889,27 @@ Mode switching is modeled on csshx, with `ctrl+a` as the escape prefix inside th
 - `ctrl+a` `esc` — switch to view mode.
 - `enter` (in view mode) — back to edit mode; selecting the bar again (`5`, a click) also
   re-enters it in edit mode.
+- `ctrl+a` *a command key* — **run that app-level command** (issue #289): the whole
+  `AreaGlobal` set, so `ctrl+a` `?` opens the help and `ctrl+a` `b` switches the broadcast
+  scope, without leaving the line. A plain letter stands for its ctrl chord — GNU screen's
+  `ctrl+a c` ≡ `ctrl+a ctrl+c` — which is how `ctrl+a` `r` reaches `Retile`'s `ctrl+r`, a
+  chord the bar would otherwise send to the hosts. The mapping is `App.chordCommandKey`, a
+  pure query over the effective keymap, so a rebound command moves its chord with it.
 - `ctrl+a` anything else — **forwarded to the targets** as the keystroke it is (issue #214),
   through the same `paneKeyEvents` encoding as plain typing, but kept out of the assembled
-  line: a prefixed key is a control sequence, not command text. The exception list is exactly
-  `ctrl+a`, `a`, `→`, `←` and `esc`.
+  line: a prefixed key is a control sequence, not command text.
 
-The prefix is cleared before the second key is handled, so it cannot chain. Forwarding is the
-default because the prefix exists for the remote multiplexer; the one-shot lazycssh command
-dispatch of issue #148 is superseded by view mode, which is now the way to run an app command
-without leaving the bar.
+The prefix is cleared before the second key is handled, so it cannot chain. What no command
+claims still forwards, because the prefix also exists for the remote multiplexer; view mode
+(issue #148's dispatch, restated as a mode) remains the way to run a run of commands rather
+than one.
 
 The mode is unmissable: the status bar carries `BROADCASTING EDIT → 7 hosts` in the warning
 style, or `BROADCAST VIEW — keys are commands` in the calm typing style, and an armed prefix
-shows as `ctrl+a… ←/→ page · ctrl+a/a = literal · esc = view · any other key goes to the hosts`. The modal state does not outlive the bar's
+shows as `ctrl+a… ←/→ page · ctrl+a/a = literal · esc = view · command keys run, the rest go to
+the hosts`. Every key named in those labels is read from the binding that handles it
+(`App.prefixKey`, `App.pagingLabel`, `App.escapeKey`), so a [remapped keymap](./keys.md#the-keymap-file)
+cannot leave a lie on the bar. The modal state does not outlive the bar's
 focus — leaving in view mode and coming back lands in edit mode.
 
 The `ctrl+a` prefix shadows the readline start-of-line the bar used to forward while edit mode
@@ -920,14 +928,24 @@ elsewhere. Both bindings stay; the chord is the second way in, not a replacement
 | `→` / `←` | next / previous screenful | same | same |
 | `a`, `ctrl+a` | one literal `ctrl+a` to the focused host | one literal to the targets | nothing to send: the status line says where the literal goes |
 | `esc` | cancel | switch to view mode | cancel |
-| anything else | handled as if pressed alone (so it reaches the host) | forwarded to the targets | dispatched as the app command it is |
+| a command key | handled as if pressed alone (so it reaches the host) | **runs that app command** (issue #289) | dispatched as the app command it is |
+| anything else | handled as if pressed alone (so it reaches the host) | forwarded to the targets | handled as if pressed alone |
+
+A pane is deliberately not in the command column: it is one host's terminal, its own commands
+are the `alt` chords, and swallowing a prefixed keystroke there would cost the user a key the
+shell was waiting for. `ctrl+]` is the way from a pane to the command scope.
 
 The armed state is one bool on the model (`prefixArmed`, mutated only in `Update`, see
 `internal/ui/prefix.go`); it lasts exactly one key press and cannot chain, because every handler
 clears it before resolving the second key. It is not bar state, so it survives the routing that
 resets the bar's modes. While it is armed the status bar carries
 `ctrl+a… — ←/→ page · ctrl+a/a = literal ctrl+a · esc cancels` in the warning style: the next
-key press is a command rather than input, and the user has to be able to read that.
+key press is a command rather than input, and the user has to be able to read that. The keys in
+that label come from the bindings, not from constants, so it survives a user keymap.
+
+`Prefix` and `PrefixLiteral` are the two bindings a [keymap file](./keys.md#the-keymap-file) may
+not move: the prefix is how a command is reached from inside a terminal-like input, and the
+literal is how a remote `screen`, `tmux` or readline stays reachable.
 
 Inside a pane `ctrl+a` is
 the readline beginning-of-line, which is why `screen`'s double-press convention is followed

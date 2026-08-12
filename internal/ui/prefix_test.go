@@ -155,6 +155,72 @@ func TestPrefixCancelsOnAnUnrelatedKeyAtTheAppLevel(t *testing.T) {
 	}
 }
 
+// The chord reaches the commands that hide behind a ctrl chord, at the app
+// level as in the bar: ctrl+a r re-tiles although Retile is ctrl+r, because
+// after the prefix a plain letter stands for its ctrl chord (issue #289).
+func TestPrefixRunsACtrlCommand(t *testing.T) {
+	a := chunkedApp(t)
+	a.keptSlots = 99
+
+	a = pressKey(t, a, "ctrl+a")
+	model, cmd := a.Update(keyMsgFor(t, "r"))
+	a = model.(App)
+
+	if got, want := a.keptSlots, len(a.hostIDs()); got != want {
+		t.Fatalf("keptSlots = %d, want ctrl+a r to have re-tiled to %d", got, want)
+	}
+	if cmd == nil {
+		t.Fatal("ctrl+a r produced no command; the PTYs would keep the old size")
+	}
+	if _, ok := cmd().(GridChangedMsg); !ok {
+		t.Fatalf("ctrl+a r produced a %T, want the re-tile", cmd())
+	}
+}
+
+// The non-negotiable invariant of issue #289: whatever a keymap file moves,
+// ctrl+a stays the command prefix and ctrl+a ctrl+a stays the literal - a
+// remote screen, tmux or readline must not be rebindable out of reach.
+func TestPrefixAndItsLiteralSurviveARemappedKeyMap(t *testing.T) {
+	keys, err := ParseKeyMap([]byte("SelectAll: z\nLeaveTyping: ctrl+g\nPrefixCancel: ctrl+e\n"), "keys.yaml")
+	if err != nil {
+		t.Fatalf("ParseKeyMap() = %v", err)
+	}
+
+	a, sender, router, _ := cmdApp(t, "web-01", "web-02")
+	a.keys = &keys
+	a = pressKey(t, a, "5")
+	if a.Focus() != AreaBroadcast {
+		t.Fatal("setup: the broadcast bar does not have focus")
+	}
+
+	a = pressKey(t, a, "ctrl+a")
+	if !a.prefixArmed {
+		t.Fatal("ctrl+a stopped arming the prefix under a user keymap")
+	}
+	a = pressKey(t, a, "ctrl+a")
+	if got := strings.Join(sender.sent, ","); got != "\x01" {
+		t.Fatalf("sent = %q, want the literal ctrl+a", got)
+	}
+
+	// The remapped chord keys follow the file: ctrl+e cancels into view mode,
+	// and the remapped command runs after the prefix.
+	a = pressKey(t, a, "ctrl+a")
+	a = pressKey(t, a, "ctrl+e")
+	if !a.broadcastView {
+		t.Fatal("the remapped chord cancel did not enter view mode")
+	}
+	a = pressKey(t, a, "enter")
+
+	a = pressKey(t, a, "ctrl+a")
+	a = pressKey(t, a, "z")
+	if got := router.SelectionCount(); got != 2 {
+		t.Fatalf("SelectionCount() = %d, want the remapped select-all to have run", got)
+	}
+	if got := strings.Join(sender.sent, ","); got != "\x01" {
+		t.Fatalf("sent = %q, want the commands to have reached no host", got)
+	}
+}
+
 // esc cancels the armed prefix outside the bar without reaching the host: a
 // user who armed a chord by accident has a way out that sends nothing.
 func TestPrefixEscCancelsWhileTyping(t *testing.T) {

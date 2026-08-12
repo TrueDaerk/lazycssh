@@ -53,6 +53,10 @@ type Config struct {
 	// history file: recall starts empty and nothing is persisted, which keeps
 	// tests that build a Model without one off the disk.
 	History *history.Store
+	// Keys is the run's keymap: the shipped bindings with the user's keys.yaml
+	// applied. Nil means [ui.DefaultKeyMap], which is what the tests here use
+	// so none of them depends on a file in the user's home directory.
+	Keys *ui.KeyMap
 	// Recent is the persistent recent-host list: the host picker offers it as
 	// its `rec` rows, and every session that reaches connected is recorded in
 	// it. Nil means the run has no recent file, which keeps tests that build
@@ -192,6 +196,7 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 		// The Hosts panel offers these as connect candidates; the UI still
 		// cannot dial, it can only ask.
 		ConfigAliases: resolver.Aliases(),
+		Keys:          cfg.Keys,
 	}
 	// A typed nil in the interface field would read as "there is a store";
 	// leave it absent instead.
