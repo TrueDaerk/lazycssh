@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 )
 
 // The pane shows the newest output: watching the tail is what the grid is for.
@@ -420,16 +422,20 @@ func TestPaneCursorAtTheEndOfThePrompt(t *testing.T) {
 	}
 }
 
-// The body carries no cursor of its own: the caret is the terminal's, and only
-// the focused pane gets it. A pane that painted one would show a caret in
-// every connected pane at once (issue #292).
+// A pane outside the broadcast set carries no cursor of its own: the caret is
+// the terminal's and only the focused pane gets it, so a pane no keystroke
+// reaches paints nothing (issue #292). Single mode is exactly that set — the
+// focused pane and no other; the broadcast-target case is in remotecursor_test.go.
 func TestPaneBodyPaintsNoCursor(t *testing.T) {
-	a, fleet, _, _ := statusApp(t, "web-01")
+	a, fleet, router, _ := statusApp(t, "web-01")
+	if err := router.SetMode(broadcast.ModeSingle); err != nil {
+		t.Fatalf("SetMode: %v", err)
+	}
 	fleet.connect(t, "web-01")
 	a = syncFleet(t, a)
 	fleet.sessions["web-01"].Emit("$ ")
 
-	if body := a.paneBody("web-01", 40, 5); body != plain(body) {
+	if body := markedBody(a, "web-01", 40, 5); body != plain(body) {
 		t.Fatalf("the pane body styles a cursor block:\n%q", body)
 	}
 }

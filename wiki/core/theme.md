@@ -4,7 +4,7 @@ title: Theme and styles
 description: The one place styles live, the palette they are built from, and why colour is never the only carrier of meaning.
 resource: internal/ui/theme.go
 tags: [ui, lipgloss, styles, accessibility]
-timestamp: 2026-08-09T00:00:00Z
+timestamp: 2026-08-14T00:00:00Z
 ---
 
 # Theme and styles
@@ -43,7 +43,10 @@ For a terminal with no colour at all, `Options.NoColor` drops colour entirely. T
 - the insecure-host-key marker is **reverse video**, not just red,
 - the list cursor is reverse video when colour is off; the muted cursor row (below) is
   **underlined** instead, so the two never collapse into the same look,
-- a failed host is **bold** as well as red.
+- a failed host is **bold** as well as red,
+- the simulated remote cursor (`RemoteCursor`, see [TUI shell](./tui.md#the-caret)) is **reverse
+  video**, tinted with `Accent` when there is colour: it has to be findable over whatever colours
+  the remote painted that cell in, on the light and the dark palette alike.
 
 Tests assert each of these, because the failure mode — a monochrome terminal where the user
 cannot tell which panel has focus or that host key checking is off — is silent otherwise.

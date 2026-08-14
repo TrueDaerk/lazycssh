@@ -4,7 +4,7 @@ title: Broadcast scope
 description: What `BROADCAST all` means when a working set is active, and how the target count is made unmissable.
 resource: internal/broadcast
 tags: [broadcast, working-set, safety]
-timestamp: 2026-08-09T00:00:00Z
+timestamp: 2026-08-14T00:00:00Z
 ---
 
 # Broadcast scope
@@ -98,6 +98,12 @@ Rules the tests enforce:
   than every host is addressed,
 - `fleet` renders as `EVERY HOST` and sets `Router.Warning`, which the status bar draws in the
   warning style.
+
+The count says *how many* hosts a keystroke reaches; the grid says *where it lands on each of
+them*. Every target pane that does not hold the frame's caret marks its host's own cursor
+position — see [the caret](./tui.md#broadcast-targets-mark-their-own-cursor) — so a host that
+diverged from the rest (a shorter prompt, a `sudo` question, an unfinished line) is visible
+before the next command goes out rather than after it.
 
 ## The visibility limit
 
