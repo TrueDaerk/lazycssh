@@ -424,8 +424,13 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("enter/y", "answer yes")),
 		ConfirmNo: key.NewBinding(key.WithKeys("esc", "n", "N"),
 			key.WithHelp("esc/n", "answer no")),
-		CopySelection: key.NewBinding(key.WithKeys("ctrl+c"),
-			key.WithHelp("ctrl+c", "copy the mouse selection (no interrupt is sent)")),
+		// super+c is the cmd+c a macOS user's hand reaches for; terminals that
+		// pass it through the Kitty keyboard protocol get the same copy as
+		// ctrl+c. Without a live selection it stays inert rather than falling
+		// through as a keystroke - unlike ctrl+c it has no interrupt meaning
+		// to fall back to (issue #302).
+		CopySelection: key.NewBinding(key.WithKeys("ctrl+c", "super+c"),
+			key.WithHelp("ctrl+c/super+c", "copy the mouse selection (no interrupt is sent)")),
 		AuthCancel: key.NewBinding(key.WithKeys("esc", "ctrl+c"),
 			key.WithHelp("esc/ctrl+c", "cancel this pane's question")),
 		// ctrl+q is never a character in a text input, and an empty start

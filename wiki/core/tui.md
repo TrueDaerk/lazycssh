@@ -529,11 +529,26 @@ is opt-in for the whole run and every host, this is one pane, one keypress, one 
 pane's body and the covered text highlights in reverse video, stream-shaped like a terminal's
 own selection — first row from the anchor, middle rows whole, last row to the head. The pane
 under the press owns the drag; leaving it clamps to that pane's body, so a neighbour pane or a
-border can never be selected. `ctrl+c` with a live selection copies it (OSC 52, ANSI stripped,
-trailing whitespace trimmed), clears it, and sends **nothing** — the status line says
-`copied N lines from <host> … no interrupt sent`, so a user who expected an interrupt sees why
-none went out. Without a selection `ctrl+c` stays what it always was: the interrupt keystroke
-for the host or the broadcast targets.
+border can never be selected.
+
+Releasing the drag **copies the selection immediately** (copy-on-select, issue #302): OSC 52,
+ANSI stripped, trailing whitespace trimmed, same as every other copy path, and the status line
+reports it the same way — `copied N lines from <host> … no interrupt sent`. The selection stays
+highlighted afterward rather than clearing, so it is still there to copy again or to read against
+the pane. A plain click without a drag still clears any previous selection and copies nothing —
+the existing `dragged` distinction is what tells the two apart.
+
+`ctrl+c` and `super+c` copy a live selection on demand the same way and then clear it — the
+status line says why no interrupt went out. This exists mainly for muscle memory: `cmd+c` is the
+natural reach on macOS, and terminals that pass it through the Kitty keyboard protocol get
+`super+c` in bubbletea, so it is bound as an alias for `ctrl+c`. Without a selection the two
+diverge: `ctrl+c` stays what it always was, the interrupt keystroke for the host or the broadcast
+targets, while `super+c` has no interrupt meaning to fall back to and is swallowed instead of
+reaching a pane as a keystroke. A terminal that intercepts `cmd+c` for its own (empty) selection
+before lazycssh ever sees it is unaffected either way — that is exactly the gap copy-on-select is
+for. Native terminal selection is usually still reachable underneath lazycssh's own, on the
+terminal's own modifier-drag convention (e.g. option-drag or shift-drag, terminal-dependent) —
+lazycssh does not own the mouse when that modifier is held.
 
 The selection is anchored to the pane's **screen cells** and remembers the view it was made
 over — pane, body rect, page, split chunk, zoom, scroll offset. Anything that changes that view

@@ -10,8 +10,10 @@ import (
 
 // Mouse text selection inside a pane (issue #149). lazycssh owns the mouse,
 // so the terminal's native selection cannot reach the pane content; dragging
-// the left button over a pane's body highlights the covered text instead, and
-// ctrl+c copies it over OSC 52 - the same clipboard path as alt+y.
+// the left button over a pane's body highlights the covered text instead.
+// Releasing the drag copies it over OSC 52 immediately (copy-on-select,
+// issue #302) - the same clipboard path as alt+y - and ctrl+c/super+c copy it
+// again on demand while the selection stays live.
 //
 // The selection is anchored to **screen cells** of the pane's body, clipped
 // to that one pane, and remembers the exact view it was made over: the pane's
@@ -103,15 +105,23 @@ func (a App) handleMouseMotion(msg tea.MouseMotionMsg) App {
 }
 
 // handleMouseRelease finishes the drag: with motion the selection stays
-// visible, without it the press was a click and clears.
-func (a App) handleMouseRelease(msg tea.MouseReleaseMsg) App {
+// visible and is copied to the clipboard immediately (copy-on-select, issue
+// #302) - so cmd+v works without cmd+c ever having to reach the app. Without
+// motion the press was a plain click and clears instead, same as before.
+func (a App) handleMouseRelease(msg tea.MouseReleaseMsg) (App, tea.Cmd) {
 	if msg.Button != tea.MouseLeft || !a.textSel.active {
-		return a
+		return a, nil
 	}
 	if !a.textSel.dragged {
 		a.textSel = textSelection{}
+		return a, nil
 	}
-	return a
+	if !a.textSelectionValid() {
+		return a, nil
+	}
+	host := a.textSel.host
+	text, count := a.selectionText()
+	return a.reportCopy(host, text, count)
 }
 
 // clearTextSelection drops the selection.
@@ -227,13 +237,21 @@ func (a App) selectionText() (string, int) {
 	return text, len(out)
 }
 
-// copyTextSelection is ctrl+c with a live selection: the text goes to the
-// clipboard over OSC 52, the selection clears, and the status line says what
-// happened - a user who expected an interrupt must see why none was sent.
+// copyTextSelection is ctrl+c/super+c with a live selection: the text goes to
+// the clipboard over OSC 52, the selection clears, and the status line says
+// what happened - a user who expected an interrupt must see why none was
+// sent.
 func (a App) copyTextSelection() (App, tea.Cmd) {
 	host := a.textSel.host
 	text, count := a.selectionText()
 	a = a.clearTextSelection()
+	return a.reportCopy(host, text, count)
+}
+
+// reportCopy sets the status line for a selection copy and, if there was
+// text, emits the OSC 52 clipboard command. Shared by the ctrl+c/super+c path
+// and copy-on-select, so both report the copy the same way.
+func (a App) reportCopy(host, text string, count int) (App, tea.Cmd) {
 	if text == "" {
 		a.lastDelivery = "selection was empty — nothing copied, nothing sent"
 		return a, nil

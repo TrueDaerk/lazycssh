@@ -616,7 +616,7 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.handleMouseMotion(msg), nil
 
 	case tea.MouseReleaseMsg:
-		return a.handleMouseRelease(msg), nil
+		return a.handleMouseRelease(msg)
 
 	case tea.MouseWheelMsg:
 		return a.handleWheel(msg), nil
@@ -729,10 +729,12 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// A live mouse selection takes ctrl+c: it copies and clears, and no
-	// interrupt goes out - the status line says why (issue #149). Without a
-	// selection ctrl+c stays what it always was, a keystroke for the hosts.
-	// esc clears the selection and still does whatever it did before.
+	// A live mouse selection takes ctrl+c/super+c: it copies and clears, and
+	// no interrupt goes out - the status line says why (issue #149, #302).
+	// Without a selection ctrl+c stays what it always was, a keystroke for
+	// the hosts - but super+c has no interrupt meaning to fall back to, so it
+	// is swallowed instead of reaching the pane. esc clears the selection and
+	// still does whatever it did before.
 	if a.textSelectionValid() {
 		if key.Matches(msg, a.keys.CopySelection) {
 			return a.copyTextSelection()
@@ -740,6 +742,8 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, a.keys.PromptCancel) {
 			a = a.clearTextSelection()
 		}
+	} else if key.Matches(msg, a.keys.CopySelection) && msg.Mod.Contains(tea.ModSuper) {
+		return a, nil
 	}
 
 	// A focused pane is a terminal: everything below this line is app-level

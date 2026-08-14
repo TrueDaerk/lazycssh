@@ -180,7 +180,8 @@ reports what was attempted either way.
 |---|---|
 | ++alt+y++ | copy the focused pane's **visible** text — scroll first to aim the window |
 | ++alt+d++ | copy the focused pane's **whole retained scrollback** |
-| drag over a pane body, then ++ctrl+c++ | copy the mouse selection |
+| drag over a pane body | select text — the release copies it right away, no extra key needed |
+| ++ctrl+c++ or ++cmd+c++ with a live selection | copy the selection again |
 
 Clipboard text is plain: ANSI styling is stripped and dropped-line markers are
 excluded, because a paste target wants the ID or the error message, not the
@@ -213,11 +214,28 @@ Press and drag the left button over a pane's body: the covered text highlights
 in reverse video, stream-shaped like a terminal's own selection. The pane under
 the press owns the drag, so a neighbour pane or a border can never be selected.
 
-++ctrl+c++ with a live selection copies it, clears it, and sends **nothing** —
-the status line says `copied N lines from <host> … no interrupt sent`, so if you
-expected an interrupt you can see why none went out. Without a selection,
-++ctrl+c++ is what it always was: the interrupt keystroke for the host or the
-broadcast targets.
+**Releasing the drag copies the selection immediately** — the status line says
+`copied N lines from <host> … no interrupt sent`, and the selection stays
+highlighted afterward, so ordinary ++cmd+v++ (or your terminal's paste)
+already has what you selected. There is no extra key to remember.
+
+++ctrl+c++ or ++cmd+c++ (bound as ++super+c++, for terminals that forward
+`cmd` through the Kitty keyboard protocol) copy a live selection again on
+demand and then clear it — useful if you have scrolled the status message away
+and want to re-copy. Without a selection the two diverge: ++ctrl+c++ is what
+it always was, the interrupt keystroke for the host or the broadcast targets,
+while ++cmd+c++ does nothing — it has no interrupt to fall back to, so it never
+reaches a pane as a keystroke either.
+
+!!! tip "Why `cmd+c` used to feel broken"
+    Most terminals intercept ++cmd+c++ for their own native selection before
+    lazycssh ever sees it — and that native selection is always empty, because
+    lazycssh owns the mouse. Copy-on-select sidesteps the problem entirely: by
+    the time you would reach for ++cmd+c++, the text is already on the
+    clipboard. Your terminal's own selection is usually still reachable too,
+    on whatever modifier-drag convention it uses (option-drag or shift-drag,
+    depending on the terminal) — lazycssh does not own the mouse while that
+    modifier is held.
 
 Anything that changes the view clears the selection: a click without a drag,
 ++esc++, leaving the grid, a page or chunk turn, a re-tile, a zoom, the pane
