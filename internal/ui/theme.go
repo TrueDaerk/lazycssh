@@ -179,6 +179,12 @@ type Theme struct {
 	// Selection highlights mouse-selected pane text (issue #149).
 	Selection lipgloss.Style
 
+	// RemoteCursor marks the remote cursor's cell in a broadcast target pane
+	// that does not own the terminal caret (issue #301). There is one real
+	// cursor per frame, so every other target draws its position as a styled
+	// cell instead.
+	RemoteCursor lipgloss.Style
+
 	// Failure highlights a pane or row whose host failed, or whose last
 	// command exited non-zero.
 	Failure lipgloss.Style
@@ -290,6 +296,17 @@ func NewTheme(opts Options) Theme {
 	// Reverse video, like a terminal's own selection: it works over any
 	// remote colours and survives a terminal without colour.
 	t.Selection = lipgloss.NewStyle().Reverse(true)
+
+	// The simulated remote cursor is a block, the way a terminal draws its own
+	// unfocused caret: reverse video, so it stands out over whatever colours
+	// the remote painted the cell in and survives a terminal without colour at
+	// all. With colour the reversed foreground makes the block the accent
+	// colour, which reads on both the light and the dark palette and keeps it
+	// distinguishable from a reverse-video text selection.
+	t.RemoteCursor = lipgloss.NewStyle().Reverse(true)
+	if !opts.NoColor {
+		t.RemoteCursor = t.RemoteCursor.Foreground(palette.Accent)
+	}
 
 	t.Failure = fg(palette.Danger).Bold(true)
 	t.ExitOK = fg(palette.Success)

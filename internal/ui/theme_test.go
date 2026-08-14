@@ -53,6 +53,29 @@ func TestNoColorStillDistinguishesFocusAndDanger(t *testing.T) {
 	if !th.StateFailed.GetBold() {
 		t.Fatal("a failed host is not marked without colour")
 	}
+	if !th.RemoteCursor.GetReverse() {
+		t.Fatal("the simulated remote cursor is invisible without colour")
+	}
+}
+
+// The simulated remote cursor has to be findable on both palettes and over
+// whatever colours the remote painted the cell in (issue #301): reverse video
+// carries it, and the accent tint is what separates it from a reverse-video
+// text selection where there is colour.
+func TestRemoteCursorIsVisibleInBothPalettes(t *testing.T) {
+	for _, dark := range []bool{true, false} {
+		th := NewTheme(Options{Dark: dark})
+		if !th.RemoteCursor.GetReverse() {
+			t.Fatalf("dark=%v: the remote cursor mark is not reverse video", dark)
+		}
+		mark := th.RemoteCursor.Render(" ")
+		if !strings.Contains(mark, "38;2") && !strings.Contains(mark, "38;5") {
+			t.Fatalf("dark=%v: the mark carries no colour: %q", dark, mark)
+		}
+		if mark == th.Selection.Render(" ") {
+			t.Fatalf("dark=%v: the mark is indistinguishable from a text selection", dark)
+		}
+	}
 }
 
 // ListCursor is the only place a view picks between the two cursor styles

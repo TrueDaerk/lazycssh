@@ -1,5 +1,28 @@
 # Log
 
+## 2026-08-14
+
+- Broadcast target panes show their host's cursor position (issue #301). A frame has one terminal
+  cursor and the focused pane owns it (issue #292), so while a command was broadcast to twenty
+  hosts, nineteen of them gave no sign of where that keystroke was landing — which is exactly
+  what diverges between machines: a different shell history, a missing directory, one host still
+  at a `sudo` prompt. Every pane in the target set that does not hold the real caret now paints
+  its cursor cell itself (`internal/ui/remotecursor.go`, `Theme.RemoteCursor`: reverse video,
+  accent-tinted where there is colour, so it reads over the remote's own colours in both
+  palettes). The set decides: `all`, `selected` and `fleet` mark every target but the focused
+  pane, `single` marks nothing because its target *is* that pane, and panes outside the set —
+  deselected, past the visibility limit, alt-screen skipped — keep drawing nothing. The refusals
+  are `paneCursor`'s, unchanged: not connected, scrolled back, cursor hidden, inline auth answer,
+  out of the drawn area. The mark is applied to the rendered body by display column, after the
+  search and selection highlights, so a line carrying the remote's escape sequences is not cut in
+  half and the layout cannot shift by a cell; `paneBody` stays unmarked, which is what the
+  clipboard and the mouse selection read. The cell is part of `paneKey`, so the #293 render cache
+  redraws a pane whose mark moved — a broadcast mode switch alone does that, with no new output to
+  invalidate the entry — and the target set is resolved once per frame in the frame memo instead
+  of once per pane: `BenchmarkKeystrokeFleet100` and `BenchmarkKeystrokeBroadcast100` are
+  unchanged (1.22 ms / 0.56 MB and 2.31 ms / 1.7 MB on an M4).
+  Updated: `core/tui.md`, `core/theme.md`, `core/broadcast-scope.md`. Version 0.11.3.
+
 ## 2026-08-12
 
 - Keystroke updates stop scaling with the fleet (issue #291). Profiling the typing path on a
