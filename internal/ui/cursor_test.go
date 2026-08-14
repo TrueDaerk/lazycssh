@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/TrueDaerk/lazycssh/internal/broadcast"
 )
 
 // The frame's caret rules (issue #292): the focused live pane owns the
@@ -117,14 +119,20 @@ func TestViewHasNoCursorWithoutAFocusedPane(t *testing.T) {
 	}
 }
 
-// The same, one layer up: an unfocused pane's body carries no cursor block
-// either, so a screen full of connected hosts shows exactly one caret.
+// The same, one layer up: an unfocused pane no keystroke reaches carries no
+// cursor block either, so a screen full of connected hosts shows exactly one
+// caret. Single mode is that set — the focused pane and nothing else; the
+// panes that are broadcast targets do mark their cursor, which is
+// remotecursor_test.go's subject (issue #301).
 func TestUnfocusedPanesDrawNoCursor(t *testing.T) {
-	a, fleet := cursorApp(t)
+	a, fleet, router := broadcastCursorApp(t)
+	if err := router.SetMode(broadcast.ModeSingle); err != nil {
+		t.Fatalf("SetMode: %v", err)
+	}
 	fleet.sessions["web-01"].Emit("$ ")
 	fleet.sessions["web-02"].Emit("$ ")
 
-	if body := a.paneBody("web-02", 40, 5); body != plain(body) {
+	if body := markedBody(a, "web-02", 40, 5); body != plain(body) {
 		t.Fatalf("the unfocused pane paints a cursor:\n%q", body)
 	}
 	if c := a.View().Cursor; c == nil {

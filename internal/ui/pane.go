@@ -359,10 +359,13 @@ func (a App) paneWindowFor(id string, height int) (paneWindow, bool) {
 // matches highlighted. A pane whose remote app is on the alternate screen
 // renders the live grid alone — no scroll, no search, no selection.
 //
-// The remote cursor is not painted into the body. It is the frame's terminal
-// cursor and only the focused pane has it, so the caret blinks in the one
-// pane the keyboard reaches instead of in every connected one (issue #292);
-// [App.paneCursor] is where it is placed.
+// The remote cursor is not painted into the body. The focused pane's caret is
+// the frame's terminal cursor, so it blinks in the one pane the keyboard
+// reaches instead of in every connected one (issue #292) — [App.paneCursor]
+// places it — and the other broadcast targets get their mark painted onto the
+// rendered body by [App.paintRemoteCursor] (issue #301). The body itself stays
+// the text the pane holds, which is what the clipboard and the text selection
+// read out of it.
 func (a App) paneBody(id string, width, height int) string {
 	if height <= 0 || width <= 0 {
 		return ""

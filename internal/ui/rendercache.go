@@ -75,6 +75,7 @@ type paneKey struct {
 	echoOK      bool
 	selValid    bool
 	sel         textSelection
+	mark        cursorMark
 	theme       *Theme
 }
 
@@ -151,6 +152,11 @@ func (a App) paneKeyFor(e *hostRender, host int, id string, cell Rect, focused b
 		theme:       a.theme,
 	}
 	k.echo, k.echoOK = a.inlineAnswerEcho(id)
+	// The simulated remote cursor moves without the pane's text changing —
+	// a broadcast mode switch alone can put one there — so the cell it lands
+	// on is part of the key rather than something the sequence implies
+	// (issue #301). The body renders it from the same measurement.
+	k.mark = a.remoteCursorMark(id, cell.Width-2, cell.Height-3)
 	if a.textSel.host == id {
 		k.sel, k.selValid = a.textSel, a.textSelectionValid()
 	}

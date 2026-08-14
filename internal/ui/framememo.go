@@ -19,6 +19,10 @@ type frameMemo struct {
 	// cursor are placed from one snapshot of a screen the session's reader
 	// goroutine keeps changing (issue #292).
 	content map[string]memoPaneContent
+	// targets is the broadcast target set as a lookup, so the panes that have
+	// to paint their own remote cursor (issue #301) ask the router once per
+	// frame instead of once per pane.
+	targets map[string]struct{}
 }
 
 // memoPaneContent is one memoized [App.paneContent] result, ok and all: a host

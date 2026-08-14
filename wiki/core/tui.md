@@ -132,7 +132,8 @@ across frames, in the same shape as the search cache: a pointer shared by every 
 self-validating on every read, no invalidation hook to forget. The validity signal is the
 emulator's `Seq` counter (see [Terminal emulation](./terminal.md)), which moves with every
 write, resize and retention change; everything else a pane's rendering depends on — geometry,
-focus, scroll, search, selection, theme — is captured in a comparable `paneKey`, and any
+focus, scroll, search, selection, the [remote-cursor mark](#broadcast-targets-mark-their-own-cursor),
+theme — is captured in a comparable `paneKey`, and any
 mismatch re-renders. Forgetting a dependency in that key is the only way to serve a stale
 frame, so a new input to the pane render path must be added there. The frame memo below stays
 the per-frame pin that keeps one `View` on one snapshot; the cache is what lets that snapshot
@@ -625,12 +626,41 @@ The order of ownership, in `App.frameCursor` and `View`:
    is scrolled back into history, the remote app hid its cursor (`CSI ?25l`), the session is not
    connected, or the pane is on a page that is not showing. The caret is hidden.
 
-Panes therefore paint **no** cursor cell of their own, on the history view or on the
-[alt-screen grid](./terminal.md#grid-rendering-in-the-pane): a block drawn per pane would put a
-caret in every connected pane at once, in panes the keyboard does not reach. The two carets that
-remain styled cells are per-host prompts that several panes can show at the same time — the
-inline [auth answer](./authentication.md) echo and the broadcast bar's `▏` marker — and neither
+A pane the keyboard does not reach paints **no** cursor cell of its own, on the history view or on
+the [alt-screen grid](./terminal.md#grid-rendering-in-the-pane): a block drawn per pane would put a
+caret in every connected pane at once, in panes no keystroke goes to. The other styled cells that
+several panes can show at the same time are per-host prompts — the inline
+[auth answer](./authentication.md) echo and the broadcast bar's `▏` marker — and none of them
 claims the terminal cursor.
+
+### Broadcast targets mark their own cursor
+
+The panes a keystroke *does* reach are the exception (issue #301). Broadcasting types one command
+into many hosts, and where those hosts stand is exactly what diverges: a different shell history,
+a missing directory, one machine still at a `sudo` prompt. With one caret per frame that state was
+invisible in every pane but the focused one.
+
+So each pane in the **broadcast target set** that does not own the real caret paints its host's
+cursor position as a styled cell (`Theme.RemoteCursor`, reverse video — see
+[Theme](./theme.md#degrading)). It is a mark, not a caret: it does not blink and it does not move
+the terminal's cursor. The rules are the caret's own, one pane wider:
+
+- modes `all`, `selected` and `fleet` mark every target pane except the one holding the real
+  caret; mode **`single`** marks nothing, because its target *is* the focused pane,
+- a pane outside the set — deselected, outside the working set or the
+  [visibility limit](./broadcast-scope.md), skipped because a full-screen app is running there —
+  paints nothing, exactly as before,
+- the refusals are `paneCursor`'s: a host that is not connected, a pane scrolled back into
+  history, a remote app that hid its cursor, an inline auth answer that already carries its own
+  block, a cell outside the drawn area.
+
+The mark is applied to the **rendered** body, after the search and selection highlights and by
+display column rather than by byte, so a line carrying the remote's own escape sequences is not
+cut in half and the layout can never shift by a cell. `paneBody` itself stays unmarked, which is
+what the clipboard and the mouse [selection](#copy) read. The cell is part of `paneKey`, so the
+[cross-frame render cache](#what-a-frame-is-allowed-to-cost) redraws a pane whose mark moved — a
+broadcast mode switch alone can put one there, with no new output to invalidate the entry — and
+the target set is resolved once per frame through the frame memo rather than once per pane.
 
 The body and the caret are measured from one snapshot: the per-frame memo caches each pane's
 content, so a session's reader goroutine writing between the two reads cannot place the caret a

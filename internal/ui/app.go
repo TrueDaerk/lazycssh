@@ -1377,13 +1377,16 @@ func (a App) renderPaneFresh(host int, id string, cell Rect, focused bool) strin
 	// remains.
 	content := a.paneHeader(host, cell.Width-2, focused)
 	if body := a.paneBody(id, cell.Width-2, cell.Height-3); body != "" {
-		if a.paneAltScreen(id) {
+		if !a.paneAltScreen(id) {
 			// A full-screen app owns the grid; a text selection over a live
 			// screen would highlight cells that repaint under it.
-			content = content + "\n" + body
-		} else {
-			content = content + "\n" + a.highlightSelection(id, cell.Width-2, body)
+			body = a.highlightSelection(id, cell.Width-2, body)
 		}
+		// Last, so the mark is not overpainted by a highlight: a broadcast
+		// target that does not own the frame's caret shows where its own host
+		// stands (issue #301).
+		body = a.paintRemoteCursor(body, a.remoteCursorMark(id, cell.Width-2, cell.Height-3))
+		content = content + "\n" + body
 	}
 
 	return a.frame(a.theme.PaneFrame(focused, a.commandFailed(id)), cell, content)
