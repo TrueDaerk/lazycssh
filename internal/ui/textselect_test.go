@@ -35,16 +35,41 @@ func mouse(t *testing.T, a App, msg tea.Msg) App {
 // drag presses at (x1,y1), moves to (x2,y2) and releases there.
 func drag(t *testing.T, a App, x1, y1, x2, y2 int) App {
 	t.Helper()
+	next, _ := dragCmd(t, a, x1, y1, x2, y2)
+	return next
+}
+
+// dragCmd is drag, but also returns the release's command - copy-on-select
+// (issue #302) means that release can itself carry a clipboard write.
+func dragCmd(t *testing.T, a App, x1, y1, x2, y2 int) (App, tea.Cmd) {
+	t.Helper()
 	a = mouse(t, a, tea.MouseClickMsg{X: x1, Y: y1, Button: tea.MouseLeft})
 	a = mouse(t, a, tea.MouseMotionMsg{X: x2, Y: y2, Button: tea.MouseLeft})
-	return mouse(t, a, tea.MouseReleaseMsg{X: x2, Y: y2, Button: tea.MouseLeft})
+	model, cmd := a.Update(tea.MouseReleaseMsg{X: x2, Y: y2, Button: tea.MouseLeft})
+	next, ok := model.(App)
+	if !ok {
+		t.Fatalf("Update returned a %T, want App", model)
+	}
+	return next, cmd
 }
 
 // ctrlC presses ctrl+c and returns the model plus the rendered command
 // message, which is the clipboard content for a copy.
 func ctrlC(t *testing.T, a App) (App, string) {
 	t.Helper()
-	model, cmd := a.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	return pressCopyKey(t, a, tea.ModCtrl)
+}
+
+// superC presses super+c (cmd+c on macOS terminals that forward it) and
+// returns the model plus the rendered clipboard content, like ctrlC.
+func superC(t *testing.T, a App) (App, string) {
+	t.Helper()
+	return pressCopyKey(t, a, tea.ModSuper)
+}
+
+func pressCopyKey(t *testing.T, a App, mod tea.KeyMod) (App, string) {
+	t.Helper()
+	model, cmd := a.Update(tea.KeyPressMsg{Code: 'c', Mod: mod})
 	next := model.(App)
 	if cmd == nil {
 		return next, ""
@@ -217,5 +242,80 @@ func TestNewOutputUnderASelection(t *testing.T) {
 	view := plain(a.View().Content)
 	if !strings.Contains(view, "late arrival") {
 		t.Fatalf("the new output is not rendered:\n%s", view)
+	}
+}
+
+// Copy-on-select (issue #302): releasing a drag copies the selection right
+// away, so cmd+v works without cmd+c ever having to reach the app - and the
+// selection stays live and highlighted, exactly like the existing ctrl+c path
+// leaves it before it is copied.
+func TestReleaseAfterDragCopiesImmediately(t *testing.T) {
+	a, fleet, body := selApp(t)
+
+	a, cmd := dragCmd(t, a, body.X, body.Y, body.X+4, body.Y+1)
+	if cmd == nil {
+		t.Fatal("release after a drag did not emit a clipboard command")
+	}
+	clip := fmt.Sprint(cmd())
+	if !strings.Contains(clip, "alpha one") || !strings.Contains(clip, "bravo") {
+		t.Fatalf("clipboard = %q, want the two selected rows", clip)
+	}
+	if strings.Contains(clip, "\x1b[3") {
+		t.Fatalf("clipboard carries ANSI styling: %q", clip)
+	}
+	if !a.TextSelectionActive() {
+		t.Fatal("copy-on-select cleared the selection; it should stay live")
+	}
+	if !strings.Contains(a.lastDelivery, "copied 2 lines from web-01") {
+		t.Fatalf("lastDelivery = %q", a.lastDelivery)
+	}
+	if got := fleet.sessions["web-01"].Written(); got != "" {
+		t.Fatalf("web-01 received %q, want no interrupt", got)
+	}
+}
+
+// A release without a drag is a plain click: no selection, so no copy.
+func TestReleaseWithoutDragDoesNotCopy(t *testing.T) {
+	a, _, body := selApp(t)
+
+	a = mouse(t, a, tea.MouseClickMsg{X: body.X + 2, Y: body.Y, Button: tea.MouseLeft})
+	model, cmd := a.Update(tea.MouseReleaseMsg{X: body.X + 2, Y: body.Y, Button: tea.MouseLeft})
+	if cmd != nil {
+		t.Fatalf("a plain click emitted a clipboard command: %v", fmt.Sprint(cmd()))
+	}
+	next := model.(App)
+	if next.TextSelectionActive() {
+		t.Fatal("a plain click built a selection")
+	}
+}
+
+// super+c copies a live selection exactly like ctrl+c (issue #302).
+func TestSuperCCopiesTheSelectionLikeCtrlC(t *testing.T) {
+	a, fleet, body := selApp(t)
+
+	a = drag(t, a, body.X, body.Y, body.X+4, body.Y+1)
+	a, clip := superC(t, a)
+	if !strings.Contains(clip, "alpha one") || !strings.Contains(clip, "bravo") {
+		t.Fatalf("clipboard = %q, want the two selected rows", clip)
+	}
+	if a.TextSelectionActive() {
+		t.Fatal("super+c did not clear the selection")
+	}
+	if got := fleet.sessions["web-01"].Written(); got != "" {
+		t.Fatalf("web-01 received %q, want no interrupt", got)
+	}
+}
+
+// Without a selection, super+c must stay inert: unlike ctrl+c it has no
+// interrupt fallback, so it must not reach the host as a keystroke either.
+func TestSuperCWithoutSelectionHasNoSideEffect(t *testing.T) {
+	a, fleet, _ := selApp(t)
+
+	a, clip := superC(t, a)
+	if clip != "" {
+		t.Fatalf("clipboard = %q, want nothing copied", clip)
+	}
+	if got := fleet.sessions["web-01"].Written(); got != "" {
+		t.Fatalf("web-01 received %q, want no interrupt and no keystroke", got)
 	}
 }

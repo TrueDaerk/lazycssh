@@ -1,5 +1,20 @@
 # Log
 
+## 2026-08-14
+
+- Mouse selection now copies itself on release, and `super+c` aliases `ctrl+c` (issue #302). The
+  drag-to-select path from #149 required a keyboard follow-up (`ctrl+c`) to actually reach the
+  clipboard, which macOS users never found — the natural `cmd+c` never reaches the app at all,
+  because lazycssh owns the mouse and the terminal intercepts `cmd+c` for its own (empty)
+  selection first. Releasing a drag now copies the selection over OSC 52 immediately
+  (`handleMouseRelease`), the same status-line report as the existing `ctrl+c` path, and leaves
+  the selection live rather than clearing it, so a second `ctrl+c`/`super+c` can still copy it
+  again. `super+c` is bound as a `ctrl+c` alias for terminals that forward `cmd` through the Kitty
+  keyboard protocol; without a live selection it diverges from `ctrl+c` on purpose — `ctrl+c`
+  keeps sending the interrupt, but `super+c` has no interrupt meaning to fall back to, so it is
+  swallowed instead of reaching a pane as a keystroke.
+  Updated: `core/tui.md`, `core/keys.md`. Version 0.11.3.
+
 ## 2026-08-12
 
 - Keystroke updates stop scaling with the fleet (issue #291). Profiling the typing path on a

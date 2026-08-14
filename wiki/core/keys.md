@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings, config]
-timestamp: 2026-08-12T18:00:00Z
+timestamp: 2026-08-14T00:00:00Z
 ---
 
 # Keymap and help
@@ -108,7 +108,7 @@ live at the same time.
 | `alt+shift+c` | panes (and app level) | clone this host into a second, independent pane — same Addr/User/Port, dialled through [`Manager.Add`](./manager.md#add), its own input, scrollback, close and reconnect (issue #253) |
 | `alt+x` | panes (and app level) | close this host; on a dead host, remove its pane |
 | `alt+y` | panes (and app level) | copy this pane's visible text to the clipboard (OSC 52) |
-| `ctrl+c` | with a live mouse selection | copy the selection (OSC 52) and clear it — no interrupt is sent; without a selection it stays a keystroke for the hosts |
+| `ctrl+c` / `super+c` | with a live mouse selection | copy the selection (OSC 52) and clear it — no interrupt is sent. Without a selection `ctrl+c` stays a keystroke for the hosts, but `super+c` is swallowed instead (it has no interrupt to fall back to). Releasing a drag already copies the selection on its own (copy-on-select, issue #302); these are for copying it again |
 | `alt+d` | panes (and app level) | copy this pane's whole scrollback to the clipboard (OSC 52) |
 | `alt+w` | panes (and app level) | export this pane's whole scrollback to `lazycssh-<alias>-<timestamp>.log` in the working directory, ANSI stripped — a one-shot postmortem export, not [session logging](./session-logging.md#one-shot-export-vs-session-logging) (issue #252) |
 | `shift+pgup` / `shift+pgdn` | panes (and app level) | scroll the focused pane back / forward |

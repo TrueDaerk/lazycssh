@@ -82,7 +82,7 @@ from the app level too.
 | ++alt+y++ | copy this pane's visible text (OSC 52) |
 | ++alt+d++ | copy this pane's whole scrollback (OSC 52) |
 | ++alt+w++ | export this pane's whole scrollback to a file, ANSI stripped |
-| ++ctrl+c++ | with a live mouse selection: copy it and clear it, sending nothing. Without one: the interrupt keystroke |
+| ++ctrl+c++ / ++cmd+c++ | with a live mouse selection: copy it again and clear it, sending nothing (a drag's release already copies on its own). Without one: ++ctrl+c++ stays the interrupt keystroke, ++cmd+c++ does nothing |
 | ++shift+page-up++ / ++shift+page-down++ | scroll this pane back / forward |
 | ++shift+home++ / ++shift+end++ | oldest retained output / back to the tail |
 | ++alt+slash++ | search the scrollback |
@@ -211,6 +211,6 @@ promised.
 | left click | `[x]` in a pane header | close a live host; remove a dead one |
 | left click | sidebar box / row | select the panel, move its cursor to the row |
 | left click | broadcast bar | give the bar the keyboard |
-| drag | pane body | select text; ++ctrl+c++ copies it |
+| drag | pane body | select text; releasing copies it right away, ++ctrl+c++/++cmd+c++ copy it again |
 | wheel | over a pane | scroll that pane's scrollback, without changing focus |
 | wheel | over a sidebar list | move that panel's cursor |

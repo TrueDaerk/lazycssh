@@ -51,10 +51,16 @@ Any reasonably modern terminal works — lazycssh uses standard truecolor SGR an
 cell-motion mouse reporting, not the Kitty keyboard protocol. Two features are
 nice to have:
 
-- **OSC 52 clipboard support**, for ++alt+y++ / ++alt+d++ / ++ctrl+c++ copy.
-  Terminals without it ignore the sequence; lazycssh still reports what it
-  attempted. OSC 52 is also what makes copy work when lazycssh itself is
-  running over SSH.
+- **OSC 52 clipboard support**, for ++alt+y++ / ++alt+d++ / mouse-selection
+  copy. Terminals without it ignore the sequence; lazycssh still reports what
+  it attempted. OSC 52 is also what makes copy work when lazycssh itself is
+  running over SSH. A mouse selection copies itself the moment you release the
+  drag, so this is the one that matters most day to day.
+- **Kitty keyboard protocol support**, only for the ++cmd+c++ alias
+  (++super+c++) on a live selection. Without it, ++cmd+c++ still works the way
+  every terminal already handles it — intercepted for the terminal's own
+  (empty) selection — but that no longer matters, since the drag's release
+  already put the text on the clipboard.
 - **A reasonably large window.** A pane never shows its host less than a 45×16
   terminal; when the hosts stop fitting the grid pages instead of shrinking
   further. Below 24×4 the whole interface degrades to a single "terminal too
