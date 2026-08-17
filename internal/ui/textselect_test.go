@@ -319,3 +319,67 @@ func TestSuperCWithoutSelectionHasNoSideEffect(t *testing.T) {
 		t.Fatalf("web-01 received %q, want no interrupt and no keystroke", got)
 	}
 }
+
+// super+c copies a live selection even while a focused input owns the
+// keyboard - the command line, the split prompt and the output filter would
+// otherwise see the chord first and swallow it before the selection was ever
+// copied (issue #305).
+func TestSuperCCopiesSelectionWithFocusedInput(t *testing.T) {
+	cases := []struct {
+		name  string
+		focus func(a App) App
+	}{
+		{"command line", func(a App) App { return a.openCommandLine() }},
+		{"split prompt", func(a App) App {
+			a.splitInput.Focus()
+			return a
+		}},
+		{"output filter", func(a App) App {
+			a.filterInput.Focus()
+			return a
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a, fleet, body := selApp(t)
+
+			a = drag(t, a, body.X, body.Y, body.X+4, body.Y+1)
+			if !a.TextSelectionActive() {
+				t.Fatal("setup: no selection")
+			}
+			a = tc.focus(a)
+
+			a, clip := superC(t, a)
+			if !strings.Contains(clip, "alpha one") || !strings.Contains(clip, "bravo") {
+				t.Fatalf("clipboard = %q, want the two selected rows", clip)
+			}
+			if a.TextSelectionActive() {
+				t.Fatal("super+c did not clear the selection")
+			}
+			if got := fleet.sessions["web-01"].Written(); got != "" {
+				t.Fatalf("web-01 received %q, want no interrupt", got)
+			}
+		})
+	}
+}
+
+// ctrl+c with a live selection copies and sends no interrupt even while the
+// command line is focused, matching super+c (issue #305).
+func TestCtrlCCopiesSelectionWithCommandLineFocused(t *testing.T) {
+	a, fleet, body := selApp(t)
+
+	a = drag(t, a, body.X, body.Y, body.X+4, body.Y+1)
+	a = a.openCommandLine()
+
+	a, clip := ctrlC(t, a)
+	if !strings.Contains(clip, "alpha one") || !strings.Contains(clip, "bravo") {
+		t.Fatalf("clipboard = %q, want the two selected rows", clip)
+	}
+	if a.TextSelectionActive() {
+		t.Fatal("ctrl+c did not clear the selection")
+	}
+	if got := fleet.sessions["web-01"].Written(); got != "" {
+		t.Fatalf("web-01 received %q, want no interrupt", got)
+	}
+}

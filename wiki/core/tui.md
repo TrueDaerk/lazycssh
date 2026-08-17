@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-14T00:00:00Z
+timestamp: 2026-08-17T00:00:00Z
 ---
 
 # TUI shell
@@ -539,7 +539,11 @@ the pane. A plain click without a drag still clears any previous selection and c
 the existing `dragged` distinction is what tells the two apart.
 
 `ctrl+c` and `super+c` copy a live selection on demand the same way and then clear it — the
-status line says why no interrupt went out. This exists mainly for muscle memory: `cmd+c` is the
+status line says why no interrupt went out. This is checked ahead of every focused input and
+overlay in `handleKey` (command line, split prompt, output filter, help/preview), so the chord
+reaches the selection regardless of where the keyboard focus is at the time — a selection made
+over a pane stays copyable while the user has since opened the command line or a prompt (issue
+#305). This exists mainly for muscle memory: `cmd+c` is the
 natural reach on macOS, and terminals that pass it through the Kitty keyboard protocol get
 `super+c` in bubbletea, so it is bound as an alias for `ctrl+c`. Without a selection the two
 diverge: `ctrl+c` stays what it always was, the interrupt keystroke for the host or the broadcast
