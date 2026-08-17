@@ -1,5 +1,17 @@
 # Log
 
+## 2026-08-17
+
+- `ctrl+c`/`super+c` now copy a live mouse selection no matter where the keyboard focus is
+  (issue #305). The selection-copy check in `handleKey` (`internal/ui/app.go`) sat after the
+  early returns for every focused input — command line, split prompt, output filter — and the
+  help/preview overlays, so those handlers saw the chord first and the selection was never
+  copied unless focus happened to be plain grid or broadcast-bar. The check now runs immediately
+  after the force-quit check, ahead of all of that dispatch, and only intercepts the chord when a
+  selection is actually live; every other key, and `ctrl+c`/`super+c` without a selection, still
+  falls through to its usual per-context handling unchanged.
+  Updated: `core/keys.md`. Version 0.11.5.
+
 ## 2026-08-14
 
 - Mouse selection now copies itself on release, and `super+c` aliases `ctrl+c` (issue #302). The

@@ -649,6 +649,15 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, tea.Quit
 	}
 
+	// A live mouse selection takes ctrl+c/super+c ahead of every focused-input
+	// or overlay dispatch below: whichever handler owns the keyboard would
+	// otherwise see the chord first and the selection would never get copied
+	// (issue #305). Without a selection, ctrl+c/super+c fall through unchanged
+	// to their usual per-context handling further down.
+	if a.textSelectionValid() && key.Matches(msg, a.keys.CopySelection) {
+		return a.copyTextSelection()
+	}
+
 	// The command line has the keyboard while it is open: a command containing
 	// a "b" must not switch the broadcast mode, and ctrl+c while editing must
 	// not reach forty machines.
@@ -729,16 +738,13 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// A live mouse selection takes ctrl+c/super+c: it copies and clears, and
-	// no interrupt goes out - the status line says why (issue #149, #302).
-	// Without a selection ctrl+c stays what it always was, a keystroke for
-	// the hosts - but super+c has no interrupt meaning to fall back to, so it
-	// is swallowed instead of reaching the pane. esc clears the selection and
-	// still does whatever it did before.
+	// A live mouse selection also takes esc here (copy is handled above, ahead
+	// of the focused-input dispatch): esc clears the selection and still does
+	// whatever it did before (issue #149, #302). Without a selection ctrl+c
+	// stays what it always was, a keystroke for the hosts - but super+c has no
+	// interrupt meaning to fall back to, so it is swallowed instead of
+	// reaching the pane.
 	if a.textSelectionValid() {
-		if key.Matches(msg, a.keys.CopySelection) {
-			return a.copyTextSelection()
-		}
 		if key.Matches(msg, a.keys.PromptCancel) {
 			a = a.clearTextSelection()
 		}
