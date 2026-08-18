@@ -1,10 +1,88 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 )
+
+// fakeClipboard records what the local clipboard fallback was handed.
+type fakeClipboard struct {
+	written []string
+	err     error
+}
+
+func (c *fakeClipboard) Write(text string) error {
+	c.written = append(c.written, text)
+	return c.err
+}
+
+// The OSC 52 sequence is not a clipboard on its own: terminals that ignore it
+// (macOS Terminal.app has no support at all, iTerm2 keeps it off by default)
+// left every copy silently unpastable (issue #307). A local run therefore
+// writes the same text to the machine's own clipboard as well, and the
+// command still resolves to bubbletea's clipboard message so OSC 52 goes out
+// unchanged for the run over SSH that only it can serve.
+func TestCopyAlsoWritesTheLocalClipboard(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	board := &fakeClipboard{}
+	a.cfg.Clipboard = board
+	fleet.sessions["web-01"].Emit("deadbeef42\n")
+	a = focusGrid(t, a)
+
+	_, clip := pressKeyCmd(t, a, "alt+y")
+
+	if !strings.Contains(clip, "deadbeef42") {
+		t.Fatalf("OSC 52 no longer carries the text: %q", clip)
+	}
+	if len(board.written) != 1 || !strings.Contains(board.written[0], "deadbeef42") {
+		t.Fatalf("the local clipboard got %q, want the copied text once", board.written)
+	}
+}
+
+// A machine whose clipboard tool is missing or broken must not lose the copy:
+// OSC 52 has already gone out, and a failed fallback is not worth an error.
+func TestCopySurvivesAFailingLocalClipboard(t *testing.T) {
+	a, fleet, _, _ := statusApp(t, "web-01")
+	a.cfg.Clipboard = &fakeClipboard{err: errors.New("no clipboard tool")}
+	fleet.sessions["web-01"].Emit("deadbeef42\n")
+	a = focusGrid(t, a)
+
+	_, clip := pressKeyCmd(t, a, "alt+y")
+
+	if !strings.Contains(clip, "deadbeef42") {
+		t.Fatalf("a failing local clipboard swallowed the copy: %q", clip)
+	}
+}
+
+// The mouse selection takes the same path, which is the copy issue #307 was
+// reported against: select in a focused pane, press ctrl+c/cmd+c, paste
+// elsewhere.
+func TestSelectionCopyAlsoWritesTheLocalClipboard(t *testing.T) {
+	a, _, body := selApp(t)
+	board := &fakeClipboard{}
+	a.cfg.Clipboard = board
+
+	a, release := dragCmd(t, a, body.X, body.Y, body.X+4, body.Y)
+	if release == nil {
+		t.Fatal("copy-on-select emitted no clipboard command")
+	}
+	release()
+	if _, clip := superC(t, a); !strings.Contains(clip, "alpha") {
+		t.Fatalf("OSC 52 no longer carries the selection: %q", clip)
+	}
+
+	// Once on release (copy-on-select), once for the chord.
+	if len(board.written) != 2 {
+		t.Fatalf("the local clipboard got %q, want the copy-on-select and the chord", board.written)
+	}
+	for _, got := range board.written {
+		if !strings.Contains(got, "alpha") {
+			t.Fatalf("the local clipboard got %q, want the selected text", got)
+		}
+	}
+}
 
 // pressKeyCmd is pressKey, but keeps the command: copy is delivered as a
 // tea.Cmd carrying the clipboard write.

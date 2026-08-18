@@ -4,7 +4,7 @@ title: Terminal emulation
 description: The per-session vt emulator that holds everything a pane shows — screen, retained history, cursor, modes — encodes key presses per host, and reflows on resize.
 resource: internal/term
 tags: [terminal, vt, emulation, alt-screen, scrollback, keys, resize]
-timestamp: 2026-08-12T22:00:00Z
+timestamp: 2026-08-18T00:00:00Z
 ---
 
 # Terminal emulation
@@ -162,7 +162,9 @@ output pump feeds it after the exit-marker scanner and the setup-echo filter hav
 raw bytes; `Resize` resizes both the remote PTY and the emulator. The
 [broadcast router](./broadcast-scope.md) reads `IsAltScreen` through the manager's
 `AltScreen` method, and delivers key events through the manager's `SendKey` — encoded per
-host, by that host's emulator.
+host, by that host's emulator. A focused pane's paste takes the matching `Manager.Paste`, so
+the bracketing a remote app asked for is decided by that host's emulator too (issue #307);
+both refuse where `Writer` refuses, on a session that is not connected.
 
 The emulator outlives its session: `Session.ReleaseTerminal` detaches it, the reconnect
 separator is written into it, and the replacement session adopts it (`Config.Terminal`) — the

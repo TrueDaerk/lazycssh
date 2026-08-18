@@ -407,6 +407,21 @@ func (m *Manager) SendKey(id string, k term.KeyEvent) bool {
 	return true
 }
 
+// Paste delivers pasted text to a host through its terminal emulator, so it
+// arrives wrapped in bracketed-paste markers whenever the remote app asked for
+// them — a multi-line paste into a shell that understands them is then one
+// edited buffer rather than N lines executed as they land. It reports false
+// when the session cannot take input, the same refusal Writer and SendKey
+// give (issue #307).
+func (m *Manager) Paste(id string, text string) bool {
+	s, ok := m.Session(id)
+	if !ok || s.State() != StateConnected {
+		return false
+	}
+	s.Terminal().Paste(text)
+	return true
+}
+
 // Counts summarises the fleet for the status bar.
 type Counts struct {
 	Total     int

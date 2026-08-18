@@ -585,6 +585,41 @@ func TestManagerConnectedAndWriter(t *testing.T) {
 	}
 }
 
+// Paste goes through the session's emulator, so a remote app that asked for
+// bracketed paste gets its markers, and it refuses exactly where Writer and
+// SendKey refuse: a session that is not connected (issue #307).
+func TestManagerPaste(t *testing.T) {
+	m, lookup := newTestManager(t, fakeFleet(1), nil)
+
+	if m.Paste("srv1", "uptime") {
+		t.Fatal("a session that was never started accepted a paste")
+	}
+	if err := lookup("srv1").Start(t.Context()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if !m.Paste("srv1", "uptime") {
+		t.Fatal("a connected session refused a paste")
+	}
+	waitFor(t, "the plain paste to arrive", func() bool { return lookup("srv1").Written() == "uptime" })
+
+	// The remote app turns bracketed paste on; the next paste is wrapped.
+	lookup("srv1").Emit("\x1b[?2004h")
+	if !m.Paste("srv1", "uptime") {
+		t.Fatal("a connected session refused a bracketed paste")
+	}
+	waitFor(t, "the bracketed paste to arrive", func() bool {
+		return strings.Contains(lookup("srv1").Written(), "\x1b[200~uptime\x1b[201~")
+	})
+
+	lookup("srv1").Disconnect(ErrDisconnected())
+	if m.Paste("srv1", "uptime") {
+		t.Fatal("a failed session accepted a paste")
+	}
+	if m.Paste("srv99", "uptime") {
+		t.Fatal("a host that is not in the fleet accepted a paste")
+	}
+}
+
 func TestManagerAddDialsOneMoreHost(t *testing.T) {
 	m, _ := newTestManager(t, fakeFleet(2), nil)
 	m.Start(t.Context())

@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-17T00:00:00Z
+timestamp: 2026-08-18T00:00:00Z
 ---
 
 # TUI shell
@@ -370,8 +370,9 @@ chords, combinations the encoder never produced, so intercepting them forwards n
 could previously send. Where keystrokes go is always in the status bar: `TYPING web-01 — ctrl+]
 leaves · alt=app`. Typing into a host that cannot take input says so rather than dropping keys.
 
-The write path is `PaneWriter`, the narrowest slice of the manager — one host's `io.Writer` —
-bypassing the broadcast scope entirely: typing into a pane can never fan out.
+The write path is `PaneWriter`, the narrowest slice of the manager — one host's `io.Writer`, its
+`SendKey` and its `Paste` — bypassing the broadcast scope entirely: typing or pasting into a
+pane can never fan out.
 
 - `tab` / `shift+tab` at the app level walk the lazygit cycle: every sidebar panel in order,
   then the grid; once in the grid they are keystrokes for the host and `ctrl+]` is the way back,
@@ -508,11 +509,24 @@ Bubbletea owns the mouse, so the terminal's native selection cannot reach the pa
 (issue #134). Copying is keyboard-first instead, per the interaction model: `alt+y` puts the
 focused pane's **visible text** into the system clipboard — scroll first to aim the window —
 and `alt+d` takes the **whole retained scrollback**. Both go out over **OSC 52**, so they reach
-the local clipboard even when lazycssh itself runs over SSH; a terminal without OSC 52 support
-ignores the sequence, and the status line reports what was attempted either way. Clipboard text
+the local clipboard even when lazycssh itself runs over SSH. Clipboard text
 is plain: ANSI styling is stripped and clear markers are excluded, because a paste target wants
 the ID or the error message, not the colours around it. Both chords appear in the `?` overlay,
 generated from the keymap as ever.
+
+**OSC 52 alone is not a clipboard** (issue #307). Terminals that do not act on the sequence
+ignore it silently, and that is not a rare corner: macOS Terminal.app never implemented OSC 52
+at all, and iTerm2 keeps it behind *Settings → General → Selection → "Applications in terminal
+may access clipboard"*, off by default. To the user that reads as "I copied and nothing was on
+the clipboard" — with no error anywhere, because a terminal that drops an escape sequence has no
+way to say so. So every copy path also writes the text to the **machine's own clipboard**
+through `Config.Clipboard` (`internal/clipboard`, driving `pbcopy` / `wl-copy` / `xclip` /
+`clip.exe`), in the same `tea.Cmd` that emits the OSC 52 sequence — never inline in `Update`,
+because those are subprocesses. A run **inside an SSH session** deliberately installs no such
+writer: there the OS clipboard belongs to the far machine, and OSC 52 is the only path that can
+reach the person at the keyboard. A machine with no clipboard tool, or a failing one, changes
+nothing: OSC 52 has already gone out and the status line reported the copy either way, so the
+failure mode stays "a wrong status line", never a crash.
 
 ### Export
 
@@ -561,6 +575,30 @@ zoom, the pane closing, **scrolling** (the decided answer for scroll-under-selec
 output under a tail-following pane redraws beneath the highlight without moving it; the
 highlight is applied at render time from the model alone, so session reader goroutines are
 never involved and the layout can never shift by a cell.
+
+### Paste
+
+A paste is input, so it goes where typing goes (issue #307). Bracketed paste delivers the whole
+block as one `tea.PasteMsg`, and `handlePaste` (`internal/ui/paste.go`) routes it by focus:
+
+- **a focused pane** — to that one host, through the host's own emulator (`Manager.Paste` →
+  `term.Emulator.Paste`), not straight at its stdin. The emulator wraps the text in
+  bracketed-paste markers whenever the remote app turned that mode on, which is the difference
+  between a pasted script landing in the shell's line editor and its lines executing as they
+  arrive. Nothing is held for review: a pane is exactly one host, the case the bar's hold
+  already exempts. The status line names the host that got it and how many lines — the target
+  count a single pane can have.
+- **a pane with an open auth question** — into that question's answer, the way typing into it
+  goes (issue #182), and only the paste's first line: a passphrase is pasted more often than it
+  is typed, and the rest of a block would be answering a question nobody has asked yet.
+- **the broadcast bar** — unchanged, including the review gate for a multiline paste aimed at
+  more than one host; see [Holding a multiline paste](./broadcast-scope.md#holding-a-multiline-paste).
+- **anywhere else** — swallowed. A prompt, dialog or overlay owning the keyboard
+  (`promptOwnsKeyboard`), the sidebar, the bar in view mode: none of them is an input path to a
+  host, and a paste must never slip past the thing the user is actually looking at.
+
+Before this, `handlePaste` returned early unless the broadcast bar had focus, so `cmd+v` into a
+focused host did nothing at all — silently, which is the worst version of it.
 
 ### Search
 

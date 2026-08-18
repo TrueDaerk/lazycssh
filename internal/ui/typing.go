@@ -26,6 +26,10 @@ type PaneWriter interface {
 	// which encodes it the way that host's current modes demand (issue #206).
 	// It reports false when the session cannot take input.
 	SendKey(id string, k term.KeyEvent) bool
+	// Paste delivers pasted text through the same emulator, so it is
+	// bracketed when the remote app asked for bracketed paste (issue #307).
+	// It reports false when the session cannot take input.
+	Paste(id string, text string) bool
 }
 
 // handleTypingKey is the focused pane behaving like a terminal: every key

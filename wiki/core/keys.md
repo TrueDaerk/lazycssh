@@ -4,7 +4,7 @@ title: Keymap and help
 description: Every binding declared once, the help generated from it, and the rules that keep a key meaning one thing at a time.
 resource: internal/ui/keys.go
 tags: [ui, keys, help, bindings, config]
-timestamp: 2026-08-17T00:00:00Z
+timestamp: 2026-08-18T00:00:00Z
 ---
 
 # Keymap and help
@@ -107,9 +107,10 @@ live at the same time.
 | `alt+r` | panes (and app level) | reconnect this host |
 | `alt+shift+c` | panes (and app level) | clone this host into a second, independent pane — same Addr/User/Port, dialled through [`Manager.Add`](./manager.md#add), its own input, scrollback, close and reconnect (issue #253) |
 | `alt+x` | panes (and app level) | close this host; on a dead host, remove its pane |
-| `alt+y` | panes (and app level) | copy this pane's visible text to the clipboard (OSC 52) |
+| `alt+y` | panes (and app level) | copy this pane's visible text to the clipboard — OSC 52, plus the machine's own clipboard on a local run (issue #307) |
 | `ctrl+c` / `super+c` | with a live mouse selection | copy the selection (OSC 52) and clear it — no interrupt is sent. This is checked ahead of every focused input and overlay (command line, split prompt, output filter, help/preview) so the chord reaches the selection no matter where the keyboard focus is (issue #305). Without a selection `ctrl+c` stays a keystroke for the hosts, but `super+c` is swallowed instead (it has no interrupt to fall back to). Releasing a drag already copies the selection on its own (copy-on-select, issue #302); these are for copying it again |
 | `alt+d` | panes (and app level) | copy this pane's whole scrollback to the clipboard (OSC 52) |
+| `cmd+v` / `ctrl+shift+v` (the terminal's paste) | panes, broadcast bar | the pasted text is input, so it goes where typing goes: the focused pane's host, or the broadcast targets from the bar. A pane's paste is delivered through that host's emulator, so it is bracketed when the remote app asked for bracketed paste, and is never held for review — one pane is one host. The bar still holds a multiline paste aimed at more than one host (issue #248). A prompt, a dialog or an overlay owning the keyboard swallows the paste rather than letting it reach a host (issue #307) |
 | `alt+w` | panes (and app level) | export this pane's whole scrollback to `lazycssh-<alias>-<timestamp>.log` in the working directory, ANSI stripped — a one-shot postmortem export, not [session logging](./session-logging.md#one-shot-export-vs-session-logging) (issue #252) |
 | `shift+pgup` / `shift+pgdn` | panes (and app level) | scroll the focused pane back / forward |
 | `shift+home` / `shift+end` | panes (and app level) | oldest retained output / back to the tail |
