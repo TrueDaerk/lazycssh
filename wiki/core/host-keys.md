@@ -4,7 +4,7 @@ title: Host key verification
 description: How lazycssh verifies server keys against known_hosts, why a changed key is never a prompt, and the one explicit way out.
 resource: internal/ssh/knownhosts.go
 tags: [ssh, security, known-hosts]
-timestamp: 2026-07-30T18:00:00Z
+timestamp: 2026-08-18T00:00:00Z
 ---
 
 # Host key verification
@@ -56,6 +56,23 @@ answers its own question, and the broadcast line answers every prompting target 
 status bar carries an `AUTH` segment while questions are open and the Status panel lists the
 prompting hosts (`ctrl+q` still quits). A session closed or cancelled while its question is
 open withdraws it via its context instead of leaking a goroutine.
+
+## Seeing an external edit
+
+`KnownHosts` re-stats every configured file before each verification and reloads if any file's
+mtime, size, or existence differs from what it last loaded (issue #309). This is what makes
+reconnect (`r`) see a `known_hosts` fixed by hand in another terminal — the repro this closes is
+`ssh-keygen -R host` plus a fresh `ssh` acceptance, done in a second terminal while lazycssh is
+still running, followed by `r` on that host's pane. Without the check, the verifier kept the
+snapshot it built at startup (or at the last accepted key) for the rest of the run, and a
+correctly fixed `known_hosts` still failed.
+
+The check runs on every dial rather than watching the filesystem for changes: connection setup
+is rare and expensive (a TCP handshake and an SSH key exchange) next to a handful of `stat(2)`
+calls, so there is no meaningful cost to paying for freshness every time. A file that appears or
+disappears between checks is also covered — the existing-file filter in `reload` already handles
+that — and a concurrent reconnect of several panes at once may cause the same reload to run more
+than once, which is wasted work but not a race: each reload only ever reads files.
 
 ## Accepting an unknown key
 

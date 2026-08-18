@@ -2,6 +2,14 @@
 
 ## 2026-08-18
 
+- `KnownHosts` now re-stats its `known_hosts` files before every verification and reloads when
+  mtime, size, or existence changed, instead of caching the parsed verifier for the process
+  lifetime (issue #309). Reconnecting a pane (`r`) after fixing `known_hosts` in another
+  terminal — `ssh-keygen -R host` plus a fresh acceptance — used to keep failing against the
+  stale in-memory snapshot until lazycssh itself restarted; a plain per-dial reload was chosen
+  over a filesystem watcher, since connection setup is far more expensive than a `stat(2)` per
+  file. Documented in `core/host-keys.md`. Version 0.11.7.
+
 - Paste now reaches a focused host, and copying no longer depends on the terminal implementing
   OSC 52 (issue #307). `handlePaste` returned early unless the broadcast bar had focus, so
   `cmd+v` into a focused pane did nothing at all, silently. Paste is routed by focus now
