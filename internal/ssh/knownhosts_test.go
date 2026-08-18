@@ -313,6 +313,78 @@ func TestKnownHostsSkipsMissingFilesButUsesTheOnesThatExist(t *testing.T) {
 	waitForOutput(t, s, "welcome")
 }
 
+func TestKnownHostsReloadsWhenAFileChangesAfterConstruction(t *testing.T) {
+	srv := newTestServer(t)
+	other := newTestServer(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "known_hosts")
+
+	addr, port := srv.Addr()
+	normalized := knownhosts.Normalize(net.JoinHostPort(addr, strconv.Itoa(port)))
+
+	// Start with the *wrong* key recorded, as if the host had since been
+	// rebuilt with a new one.
+	staleLine := knownhosts.Line([]string{normalized}, other.signer.PublicKey())
+	if err := os.WriteFile(path, []byte(staleLine+"\n"), 0o600); err != nil {
+		t.Fatalf("write known_hosts: %v", err)
+	}
+
+	kh, err := NewKnownHosts([]string{path}, promptFunc(
+		func(context.Context, string, hosts.Host, string, string) (bool, error) {
+			t.Error("the corrected key must not produce a prompt")
+			return false, nil
+		}))
+	if err != nil {
+		t.Fatalf("NewKnownHosts: %v", err)
+	}
+
+	// Simulate `ssh-keygen -R` plus re-adding the real key, as the issue's
+	// repro does, from outside this process while lazycssh keeps running.
+	freshLine := knownhosts.Line([]string{normalized}, srv.signer.PublicKey())
+	if err := os.WriteFile(path, []byte(freshLine+"\n"), 0o600); err != nil {
+		t.Fatalf("rewrite known_hosts: %v", err)
+	}
+	// Force the mtime forward so the change is detected even on filesystems
+	// with coarse (e.g. 1s) mtime resolution.
+	future := time.Now().Add(time.Hour)
+	if err := os.Chtimes(path, future, future); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	cb := kh.Callback(t.Context(), "s1", serverHost(srv))
+	if err := cb(normalized, &net.TCPAddr{}, srv.signer.PublicKey()); err != nil {
+		t.Fatalf("verify after known_hosts was corrected: %v", err)
+	}
+}
+
+func TestKnownHostsPicksUpAFileCreatedAfterConstruction(t *testing.T) {
+	srv := newTestServer(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "known_hosts")
+	// path does not exist yet: NewKnownHosts must succeed anyway.
+
+	kh, err := NewKnownHosts([]string{path}, promptFunc(
+		func(context.Context, string, hosts.Host, string, string) (bool, error) {
+			t.Error("a key recorded in a file created after construction must not produce a prompt")
+			return false, nil
+		}))
+	if err != nil {
+		t.Fatalf("NewKnownHosts: %v", err)
+	}
+
+	addr, port := srv.Addr()
+	normalized := knownhosts.Normalize(net.JoinHostPort(addr, strconv.Itoa(port)))
+	line := knownhosts.Line([]string{normalized}, srv.signer.PublicKey())
+	if err := os.WriteFile(path, []byte(line+"\n"), 0o600); err != nil {
+		t.Fatalf("create known_hosts: %v", err)
+	}
+
+	cb := kh.Callback(t.Context(), "s1", serverHost(srv))
+	if err := cb(normalized, &net.TCPAddr{}, srv.signer.PublicKey()); err != nil {
+		t.Fatalf("verify after known_hosts was created: %v", err)
+	}
+}
+
 func TestKnownHostsCreatesTheFileAndItsDirectory(t *testing.T) {
 	srv := newTestServer(t)
 	// A path two levels below an empty temp dir, as on a machine with no ~/.ssh.

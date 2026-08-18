@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -72,9 +73,37 @@ type KnownHosts struct {
 	files    []string
 	writable string // where accepted keys are appended
 
-	mu       sync.Mutex
-	verify   ssh.HostKeyCallback
-	accepted map[string]struct{} // normalized address + key, accepted this run
+	mu        sync.Mutex
+	verify    ssh.HostKeyCallback
+	snapshots map[string]fileSnapshot // last-loaded mtime/size per file, for change detection
+	accepted  map[string]struct{}     // normalized address + key, accepted this run
+}
+
+// fileSnapshot is the state a known_hosts file was in when last loaded. It is
+// deliberately coarse (mtime + size, not a hash): known_hosts files are
+// rewritten wholesale by ssh-keygen and friends, so a changed mtime or size is
+// enough to know the cached verifier is stale, without reading the file twice
+// per check.
+type fileSnapshot struct {
+	exists  bool
+	modTime time.Time
+	size    int64
+}
+
+// snapshotFiles stats each file. A file that cannot be stat'd (missing or
+// otherwise inaccessible) is recorded as not existing, mirroring reload's
+// existing-file filter.
+func snapshotFiles(files []string) map[string]fileSnapshot {
+	snaps := make(map[string]fileSnapshot, len(files))
+	for _, f := range files {
+		info, err := os.Stat(f)
+		if err != nil {
+			snaps[f] = fileSnapshot{}
+			continue
+		}
+		snaps[f] = fileSnapshot{exists: true, modTime: info.ModTime(), size: info.Size()}
+	}
+	return snaps
 }
 
 // DefaultKnownHostsFiles returns the files OpenSSH consults, whether or not they
@@ -115,9 +144,11 @@ func NewKnownHosts(files []string, prompter HostKeyPrompter) (*KnownHosts, error
 
 // reload rebuilds the verifier from the files that currently exist.
 func (k *KnownHosts) reload() error {
+	snaps := snapshotFiles(k.files)
+
 	var existing []string
 	for _, f := range k.files {
-		if _, err := os.Stat(f); err == nil {
+		if snaps[f].exists {
 			existing = append(existing, f)
 		}
 	}
@@ -130,6 +161,7 @@ func (k *KnownHosts) reload() error {
 		k.verify = func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 			return &knownhosts.KeyError{}
 		}
+		k.snapshots = snaps
 		return nil
 	}
 
@@ -138,7 +170,41 @@ func (k *KnownHosts) reload() error {
 		return fmt.Errorf("read known_hosts: %w", err)
 	}
 	k.verify = verify
+	k.snapshots = snaps
 	return nil
+}
+
+// refreshIfChanged reloads the verifier when any known_hosts file's mtime or
+// size differs from what was last loaded - including a file that appeared or
+// disappeared since. It runs before every verification: connection setup is
+// rare and expensive compared to a handful of stat(2) calls, so checking on
+// every dial keeps a reconnect (issue #309) from missing an external edit
+// made while lazycssh was already running, without needing a filesystem
+// watcher.
+func (k *KnownHosts) refreshIfChanged() error {
+	current := snapshotFiles(k.files)
+
+	k.mu.Lock()
+	changed := !snapshotsEqual(k.snapshots, current)
+	k.mu.Unlock()
+
+	if !changed {
+		return nil
+	}
+	return k.reload()
+}
+
+// snapshotsEqual reports whether two snapshot sets describe the same files.
+func snapshotsEqual(a, b map[string]fileSnapshot) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for f, sa := range a {
+		if b[f] != sa {
+			return false
+		}
+	}
+	return true
 }
 
 // Callback returns the [ssh.HostKeyCallback] for one session. The context is the
@@ -146,6 +212,10 @@ func (k *KnownHosts) reload() error {
 // question; the session id names the pane the question belongs to.
 func (k *KnownHosts) Callback(ctx context.Context, sessionID string, host hosts.Host) ssh.HostKeyCallback {
 	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		if err := k.refreshIfChanged(); err != nil {
+			return fmt.Errorf("refresh known_hosts for %s: %w", host.Alias, err)
+		}
+
 		k.mu.Lock()
 		verify := k.verify
 		_, alreadyAccepted := k.accepted[acceptKey(hostname, key)]
