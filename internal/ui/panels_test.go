@@ -40,6 +40,14 @@ func (f *fakeFleet) SendKey(id string, k term.KeyEvent) bool {
 	return s.SendKey(k)
 }
 
+func (f *fakeFleet) Paste(id string, text string) bool {
+	s, ok := f.sessions[id]
+	if !ok {
+		return false
+	}
+	return s.Paste(text)
+}
+
 func (f *fakeFleet) Session(id string) (ssh.Session, bool) {
 	s, ok := f.sessions[id]
 	if !ok {

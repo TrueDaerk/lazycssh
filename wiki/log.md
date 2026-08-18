@@ -1,5 +1,30 @@
 # Log
 
+## 2026-08-18
+
+- Paste now reaches a focused host, and copying no longer depends on the terminal implementing
+  OSC 52 (issue #307). `handlePaste` returned early unless the broadcast bar had focus, so
+  `cmd+v` into a focused pane did nothing at all, silently. Paste is routed by focus now
+  (`internal/ui/paste.go`): a focused pane's paste goes to that one host through the host's own
+  emulator (`Manager.Paste` → `term.Emulator.Paste`), so it carries bracketed-paste markers
+  whenever the remote app asked for them; a pane with an open auth question takes the paste's
+  first line as the answer, the way it takes typing; the broadcast bar keeps its behaviour
+  including the `pendingPaste` review gate; every other focus — a prompt, a dialog, an overlay,
+  the sidebar — swallows it rather than letting it slip through to a host the user is not
+  looking at. A pane's paste is never held: one pane is one host, the case the bar's hold
+  already exempts, and the status line names the host and line count.
+  The copy half was not a dispatch bug — the selection copy path was already reached with a
+  pane focused (issue #305) — but OSC 52 was the only clipboard mechanism, and terminals that
+  ignore it do so silently: macOS Terminal.app has no OSC 52 support at all, and iTerm2 keeps it
+  behind an off-by-default preference. Every copy path now also writes the machine's own
+  clipboard through the new `internal/clipboard` (`pbcopy` / `wl-copy` / `xclip` / `clip.exe`),
+  inside the same `tea.Cmd` that emits the sequence. A run inside an SSH session installs no
+  local writer: there the OS clipboard is the wrong machine's, and OSC 52 is the only path to
+  the user. Verified on macOS: the local write round-trips through `pbpaste`, so a selection
+  copied in a pane pastes into another application.
+  Updated: `core/tui.md`, `core/keys.md`, `core/terminal.md`, `core/program.md`,
+  `core/broadcast-scope.md`. Version 0.11.6.
+
 ## 2026-08-17
 
 - `ctrl+c`/`super+c` now copy a live mouse selection no matter where the keyboard focus is

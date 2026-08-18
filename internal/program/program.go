@@ -17,6 +17,7 @@ import (
 	cryptossh "golang.org/x/crypto/ssh"
 
 	"github.com/TrueDaerk/lazycssh/internal/broadcast"
+	"github.com/TrueDaerk/lazycssh/internal/clipboard"
 	"github.com/TrueDaerk/lazycssh/internal/commandlog"
 	"github.com/TrueDaerk/lazycssh/internal/history"
 	"github.com/TrueDaerk/lazycssh/internal/hosts"
@@ -208,6 +209,13 @@ func Build(ctx context.Context, cfg Config) (*Model, error) {
 	}
 	if cfg.Recent != nil {
 		uiCfg.Recent = cfg.Recent
+	}
+	// A local run copies to the OS clipboard as well as over OSC 52, because
+	// too many terminals ignore OSC 52 for it to be the only path (issue
+	// #307). Nil - no clipboard tool, or lazycssh itself running over SSH -
+	// leaves the copy on OSC 52 alone.
+	if w := clipboard.New(nil); w != nil {
+		uiCfg.Clipboard = w
 	}
 	app := ui.NewApp(uiCfg)
 

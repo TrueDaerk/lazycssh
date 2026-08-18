@@ -174,6 +174,11 @@ func (s fleetSessions) SendKey(id string, k term.KeyEvent) bool {
 	return present && sess.SendKey(k)
 }
 
+func (s fleetSessions) Paste(id string, text string) bool {
+	sess, present := s.f.sessions[id]
+	return present && sess.Paste(text)
+}
+
 // A host that leaves the fleet leaves its sessions; a session that loses its
 // last host closes.
 func TestClosedHostsLeaveTheirSessions(t *testing.T) {

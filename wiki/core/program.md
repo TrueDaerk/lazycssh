@@ -4,7 +4,7 @@ title: Program assembly
 description: The one place every layer meets - building the fleet, wiring the router and the UI together, and the wrapper model that acts on what the UI may only ask for.
 resource: internal/program/program.go
 tags: [program, wiring, bubbletea, transport]
-timestamp: 2026-08-12T12:00:00Z
+timestamp: 2026-08-18T00:00:00Z
 ---
 
 # Program assembly
@@ -39,6 +39,12 @@ acted on:
 Filesystem work — the store read, the ssh-config resolution, the goroutine wait inside
 `Remove` — always runs in the `tea.Cmd`; the managers are only ever mutated where the result
 message lands, on the `Update` goroutine (issue #225).
+
+It also decides what the UI is allowed to reach outside the fleet. The local clipboard is one:
+`Build` installs `internal/clipboard`'s writer into `ui.Config.Clipboard` only when there is one
+to install — no clipboard tool, or lazycssh itself running inside an SSH session, leaves the
+field nil and every copy on OSC 52 alone (issue #307). `internal/ui` never shells out; it is
+handed a writer or it is not. See [Copy](./tui.md#copy).
 
 The program owns the run's live pattern list: seeded from the CLI, extended by every runtime
 connect and session launch, pruned when a removal names a pattern exactly, and handed to the UI

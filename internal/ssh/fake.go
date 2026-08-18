@@ -206,6 +206,25 @@ func (f *Fake) SendKey(k term.KeyEvent) bool {
 	return true
 }
 
+// Paste delivers pasted text through the fake's emulator, the way
+// [Manager.Paste] does for a real session, and waits for the bytes the same
+// way SendKey does so tests can assert on Written straight after.
+func (f *Fake) Paste(text string) bool {
+	if f.State() != StateConnected {
+		return false
+	}
+	if text == "" {
+		return true
+	}
+	before := len(f.Written())
+	f.Terminal().Paste(text)
+	deadline := time.Now().Add(2 * time.Second)
+	for len(f.Written()) == before && time.Now().Before(deadline) {
+		time.Sleep(100 * time.Microsecond)
+	}
+	return true
+}
+
 // splitCompleteLines drains every terminated line from b, leaving the partial
 // remainder. The caller holds the lock.
 func splitCompleteLines(b *strings.Builder) []string {

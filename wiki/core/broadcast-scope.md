@@ -4,7 +4,7 @@ title: Broadcast scope
 description: What `BROADCAST all` means when a working set is active, and how the target count is made unmissable.
 resource: internal/broadcast
 tags: [broadcast, working-set, safety]
-timestamp: 2026-08-14T00:00:00Z
+timestamp: 2026-08-18T00:00:00Z
 ---
 
 # Broadcast scope
@@ -232,6 +232,9 @@ The paste is never mangled: what was copied is what is written, with no line-end
 no trailing newline appended. It goes out through `Router.Send`, exactly like the `:` command
 line, so it is subject to the same per-host write failures and the same `Delivery` reporting —
 the only difference is the review gate in front of it.
+
+A paste into a **focused pane** never reaches this gate at all: it is one host, and it takes the
+pane path rather than the router — see [Paste](./tui.md#paste).
 
 The hold is a UI-level decision, not a router one: `broadcast.Router` has no notion of a pending
 paste. It only answers "how many lines, how many hosts" through the same `Count()` every other

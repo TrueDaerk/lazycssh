@@ -142,6 +142,11 @@ type Config struct {
 	// further source can be plugged in without the picker changing (issues
 	// #246, #254).
 	HostSource HostSource
+	// Clipboard is the local clipboard every copy writes to on top of the
+	// OSC 52 sequence, for the terminals that ignore OSC 52 (issue #307).
+	// Nil means OSC 52 alone, which is also what a run over SSH gets: see
+	// internal/clipboard.
+	Clipboard ClipboardWriter
 }
 
 // App is the root bubbletea model: it owns the layout, the focus and the panel
@@ -641,11 +646,7 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// host prompt - which must not be able to trap the user. While typing to
 	// a host it stays a keystroke for the host (XON), like every other chord
 	// the pane forwards.
-	if key.Matches(msg, a.keys.ForceQuit) &&
-		(a.cmdInput.Focused() || a.hostInput.Focused() || a.picker.open ||
-			a.searchInput.Focused() || a.Saving() || a.splitInput.Focused() ||
-			a.filterInput.Focused() ||
-			a.GroupDialogOpen() || a.DeleteGroupPending() != "" || a.EndSessionPending() != "") {
+	if key.Matches(msg, a.keys.ForceQuit) && a.promptOwnsKeyboard() {
 		return a, tea.Quit
 	}
 
@@ -766,6 +767,18 @@ func (a App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return a.handleAppKey(msg)
+}
+
+// promptOwnsKeyboard reports whether a text prompt, a dialog or a question
+// has the keyboard: the states in which a key is content or an answer rather
+// than a command, and in which nothing may be forwarded to a host. It is what
+// ctrl+q has to override to stay a force quit, and what makes a paste stop
+// short of the panes (issue #307).
+func (a App) promptOwnsKeyboard() bool {
+	return a.cmdInput.Focused() || a.hostInput.Focused() || a.picker.open ||
+		a.searchInput.Focused() || a.Saving() || a.splitInput.Focused() ||
+		a.filterInput.Focused() ||
+		a.GroupDialogOpen() || a.DeleteGroupPending() != "" || a.EndSessionPending() != ""
 }
 
 // handleAppKey is the app-level command dispatch: everything that is live once

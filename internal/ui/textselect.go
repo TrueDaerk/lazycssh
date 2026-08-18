@@ -258,5 +258,5 @@ func (a App) reportCopy(host, text string, count int) (App, tea.Cmd) {
 	}
 	a.lastDelivery = fmt.Sprintf("copied %d line%s from %s (OSC 52) — no interrupt sent",
 		count, plural(count), host)
-	return a, tea.SetClipboard(text)
+	return a, a.clipboardCmd(text)
 }
