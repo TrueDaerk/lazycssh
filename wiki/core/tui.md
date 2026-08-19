@@ -4,7 +4,7 @@ title: TUI shell
 description: The root bubbletea model, the layout arithmetic, and the rules that keep a resize from taking the program down.
 resource: internal/ui/app.go
 tags: [ui, bubbletea, layout, focus]
-timestamp: 2026-08-18T00:00:00Z
+timestamp: 2026-08-19T00:00:00Z
 ---
 
 # TUI shell
@@ -1078,7 +1078,17 @@ hittest.go`), so a click resolves without a terminal and the tests stay table-dr
   panel's cursor there, the broadcast bar to give it the keyboard.
 - **Wheel** over a pane scrolls **that** pane's scrollback a few lines per notch — the pane
   under the pointer, not the focused one, and without stealing focus. Over a sidebar list it
-  moves the cursor.
+  moves the cursor. Notches are **coalesced** (`internal/ui/wheel.go`, issue #313): a trackpad
+  or a free-spinning wheel emits them far faster than a frame is drawn, and worked off one by
+  one they queue up seconds deep, so a reversal would only take effect after every stale notch
+  had been scrolled. Instead the first notch of a gesture applies immediately — slow scrolling
+  keeps its exact old step — and opens a 20 ms window; notches arriving inside it are added up
+  and applied as one jump when it closes, a window that collected something opens the next one,
+  and an empty window ends the gesture. A **reversal inside a window drops everything held** and
+  applies on the spot: all of it points the way the user has just stopped going. Moving the
+  pointer to another pane flushes the held notches to the pane they were aimed at, never to the
+  new one. This is the [backpressure](./session.md) rule on the input side — a flood must not
+  stall the reaction to what the user is doing now.
 - **Drag** over a pane's body selects text for `ctrl+c` — see Copy above.
 
 Mouse reporting is cell-motion: clicks, drags, releases and the wheel, without bare-movement chatter.

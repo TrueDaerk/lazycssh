@@ -68,8 +68,10 @@ func (a App) handleClick(x, y int) (tea.Model, tea.Cmd) {
 }
 
 // handleWheel scrolls what is under the pointer, not what has focus: the pane
-// under it by a few lines, a sidebar panel's cursor by one row.
-func (a App) handleWheel(msg tea.MouseWheelMsg) App {
+// under it by a few lines, a sidebar panel's cursor by one row. Notches are
+// coalesced rather than worked off one by one, so a flood cannot delay a
+// reversal; see wheel.go (issue #313).
+func (a App) handleWheel(msg tea.MouseWheelMsg) (App, tea.Cmd) {
 	delta := 0
 	switch msg.Button {
 	case tea.MouseWheelUp:
@@ -77,26 +79,21 @@ func (a App) handleWheel(msg tea.MouseWheelMsg) App {
 	case tea.MouseWheelDown:
 		delta = -1
 	default:
-		return a
+		return a, nil
 	}
 
-	switch a.layout.regionAt(msg.X, msg.Y) {
-	case RegionMain:
-		if _, showing := a.mainPreview(); showing {
-			// A preview is not a pane's scrollback; the wheel over it scrolls
-			// nothing rather than a host the user cannot see.
-			return a
-		}
-		if index, ok := a.paneUnder(msg.X, msg.Y); ok {
-			return a.scrollHostBy(index, delta*wheelStep)
-		}
-	case RegionSidebar:
-		heights := a.sidebarHeights()
-		if panel, _, ok := sidebarPanelAt(heights, msg.Y-a.layout.Sidebar.Y); ok {
-			return a.movePanelCursor(Panels()[panel], -delta)
-		}
+	target, ok := a.wheelTargetAt(msg.X, msg.Y)
+	if !ok {
+		return a, nil
 	}
-	return a
+
+	step := a.wheel.event(target, delta)
+	a = a.applyWheelScroll(step.flush)
+	a = a.applyWheelScroll(step.now)
+	if step.openWindow {
+		return a, wheelFlushCmd()
+	}
+	return a, nil
 }
 
 // paneUnder resolves a point in the main area to a host index.

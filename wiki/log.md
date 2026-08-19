@@ -2,6 +2,18 @@
 
 ## 2026-08-19
 
+- Mouse wheel notches are now coalesced instead of being worked off one at a time (issue #313).
+  Every `tea.MouseWheelMsg` used to run its own scroll step, so a trackpad or free-spinning
+  wheel — which emits notches far faster than a frame is drawn — built a queue seconds deep and
+  a direction reversal only took effect once every stale notch ahead of it had been scrolled.
+  `wheelBatch` (`internal/ui/wheel.go`) applies the first notch of a gesture immediately, so
+  slow scrolling keeps its exact old step, and opens a 20 ms window in which further notches are
+  added up and applied as a single jump; a reversal inside a window drops everything held and
+  applies on the spot, and a pointer move flushes the held notches to the target they were aimed
+  at. The window is closed by a `wheelFlushMsg` tick rather than by reading a clock in `Update`,
+  which keeps the whole thing testable with synthetic message sequences. Documented in
+  `core/tui.md`. Version 0.11.9.
+
 - `HostName` values from `~/.ssh/config` are now token-expanded before dialling (issue #311).
   `Resolve` used to pass the raw directive straight to `h.Addr`, so a config like
   `Host fs* / HostName %h.example.com` produced the literal, undialable address

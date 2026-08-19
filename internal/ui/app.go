@@ -240,6 +240,11 @@ type App struct {
 	// textSel is the mouse text selection inside a pane; see textselect.go.
 	textSel textSelection
 
+	// wheel coalesces mouse wheel notches, so a flood of them collapses into
+	// one jump and a reversal is not queued behind stale notches; see
+	// internal/ui/wheel.go (issue #313).
+	wheel wheelBatch
+
 	// hadHosts records that the run held at least one host at some point.
 	// It is what separates a run that emptied - every session logged out or
 	// removed, the program's work is done, quit (issue #146) - from a run
@@ -624,7 +629,12 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.handleMouseRelease(msg)
 
 	case tea.MouseWheelMsg:
-		return a.handleWheel(msg), nil
+		next, cmd := a.handleWheel(msg)
+		return next, cmd
+
+	case wheelFlushMsg:
+		next, cmd := a.handleWheelFlush()
+		return next, cmd
 	}
 
 	return a, nil
