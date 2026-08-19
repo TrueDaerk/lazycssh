@@ -4,7 +4,7 @@ title: Host resolution
 description: How an expanded host argument becomes a dialable target using ~/.ssh/config, and the precedence between command line, config and defaults.
 resource: internal/hosts/resolve.go
 tags: [hosts, ssh-config, cli]
-timestamp: 2026-07-29T19:00:00Z
+timestamp: 2026-08-19T00:00:00Z
 ---
 
 # Host resolution
@@ -48,6 +48,14 @@ A resolved host keeps both:
 
 With `Host web-1 / HostName 10.0.0.1`, the pane is labelled `web-1` and the connection goes to
 `10.0.0.1`.
+
+`HostName` is token-expanded the way `ssh_config(5)` defines it for that directive: `%h` becomes
+the alias as typed on the command line (before any substitution — the expansion is not
+recursive), and `%%` becomes a literal `%`. With `Host fs* / HostName %h.example.com`, resolving
+`fs01.x` dials `fs01.x.example.com`. No other token is valid here; an unrecognised `%`-token is a
+resolution error naming the alias and the offending token, matching OpenSSH's own
+`percent_expand: unknown key` behaviour rather than passing the raw token to a failing DNS
+lookup.
 
 ## Listing candidates
 
