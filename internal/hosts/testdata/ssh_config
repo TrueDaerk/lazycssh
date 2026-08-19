@@ -27,5 +27,14 @@ Host noproxy
 Host badport
     Port 99999
 
+Host fs* !*.example.com
+    HostName %h.example.com
+
+Host literalpercent
+    HostName host%%name.example.com
+
+Host badtoken
+    HostName %x.example.com
+
 Host *
     User fallback

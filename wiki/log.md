@@ -1,5 +1,17 @@
 # Log
 
+## 2026-08-19
+
+- `HostName` values from `~/.ssh/config` are now token-expanded before dialling (issue #311).
+  `Resolve` used to pass the raw directive straight to `h.Addr`, so a config like
+  `Host fs* / HostName %h.example.com` produced the literal, undialable address
+  `%h.example.com` instead of substituting the alias. `expandHostNameTokens`
+  (`internal/hosts/resolve.go`) now expands `%h` to the alias as given on the command line
+  (non-recursively) and `%%` to a literal `%`, matching the tokens `ssh_config(5)` allows for
+  `HostName`; any other `%`-token is a resolution error naming the alias and the token, rather
+  than being passed through to a failing DNS lookup. Documented in `core/host-resolution.md`.
+  Version 0.11.8.
+
 ## 2026-08-18
 
 - `KnownHosts` now re-stats its `known_hosts` files before every verification and reloads when

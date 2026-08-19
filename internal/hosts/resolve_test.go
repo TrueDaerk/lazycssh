@@ -107,6 +107,16 @@ func TestResolve(t *testing.T) {
 			arg:  "2001:db8::1",
 			want: Host{Alias: "2001:db8::1", Addr: "2001:db8::1", User: "fallback", Port: 22},
 		},
+		{
+			name: "%h token expands to the alias before substitution",
+			arg:  "fs01.x",
+			want: Host{Alias: "fs01.x", Addr: "fs01.x.example.com", User: "fallback", Port: 22},
+		},
+		{
+			name: "%% expands to a literal percent sign",
+			arg:  "literalpercent",
+			want: Host{Alias: "literalpercent", Addr: "host%name.example.com", User: "fallback", Port: 22},
+		},
 	}
 
 	for _, tt := range tests {
@@ -138,6 +148,7 @@ func TestResolveRejectsMalformedTargets(t *testing.T) {
 		{name: "unclosed IPv6 bracket", arg: "[2001:db8::1", wantMsg: "missing ']'"},
 		{name: "junk after IPv6 bracket", arg: "[2001:db8::1]x", wantMsg: "unexpected"},
 		{name: "invalid port in the config", arg: "badport", wantMsg: "not a valid port number"},
+		{name: "unknown percent token in HostName", arg: "badtoken", wantMsg: "unknown token %x"},
 	}
 
 	for _, tt := range tests {

@@ -138,6 +138,11 @@ func (r *Resolver) Resolve(arg string) (Host, error) {
 	h.Addr = r.lookup(alias, "HostName")
 	if h.Addr == "" {
 		h.Addr = alias
+	} else {
+		h.Addr, err = expandHostNameTokens(h.Addr, alias)
+		if err != nil {
+			return Host{}, err
+		}
 	}
 
 	if h.User == "" {
@@ -284,6 +289,39 @@ func parsePort(arg, s string) (int, error) {
 		return 0, fmt.Errorf("host %q: %q is not a valid port number", arg, s)
 	}
 	return n, nil
+}
+
+// expandHostNameTokens expands the percent tokens ssh_config(5) allows in a
+// HostName directive: %h is the alias as given before any substitution, and
+// %% is a literal percent sign. Any other %-token is an error, matching
+// OpenSSH's own "percent_expand: unknown key" behaviour rather than passing
+// the raw token through to a failing DNS lookup.
+func expandHostNameTokens(hostname, alias string) (string, error) {
+	if !strings.Contains(hostname, "%") {
+		return hostname, nil
+	}
+
+	var b strings.Builder
+	for i := 0; i < len(hostname); i++ {
+		c := hostname[i]
+		if c != '%' {
+			b.WriteByte(c)
+			continue
+		}
+		i++
+		if i >= len(hostname) {
+			return "", fmt.Errorf("ssh config for %q: HostName %q ends with a dangling '%%'", alias, hostname)
+		}
+		switch hostname[i] {
+		case 'h':
+			b.WriteString(alias)
+		case '%':
+			b.WriteByte('%')
+		default:
+			return "", fmt.Errorf("ssh config for %q: HostName %q has unknown token %%%c", alias, hostname, hostname[i])
+		}
+	}
+	return b.String(), nil
 }
 
 // expandTilde resolves a leading ~/ against the current home directory, which
