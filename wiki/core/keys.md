@@ -233,5 +233,5 @@ come back.
 | left click | `[x]` in a pane header | close a live host; remove a dead one |
 | left click | sidebar box / row | select the panel, move its cursor to the row |
 | left click | broadcast bar | give the bar the keyboard |
-| wheel | over a pane | scroll that pane's scrollback, without changing focus |
+| wheel | over a pane | scroll that pane's scrollback, without changing focus (notches are coalesced; see [TUI shell](./tui.md)) |
 | wheel | over a sidebar list | move that panel's cursor |

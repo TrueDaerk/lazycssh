@@ -96,7 +96,7 @@ output instead.
 | ++shift+page-up++ / ++shift+page-down++ | scroll the focused pane half a pane |
 | ++shift+home++ | the oldest retained output |
 | ++shift+end++ | back to the tail, following again |
-| wheel over a pane | scroll **that** pane, without stealing focus |
+| wheel over a pane | scroll **that** pane, without stealing focus — flick-scroll is coalesced, so reversing direction reacts at once |
 
 The offset is anchored at the bottom, so new output slides the window rather
 than your position in it. A pane that is not following its tail says

@@ -212,5 +212,5 @@ promised.
 | left click | sidebar box / row | select the panel, move its cursor to the row |
 | left click | broadcast bar | give the bar the keyboard |
 | drag | pane body | select text; releasing copies it right away, ++ctrl+c++/++cmd+c++ copy it again |
-| wheel | over a pane | scroll that pane's scrollback, without changing focus |
+| wheel | over a pane | scroll that pane's scrollback, without changing focus — fast scrolling is coalesced, so reversing direction reacts at once |
 | wheel | over a sidebar list | move that panel's cursor |
